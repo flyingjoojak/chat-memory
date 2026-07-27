@@ -6,12 +6,16 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
 
 from .config import DB_PATH
 from .models import Action, Turn
+
+# FTS MATCH 용 토큰: ASCII 영숫자 런 + 한글 런. '_'는 제외(FTS unicode61이 _로 분리하므로).
+_FTS_TOKEN = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS turns(
@@ -64,12 +68,65 @@ class ArchiveDB:
         # 스키마 생성(쓰기)은 없을 때만 → 읽기전용 명령이 쓰기락과 충돌하지 않도록.
         if not self._has_schema():
             self.conn.executescript(_SCHEMA)
+        self.fts_enabled = self._ensure_fts()
 
     def _has_schema(self) -> bool:
         row = self.conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='turns'"
         ).fetchone()
         return row is not None
+
+    def _ensure_fts(self) -> bool:
+        """FTS5 키워드 인덱스(BM25) 준비. FTS5 미지원 빌드면 False(의미검색만 폴백)."""
+        has = self.conn.execute(
+            "SELECT name FROM sqlite_master WHERE name='turns_fts'"
+        ).fetchone()
+        if has:
+            return True
+        try:
+            self.conn.execute(
+                "CREATE VIRTUAL TABLE turns_fts USING fts5(turn_id UNINDEXED, text)"
+            )
+            return True
+        except sqlite3.OperationalError:
+            return False
+
+    @staticmethod
+    def _fts_text(question: str, answer: str, actions: tuple[Action, ...]) -> str:
+        return "\n".join([question or "", answer or "", "; ".join(a.render() for a in actions)])
+
+    def rebuild_fts(self) -> int:
+        """기존 turns 전체로 FTS 인덱스를 재구축(백필/최초 1회)."""
+        if not self.fts_enabled:
+            return 0
+        self.conn.execute("DELETE FROM turns_fts")
+        n = 0
+        for r in self.conn.execute("SELECT id,question,answer,actions FROM turns"):
+            text = self._fts_text(r["question"], r["answer"], _actions_from_json(r["actions"]))
+            self.conn.execute(
+                "INSERT INTO turns_fts(turn_id,text) VALUES(?,?)", (r["id"], text)
+            )
+            n += 1
+        self.conn.commit()
+        return n
+
+    def keyword_search(self, query: str, limit: int = 40) -> list[tuple[str, float]]:
+        """FTS5 BM25 키워드 검색 → [(turn_id, score)] (score 낮을수록 관련↑)."""
+        if not self.fts_enabled:
+            return []
+        terms = _FTS_TOKEN.findall(query)
+        if not terms:
+            return []
+        match = " OR ".join(f'"{t}"' for t in terms)
+        try:
+            rows = self.conn.execute(
+                "SELECT turn_id, bm25(turns_fts) AS s FROM turns_fts "
+                "WHERE turns_fts MATCH ? ORDER BY s LIMIT ?",
+                (match, limit),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [(r["turn_id"], r["s"]) for r in rows]
 
     def close(self) -> None:
         self.conn.close()
@@ -85,6 +142,12 @@ class ArchiveDB:
             (turn.id, turn.session_id, turn.uuid, turn.parent_uuid, turn.timestamp,
              turn.project, turn.question, turn.answer, _actions_to_json(turn.actions)),
         )
+        if self.fts_enabled:  # 키워드 인덱스 동기화(멱등)
+            self.conn.execute("DELETE FROM turns_fts WHERE turn_id=?", (turn.id,))
+            self.conn.execute(
+                "INSERT INTO turns_fts(turn_id,text) VALUES(?,?)",
+                (turn.id, self._fts_text(turn.question, turn.answer, turn.actions)),
+            )
 
     def get_turn(self, turn_id: str) -> Turn | None:
         row = self.conn.execute("SELECT * FROM turns WHERE id=?", (turn_id,)).fetchone()

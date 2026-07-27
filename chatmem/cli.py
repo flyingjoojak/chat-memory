@@ -39,13 +39,16 @@ def cmd_search(args: argparse.Namespace) -> int:
         print("인덱스가 비어있습니다. 먼저 `mem index` 로 백필하세요.")
         return 1
     hits = run_search(args.query, db, vi, embedder, k=args.k,
-                      session=args.session, since=args.since)
+                      session=args.session, since=args.since,
+                      keyword=not args.semantic_only)
     if not hits:
         print("결과 없음.")
         return 0
     for i, h in enumerate(hits, 1):
         t = h.turn
-        print(f"\n[{i}] score={h.score:.3f}  {t.timestamp}  ({t.project})")
+        via = "+".join(h.sources) if h.sources else "?"
+        cos = f"cos={h.cosine:.3f}" if h.cosine is not None else "키워드"
+        print(f"\n[{i}] [{via}] {cos}  {t.timestamp}  ({t.project})")
         print(f"    Q: {_trunc(t.question, 200)}")
         print(f"    A: {_trunc(t.answer, 200)}")
         if t.actions:
@@ -167,6 +170,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-k", type=int, default=5)
     s.add_argument("--session", default=None, help="세션ID 접두 또는 프로젝트 부분일치")
     s.add_argument("--since", default=None, help="이 날짜 이후 (예: 2026-07-01)")
+    s.add_argument("--semantic-only", action="store_true", help="키워드(BM25) 없이 의미검색만")
     s.set_defaults(func=cmd_search)
 
     i = sub.add_parser("index", help="백필/증분 인덱싱")

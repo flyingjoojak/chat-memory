@@ -42,7 +42,7 @@ python -m chatmem stats
 | `store.py` | SQLite 아카이브(턴·청크·커서·정제본·메타) |
 | `vectorindex.py` | numpy 브루트포스 벡터 검색 |
 | `indexer.py` | 파이프라인 · 미완결 마지막 턴 보류 · 맥락 임베딩 |
-| `search.py` | 검색 조립(dedup·필터·다양화·스레드) |
+| `search.py` | **하이브리드 검색**(의미+키워드 BM25 RRF 융합)·dedup·필터·스레드 |
 | `cli.py` | `mem` 커맨드 |
 
 ## 환경변수
