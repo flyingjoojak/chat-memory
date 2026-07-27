@@ -14,7 +14,8 @@ import time
 from .models import Turn
 
 ENRICH_MODEL = "sonnet"
-_MAX_TURNS_PER_CALL = 40
+# 창이 크면 Sonnet이 긴 JSON 목록에서 일부 턴을 누락함 → 작게 잡아 커버리지 확보.
+_MAX_TURNS_PER_CALL = 20
 _FIELD_CHARS = 400
 
 
@@ -64,9 +65,12 @@ def _parse_json(out: str) -> list[dict]:
     return data.get("turns", []) if isinstance(data, dict) else []
 
 
-def enrich_session(session_id: str, db, model: str = ENRICH_MODEL) -> int:
+def enrich_session(session_id: str, db, model: str = ENRICH_MODEL,
+                   missing_only: bool = True) -> int:
+    # 증분: missing_only면 아직 요약 없는 턴만 처리(재실행 시 구멍만 채움).
+    where = "session_id=?" + (" AND summary IS NULL" if missing_only else "")
     rows = db.conn.execute(
-        "SELECT id FROM turns WHERE session_id=? ORDER BY timestamp, id", (session_id,)
+        f"SELECT id FROM turns WHERE {where} ORDER BY timestamp, id", (session_id,)
     ).fetchall()
     turns = [t for t in (db.get_turn(r["id"]) for r in rows) if t]
     if not turns:
@@ -101,7 +105,7 @@ def enrich_all(db, model: str = ENRICH_MODEL, throttle: float = 1.0,
     total = 0
     for sid in sessions:
         try:
-            n = enrich_session(sid, db, model)
+            n = enrich_session(sid, db, model, missing_only=only_missing)
             total += n
             log_fn(f"enriched {n} turns  session {sid[:8]}")
         except Exception as ex:  # 한 세션 실패가 전체를 막지 않도록
