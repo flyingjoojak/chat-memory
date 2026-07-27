@@ -120,12 +120,15 @@ h1{font-size:20px;margin:0;letter-spacing:-.02em}
 .opts{display:flex;align-items:center;gap:10px;margin:11px 2px 0;
   color:var(--muted);font-size:12.5px;flex-wrap:wrap}
 .opts .spacer{flex:1 1 auto}
-.chip{font:inherit;color:var(--muted);background:var(--surface);border:1px solid var(--border);
-  border-radius:20px;padding:5px 13px;cursor:pointer;transition:all .15s;
-  display:inline-flex;align-items:center;gap:6px;user-select:none}
-.chip:hover{border-color:var(--accent);color:var(--text)}
-.chip.alt{background:color-mix(in srgb,var(--accent) 15%,transparent);
-  border-color:var(--accent);color:var(--accent);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:20px;
+  overflow:hidden;background:var(--surface)}
+.seg-btn{font:inherit;color:var(--muted);background:transparent;border:0;
+  padding:5px 13px;cursor:pointer;transition:all .15s;display:inline-flex;
+  align-items:center;gap:5px;user-select:none}
+.seg-btn+.seg-btn{border-left:1px solid var(--border)}
+.seg-btn:hover{color:var(--text)}
+.seg-btn.active{background:color-mix(in srgb,var(--accent) 18%,transparent);
+  color:var(--accent);font-weight:600}
 .sel{display:inline-flex;align-items:center;gap:6px;user-select:none}
 .opts select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);
   border-radius:8px;padding:4px 9px;cursor:pointer;outline:none}
@@ -166,7 +169,10 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
   <div class="search">
     <input id="q" placeholder="대화 검색…  (예: 급여 계산, STAGE1, 신선도 감쇠)" autofocus>
     <div class="opts">
-      <button type="button" id="mode" class="chip" title="하이브리드(의미+키워드) ↔ 의미검색만 전환">🔀 하이브리드</button>
+      <div class="seg" title="검색 모드 선택">
+        <button type="button" class="seg-btn active" data-sem="0">🔀 하이브리드</button>
+        <button type="button" class="seg-btn" data-sem="1">🧠 의미만</button>
+      </div>
       <span class="spacer"></span>
       <label class="sel">표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
       <span class="hint"><kbd>Enter</kbd> 검색</span>
@@ -207,13 +213,11 @@ async function go(){
     $('#hits').innerHTML=(r.hits&&r.hits.length)?r.hits.map(card).join(''):'<div class="empty">결과 없음</div>';
   }catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
 }
-$('#mode').addEventListener('click',()=>{
-  semOnly=!semOnly;
-  const b=$('#mode');
-  b.textContent=semOnly?'🧠 의미검색만':'🔀 하이브리드';
-  b.classList.toggle('alt',semOnly);
+document.querySelectorAll('.seg-btn').forEach(b=>b.addEventListener('click',()=>{
+  semOnly=b.dataset.sem==='1';
+  document.querySelectorAll('.seg-btn').forEach(x=>x.classList.toggle('active',x===b));
   go();
-});
+}));
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
 $('#k').addEventListener('change',go);
 stats();
