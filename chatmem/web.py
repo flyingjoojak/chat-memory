@@ -88,17 +88,6 @@ def index() -> str:
     return _HTML
 
 
-def main() -> None:
-    import uvicorn
-
-    print("chat-memory 웹 UI → http://127.0.0.1:8642  (모델 로딩 ~15초)")
-    uvicorn.run(app, host="127.0.0.1", port=8642, log_level="warning")
-
-
-if __name__ == "__main__":
-    main()
-
-
 _HTML = r"""<!doctype html>
 <html lang="ko">
 <head>
@@ -207,3 +196,14 @@ stats();
 </script>
 </body>
 </html>"""
+
+
+def main() -> None:
+    import uvicorn
+
+    print("chat-memory 웹 UI → http://127.0.0.1:8642  (모델 로딩 ~15초)")
+    uvicorn.run(app, host="127.0.0.1", port=8642, log_level="warning")
+
+
+if __name__ == "__main__":
+    main()
