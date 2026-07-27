@@ -4,4 +4,4 @@ cd /d "%USERPROFILE%\chat-memory"
 set PYTHONWARNINGS=ignore
 set PYTHONUNBUFFERED=1
 set PYTHONIOENCODING=utf-8
-python -m chatmem enrich >> "%USERPROFILE%\chat-memory\data\batch.log" 2>&1
+python -m chatmem enrich >> "%USERPROFILE%\chat-memory\data\enrich.log" 2>&1

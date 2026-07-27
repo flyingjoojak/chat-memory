@@ -8,7 +8,11 @@ from .config import LOG_PATH
 
 
 def batch_log(msg: str) -> None:
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    ts = time.strftime("%Y-%m-%d %H:%M:%S")
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(f"{ts}  {msg}\n")
+    # 로깅 실패(파일 잠금·권한 등)가 파이프라인을 죽이면 안 됨 → 조용히 무시.
+    try:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"{ts}  {msg}\n")
+    except Exception:
+        pass

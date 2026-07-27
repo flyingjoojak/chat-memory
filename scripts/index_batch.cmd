@@ -5,4 +5,4 @@ cd /d "%USERPROFILE%\chat-memory"
 set PYTHONWARNINGS=ignore
 set PYTHONUNBUFFERED=1
 set PYTHONIOENCODING=utf-8
-python -m chatmem index >> "%USERPROFILE%\chat-memory\data\batch.log" 2>&1
+python -m chatmem index >> "%USERPROFILE%\chat-memory\data\index.log" 2>&1
