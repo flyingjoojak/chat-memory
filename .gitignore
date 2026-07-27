@@ -1,0 +1,29 @@
+# ── 대화 데이터·인덱스 (개인정보 — 절대 커밋 금지) ──
+data/
+*.db
+*.db-wal
+*.db-shm
+*.npy
+*.npy.tmp
+vector_ids.json
+vector_ids.json.tmp
+*.log
+
+# ── 파이썬 ──
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── 임베딩 모델 캐시 ──
+fastembed_cache/
+*.onnx
+
+# ── OS/에디터 ──
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
