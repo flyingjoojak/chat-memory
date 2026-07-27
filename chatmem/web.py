@@ -111,7 +111,8 @@ body{margin:0;background:var(--bg);color:var(--text);
 header{display:flex;align-items:baseline;gap:12px;margin-bottom:20px}
 h1{font-size:20px;margin:0;letter-spacing:-.02em}
 .stats{color:var(--muted);font-size:12.5px}
-.search{position:sticky;top:12px;z-index:5}
+.search{position:sticky;top:0;z-index:5;background:var(--bg);
+  padding:16px 0 12px;box-shadow:0 8px 12px -8px var(--bg)}
 .search input{width:100%;padding:15px 18px;font-size:16px;color:var(--text);
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   outline:none;transition:border-color .15s,box-shadow .15s}
