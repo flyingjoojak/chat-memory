@@ -70,6 +70,12 @@ def test_command_plumbing_not_a_prompt():
     )
 
 
+def test_system_events_not_a_prompt():
+    # 시스템 이벤트(작업 알림 등)는 사용자 질문이 아니다 → 인덱싱 제외.
+    assert not is_real_user_prompt(_user("u1", "<task-notification>\n<task-id>abc</task-id>"))
+    assert not is_real_user_prompt(_user("u1", "[SYSTEM NOTIFICATION - NOT USER INPUT]\n..."))
+
+
 def test_tool_result_not_a_prompt():
     obj = {
         "type": "user",

@@ -24,13 +24,15 @@ _STRUCTURAL_TYPES = {
     "ai-title",
 }
 
-# 슬래시명령 배관 텍스트 접두.
+# 사용자 질문이 아닌 주입 텍스트 접두(슬래시명령 배관 + 시스템 이벤트).
 _PLUMBING_PREFIXES = (
     "<local-command",
     "<command-name>",
     "<command-message>",
     "<command-args>",
     "<command-stdout>",
+    "<task-notification",              # 백그라운드 작업 완료 등 시스템 이벤트
+    "[SYSTEM NOTIFICATION",            # 시스템 알림(NOT USER INPUT)
 )
 
 # 행동 상세로 뽑을 우선 키 순서.
