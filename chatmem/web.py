@@ -120,15 +120,19 @@ h1{font-size:20px;margin:0;letter-spacing:-.02em}
 .opts{display:flex;align-items:center;gap:10px;margin:11px 2px 0;
   color:var(--muted);font-size:12.5px;flex-wrap:wrap}
 .opts .spacer{flex:1 1 auto}
-.seg{display:inline-flex;border:1px solid var(--border);border-radius:20px;
-  overflow:hidden;background:var(--surface)}
-.seg-btn{font:inherit;color:var(--muted);background:transparent;border:0;
-  padding:5px 13px;cursor:pointer;transition:all .15s;display:inline-flex;
-  align-items:center;gap:5px;user-select:none}
-.seg-btn+.seg-btn{border-left:1px solid var(--border)}
-.seg-btn:hover{color:var(--text)}
-.seg-btn.active{background:color-mix(in srgb,var(--accent) 18%,transparent);
-  color:var(--accent);font-weight:600}
+.slider{position:relative;display:inline-flex;border:1px solid var(--border);
+  border-radius:22px;background:var(--surface);cursor:pointer;user-select:none}
+.slider .thumb{position:absolute;top:0;left:0;height:100%;width:50%;border-radius:22px;z-index:0;
+  background:color-mix(in srgb,var(--accent) 22%,transparent);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent);
+  transition:transform .25s cubic-bezier(.4,0,.2,1)}
+.slider.sem .thumb{transform:translateX(100%)}
+.slider .opt{position:relative;z-index:1;flex:1 1 0;min-width:94px;text-align:center;
+  padding:6px 14px;font-size:12.5px;white-space:nowrap;transition:color .2s,font-weight .2s}
+.slider .opt:nth-of-type(1){color:var(--accent);font-weight:600}
+.slider .opt:nth-of-type(2){color:var(--muted)}
+.slider.sem .opt:nth-of-type(1){color:var(--muted);font-weight:400}
+.slider.sem .opt:nth-of-type(2){color:var(--accent);font-weight:600}
 .sel{display:inline-flex;align-items:center;gap:6px;user-select:none}
 .opts select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);
   border-radius:8px;padding:4px 9px;cursor:pointer;outline:none}
@@ -169,9 +173,10 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
   <div class="search">
     <input id="q" placeholder="대화 검색…  (예: 급여 계산, STAGE1, 신선도 감쇠)" autofocus>
     <div class="opts">
-      <div class="seg" title="검색 모드 선택">
-        <button type="button" class="seg-btn active" data-sem="0">🔀 하이브리드</button>
-        <button type="button" class="seg-btn" data-sem="1">🧠 의미만</button>
+      <div class="slider" id="modeSlider" title="클릭하면 검색 모드 전환">
+        <div class="thumb"></div>
+        <span class="opt">🔀 하이브리드</span>
+        <span class="opt">🧠 의미만</span>
       </div>
       <span class="spacer"></span>
       <label class="sel">표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
@@ -213,11 +218,11 @@ async function go(){
     $('#hits').innerHTML=(r.hits&&r.hits.length)?r.hits.map(card).join(''):'<div class="empty">결과 없음</div>';
   }catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
 }
-document.querySelectorAll('.seg-btn').forEach(b=>b.addEventListener('click',()=>{
-  semOnly=b.dataset.sem==='1';
-  document.querySelectorAll('.seg-btn').forEach(x=>x.classList.toggle('active',x===b));
+$('#modeSlider').addEventListener('click',()=>{
+  semOnly=!semOnly;
+  $('#modeSlider').classList.toggle('sem',semOnly);
   go();
-}));
+});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
 $('#k').addEventListener('change',go);
 stats();
