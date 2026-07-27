@@ -117,8 +117,20 @@ h1{font-size:20px;margin:0;letter-spacing:-.02em}
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   outline:none;transition:border-color .15s,box-shadow .15s}
 .search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
-.opts{display:flex;gap:14px;align-items:center;margin:10px 2px;color:var(--muted);font-size:12.5px}
-.opts label{cursor:pointer;user-select:none}
+.opts{display:flex;align-items:center;gap:10px;margin:11px 2px 0;
+  color:var(--muted);font-size:12.5px;flex-wrap:wrap}
+.opts .spacer{flex:1 1 auto}
+.chip{font:inherit;color:var(--muted);background:var(--surface);border:1px solid var(--border);
+  border-radius:20px;padding:5px 13px;cursor:pointer;transition:all .15s;
+  display:inline-flex;align-items:center;gap:6px;user-select:none}
+.chip:hover{border-color:var(--accent);color:var(--text)}
+.chip.alt{background:color-mix(in srgb,var(--accent) 15%,transparent);
+  border-color:var(--accent);color:var(--accent);font-weight:600}
+.sel{display:inline-flex;align-items:center;gap:6px;user-select:none}
+.opts select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:4px 9px;cursor:pointer;outline:none}
+.opts select:hover{border-color:var(--accent)}
+.hint{opacity:.65}
 .hits{margin-top:18px;display:flex;flex-direction:column;gap:12px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:15px 17px;transition:border-color .15s}
@@ -154,15 +166,17 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
   <div class="search">
     <input id="q" placeholder="대화 검색…  (예: 급여 계산, STAGE1, 신선도 감쇠)" autofocus>
     <div class="opts">
-      <label><input type="checkbox" id="semonly"> 의미검색만(키워드 끄기)</label>
-      <label>표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
-      <span id="hint"><kbd>Enter</kbd> 로 검색</span>
+      <button type="button" id="mode" class="chip" title="하이브리드(의미+키워드) ↔ 의미검색만 전환">🔀 하이브리드</button>
+      <span class="spacer"></span>
+      <label class="sel">표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
+      <span class="hint"><kbd>Enter</kbd> 검색</span>
     </div>
   </div>
   <div class="hits" id="hits"></div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
+let semOnly=false;
 async function stats(){
   try{const s=await (await fetch('/api/stats')).json();
     $('#stats').textContent=`세션 ${s.sessions} · 턴 ${s.turns} · 벡터 ${s.vectors} · 정제 ${s.enriched}`;}catch(e){}
@@ -187,14 +201,20 @@ let timer;
 async function go(){
   const q=$('#q').value.trim(); if(!q){$('#hits').innerHTML='';return;}
   $('#hits').innerHTML='<div class="empty">검색 중…</div>';
-  const p=new URLSearchParams({q,k:$('#k').value,semantic_only:$('#semonly').checked});
+  const p=new URLSearchParams({q,k:$('#k').value,semantic_only:semOnly});
   try{
     const r=await (await fetch('/api/search?'+p)).json();
     $('#hits').innerHTML=(r.hits&&r.hits.length)?r.hits.map(card).join(''):'<div class="empty">결과 없음</div>';
   }catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
 }
+$('#mode').addEventListener('click',()=>{
+  semOnly=!semOnly;
+  const b=$('#mode');
+  b.textContent=semOnly?'🧠 의미검색만':'🔀 하이브리드';
+  b.classList.toggle('alt',semOnly);
+  go();
+});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
-$('#semonly').addEventListener('change',go);
 $('#k').addEventListener('change',go);
 stats();
 </script>
