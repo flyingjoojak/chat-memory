@@ -20,6 +20,9 @@ _FIELD_CHARS = 400
 
 def _build_prompt(turns: list[Turn]) -> str:
     head = [
+        # sentinel: claude -p 는 세션 로그를 남기므로, 이 프롬프트가 새 세션으로 기록된다.
+        # 파서가 이 접두를 보고 인덱싱에서 제외한다(자기오염 방지).
+        "<<CHATMEM-ENRICH>> chatmem 정제 작업(자동 생성 — 인덱싱 제외).",
         "다음은 한 Claude Code 세션의 대화 턴들이다.",
         "각 턴마다 한국어 한 줄 요약(summary)과 태그 2~4개(tags)를 생성하라.",
         "설명·인사·코드펜스 없이 아래 형식의 JSON만 출력하라:",

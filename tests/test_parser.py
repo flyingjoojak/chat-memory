@@ -76,6 +76,12 @@ def test_system_events_not_a_prompt():
     assert not is_real_user_prompt(_user("u1", "[SYSTEM NOTIFICATION - NOT USER INPUT]\n..."))
 
 
+def test_enrichment_prompt_not_a_prompt():
+    # 정제 claude -p 세션(자기오염) 제외 — sentinel/구버전 둘 다.
+    assert not is_real_user_prompt(_user("u1", "<<CHATMEM-ENRICH>> chatmem 정제 작업..."))
+    assert not is_real_user_prompt(_user("u1", "다음은 한 Claude Code 세션의 대화 턴들이다.\n각 턴마다..."))
+
+
 def test_tool_result_not_a_prompt():
     obj = {
         "type": "user",

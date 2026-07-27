@@ -33,6 +33,8 @@ _PLUMBING_PREFIXES = (
     "<command-stdout>",
     "<task-notification",              # 백그라운드 작업 완료 등 시스템 이벤트
     "[SYSTEM NOTIFICATION",            # 시스템 알림(NOT USER INPUT)
+    "<<CHATMEM-ENRICH>>",              # 정제 claude -p 세션(자기오염 방지)
+    "다음은 한 Claude Code 세션의 대화 턴들이다",  # 정제 프롬프트 구버전(sentinel 이전)
 )
 
 # 행동 상세로 뽑을 우선 키 순서.
