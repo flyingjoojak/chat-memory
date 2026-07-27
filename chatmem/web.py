@@ -127,11 +127,14 @@ h1{font-size:20px;margin:0;letter-spacing:-.02em}
   background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
 .badge.kw{background:color-mix(in srgb,var(--kw) 20%,transparent);color:var(--kw)}
 .q{font-weight:650;margin:0 0 6px;letter-spacing:-.01em}
-.a{color:var(--muted);white-space:pre-wrap;max-height:4.9em;overflow:hidden;position:relative}
+.a{color:var(--muted);white-space:pre-wrap;max-height:4.9em;overflow:hidden;position:relative;cursor:pointer}
+.a:not(.open)::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1.7em;
+  background:linear-gradient(transparent,var(--surface));pointer-events:none}
 .a.open{max-height:none}
-.actions{margin-top:9px;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;
+.actions{margin-top:8px;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;
   font-size:12px;color:var(--accent2);background:var(--surface2);padding:7px 10px;
-  border-radius:8px;overflow-x:auto;white-space:pre}
+  border-radius:8px;overflow-x:auto;white-space:pre;display:none}
+.actions.open{display:block}
 .enrich{margin-top:9px;font-size:12.5px}
 .tag{display:inline-block;padding:1px 8px;margin:2px 4px 0 0;border-radius:6px;
   background:var(--surface2);color:var(--muted);font-size:11px}
@@ -167,7 +170,7 @@ function esc(t){return (t||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':
 function card(h){
   const src=(h.sources||[]).map(s=>`<span class="badge ${s==='키워드'?'kw':''}">${s}</span>`).join('');
   const cos=h.cosine!=null?`<span class="cos">cos ${h.cosine.toFixed(3)}</span>`:'키워드매칭';
-  const acts=(h.actions||[]).length?`<div class="actions">${esc(h.actions.join('\n'))}</div>`:'';
+  const acts=(h.actions||[]).length?`<div class="toggle" onclick="this.nextElementSibling.classList.toggle('open')">▸ 행동(bash 등) ${h.actions.length}개</div><div class="actions">${esc(h.actions.join('\n'))}</div>`:'';
   const tags=(h.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
   const enrich=(h.summary||tags)?`<div class="enrich">${h.summary?'📝 '+esc(h.summary):''} ${tags}</div>`:'';
   const thread=(h.thread||[]).map(x=>`<div class="t"><b>Q:</b> ${esc(x.question).slice(0,120)}</div>`).join('');
