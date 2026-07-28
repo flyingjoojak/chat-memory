@@ -16,12 +16,29 @@ import shutil
 import subprocess
 import time
 
-from .config import ENRICH_API_MODEL, ENRICH_BACKEND, ENRICH_CLI_MODEL
+from .config import (
+    ENRICH_API_MODEL,
+    ENRICH_BACKEND,
+    ENRICH_CLI_MODEL,
+    ENRICH_GEMINI_MODEL,
+    ENRICH_OLLAMA_MODEL,
+    ENRICH_OLLAMA_URL,
+    ENRICH_OPENAI_MODEL,
+)
 from .models import Turn
 
 # 창이 크면 LLM이 긴 JSON 목록에서 일부 턴을 누락함 → 작게 잡아 커버리지 확보.
 _MAX_TURNS_PER_CALL = 20
 _FIELD_CHARS = 400
+
+# OpenAI 호환 백엔드 프리셋 — SDK 하나(openai)로 base_url·키·모델만 다르게.
+# ollama는 키 불필요(로컬), gemini는 Google의 OpenAI 호환 엔드포인트.
+_OPENAI_PRESETS = {
+    "openai": {"base_url": None, "key_envs": ["OPENAI_API_KEY"], "default_model": ENRICH_OPENAI_MODEL},
+    "gemini": {"base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+               "key_envs": ["GEMINI_API_KEY", "GOOGLE_API_KEY"], "default_model": ENRICH_GEMINI_MODEL},
+    "ollama": {"base_url": ENRICH_OLLAMA_URL, "key_envs": [], "default_model": ENRICH_OLLAMA_MODEL},
+}
 
 
 def _build_prompt(turns: list[Turn]) -> str:
@@ -71,10 +88,38 @@ def _call_anthropic_api(prompt: str, model: str, max_tokens: int = 4096) -> str:
     return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
 
 
+def _openai_key_for(preset: dict) -> str | None:
+    for env in preset["key_envs"]:
+        if os.environ.get(env):
+            return os.environ[env]
+    return None
+
+
+def _call_openai_compatible(prompt: str, model: str, base_url: str | None,
+                            api_key: str | None, max_tokens: int = 4096) -> str:
+    """OpenAI 호환 API 호출(OpenAI/Gemini/Ollama/LM Studio/vLLM 등 공통)."""
+    try:
+        from openai import OpenAI  # 선택적 의존성
+    except ImportError as e:
+        raise RuntimeError("openai 패키지가 필요합니다: pip install openai") from e
+    client = OpenAI(api_key=api_key or "not-needed", base_url=base_url)
+    resp = client.chat.completions.create(
+        model=model, max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return (resp.choices[0].message.content or "").strip()
+
+
 def _resolve_model(backend: str, model: str | None) -> str:
     if model:
         return model
-    return ENRICH_CLI_MODEL if backend == "claude" else ENRICH_API_MODEL
+    if backend == "claude":
+        return ENRICH_CLI_MODEL
+    if backend == "anthropic":
+        return ENRICH_API_MODEL
+    if backend in _OPENAI_PRESETS:
+        return _OPENAI_PRESETS[backend]["default_model"]
+    return model or ""
 
 
 def _generate(prompt: str, backend: str, model: str) -> str:
@@ -82,6 +127,9 @@ def _generate(prompt: str, backend: str, model: str) -> str:
         return _call_claude_cli(prompt, model)
     if backend == "anthropic":
         return _call_anthropic_api(prompt, model)
+    if backend in _OPENAI_PRESETS:
+        p = _OPENAI_PRESETS[backend]
+        return _call_openai_compatible(prompt, model, p["base_url"], _openai_key_for(p))
     raise RuntimeError(f"알 수 없는 정제 백엔드: {backend}")
 
 
@@ -101,6 +149,15 @@ def backend_available(backend: str) -> tuple[bool, str]:
         if not os.environ.get("ANTHROPIC_API_KEY"):
             return False, "ANTHROPIC_API_KEY 미설정"
         return True, ""
+    if backend in _OPENAI_PRESETS:
+        try:
+            import openai  # noqa: F401
+        except ImportError:
+            return False, "openai 패키지 없음 — pip install openai"
+        p = _OPENAI_PRESETS[backend]
+        if p["key_envs"] and _openai_key_for(p) is None:
+            return False, f"{'/'.join(p['key_envs'])} 미설정"
+        return True, ""  # ollama는 키 불필요(단, 로컬 서버가 떠 있어야 함)
     return False, f"알 수 없는 백엔드: {backend}"
 
 

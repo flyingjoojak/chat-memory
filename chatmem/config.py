@@ -52,8 +52,18 @@ CONTEXT_PREV_CHARS = 120     # 맥락 임베딩: 직전 질문을 이만큼 prep
 CHECKPOINT_TURNS = 50
 
 # --- 정제 백엔드 (플러그블) ----------------------------------------
-# 정제 LLM 호출 방식. claude=구독(claude -p) / anthropic=API키 / off=정제 안 함.
-# Claude Code 구독이 없는 사람은 anthropic(ANTHROPIC_API_KEY) 또는 off 사용.
+# 정제 LLM 호출 방식:
+#   claude    = Claude Code 구독(claude -p)           (기본)
+#   anthropic = Anthropic API키 + 공식 SDK
+#   openai    = OpenAI(GPT) 또는 OpenAI호환 서버       (OPENAI_API_KEY)
+#   gemini    = Google Gemini (OpenAI호환 엔드포인트)   (GEMINI_API_KEY/GOOGLE_API_KEY)
+#   ollama    = 로컬 모델(Ollama, 오프라인·무료)         (키 불필요)
+#   off       = 정제 안 함
 ENRICH_BACKEND = os.environ.get("CHATMEM_ENRICH_BACKEND", "claude")
 ENRICH_CLI_MODEL = os.environ.get("CHATMEM_ENRICH_MODEL", "sonnet")               # claude -p 별칭
-ENRICH_API_MODEL = os.environ.get("CHATMEM_ENRICH_API_MODEL", "claude-sonnet-5")  # API 전체 ID
+ENRICH_API_MODEL = os.environ.get("CHATMEM_ENRICH_API_MODEL", "claude-sonnet-5")  # anthropic API ID
+# OpenAI 호환 계열(openai/gemini/ollama) — SDK 하나로 base_url만 다르게.
+ENRICH_OPENAI_MODEL = os.environ.get("CHATMEM_OPENAI_MODEL", "gpt-4o-mini")
+ENRICH_GEMINI_MODEL = os.environ.get("CHATMEM_GEMINI_MODEL", "gemini-2.0-flash")
+ENRICH_OLLAMA_MODEL = os.environ.get("CHATMEM_OLLAMA_MODEL", "llama3.1")
+ENRICH_OLLAMA_URL = os.environ.get("CHATMEM_OLLAMA_URL", "http://localhost:11434/v1")

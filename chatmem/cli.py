@@ -189,7 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     i.set_defaults(func=cmd_index)
 
     en = sub.add_parser("enrich", help="세션 요약·태그 정제(claude -p / API / off)")
-    en.add_argument("--backend", choices=["claude", "anthropic", "off"], default=None,
+    en.add_argument("--backend",
+                    choices=["claude", "anthropic", "openai", "gemini", "ollama", "off"],
+                    default=None,
                     help="정제 백엔드 (기본: CHATMEM_ENRICH_BACKEND, 없으면 claude)")
     en.add_argument("--model", default=None, help="모델 (미지정 시 백엔드별 기본값)")
     en.add_argument("--session", default=None, help="특정 세션만")

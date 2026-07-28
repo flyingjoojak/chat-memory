@@ -45,6 +45,9 @@ def test_resolve_model_defaults():
     from chatmem.enrich import _resolve_model
     assert _resolve_model("claude", None) == "sonnet"
     assert _resolve_model("anthropic", None) == "claude-sonnet-5"
+    assert _resolve_model("openai", None) == "gpt-4o-mini"
+    assert _resolve_model("gemini", None) == "gemini-2.0-flash"
+    assert _resolve_model("ollama", None) == "llama3.1"
     assert _resolve_model("claude", "custom-model") == "custom-model"
 
 
@@ -60,7 +63,14 @@ def test_generate_dispatch(monkeypatch):
     from chatmem import enrich
     monkeypatch.setattr(enrich, "_call_claude_cli", lambda p, m, **k: f"cli:{m}")
     monkeypatch.setattr(enrich, "_call_anthropic_api", lambda p, m, **k: f"api:{m}")
+    monkeypatch.setattr(enrich, "_call_openai_compatible",
+                        lambda p, m, base_url, api_key, **k: f"oai:{m}@{base_url}")
     assert enrich._generate("x", "claude", "sonnet") == "cli:sonnet"
     assert enrich._generate("x", "anthropic", "claude-sonnet-5") == "api:claude-sonnet-5"
+    assert enrich._generate("x", "openai", "gpt-4o-mini") == "oai:gpt-4o-mini@None"
+    # gemini는 Google OpenAI호환 엔드포인트로 라우팅
+    assert "generativelanguage.googleapis.com" in enrich._generate("x", "gemini", "gemini-2.0-flash")
+    # ollama는 로컬 base_url
+    assert "11434" in enrich._generate("x", "ollama", "llama3.1")
     with pytest.raises(RuntimeError):
         enrich._generate("x", "off", "m")

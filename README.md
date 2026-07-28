@@ -47,22 +47,31 @@ python -m chatmem stats
 
 ## 정제(요약·태그) 백엔드 — 플러그블
 
-정제는 **선택 기능**이며 3가지 백엔드 중 고를 수 있다(`CHATMEM_ENRICH_BACKEND`):
+정제는 **선택 기능**이며 백엔드를 골라 쓴다(`CHATMEM_ENRICH_BACKEND` 또는 `--backend`):
 
 | 백엔드 | 설명 | 필요 조건 |
 |--------|------|-----------|
 | `claude` (기본) | Claude Code 구독(`claude -p`) | Claude Code 설치·로그인 |
-| `anthropic` | Anthropic API + 공식 SDK | `pip install -r requirements-enrich.txt` + `ANTHROPIC_API_KEY` |
+| `anthropic` | Anthropic API | `pip install anthropic` + `ANTHROPIC_API_KEY` |
+| `openai` | OpenAI(GPT) / OpenAI호환 서버 | `pip install openai` + `OPENAI_API_KEY` |
+| `gemini` | Google Gemini (OpenAI호환) | `pip install openai` + `GEMINI_API_KEY` |
+| `ollama` | 로컬 모델 (오프라인·무료) | `pip install openai` + Ollama 실행 |
 | `off` | 정제 안 함 (원문 검색만) | 없음 — 정제 없이도 완전 동작 |
 
+`openai`/`gemini`/`ollama`는 전부 **OpenAI 호환 API**라 `openai` SDK 하나로 처리된다. LM Studio·vLLM·Groq 등도 `openai` 백엔드에 `CHATMEM_OPENAI_MODEL` + base_url 커스텀으로 연결 가능.
+
 ```bash
-# API 키 방식 (Claude Code 구독 없이)
-export CHATMEM_ENRICH_BACKEND=anthropic
-export ANTHROPIC_API_KEY=sk-ant-...
-python -m chatmem enrich
+# GPT
+CHATMEM_ENRICH_BACKEND=openai OPENAI_API_KEY=sk-... python -m chatmem enrich
+
+# Gemini
+CHATMEM_ENRICH_BACKEND=gemini GEMINI_API_KEY=... python -m chatmem enrich
+
+# 로컬 (Ollama, 완전 오프라인·유출0)
+CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem enrich
 
 # 정제 끄기
-CHATMEM_ENRICH_BACKEND=off python -m chatmem enrich
+python -m chatmem enrich --backend off
 ```
 
 정제 없이도 임베딩·하이브리드 검색은 그대로 동작한다. 정제본은 검색 결과 헤드라인(표시용)일 뿐 검색 자체는 원문 기준이다.
@@ -72,8 +81,10 @@ CHATMEM_ENRICH_BACKEND=off python -m chatmem enrich
 - `CHATMEM_DATA_DIR` — 데이터 저장 위치 (기본 `~/chat-memory/data`)
 - `CLAUDE_PROJECTS_DIR` — 로그 소스 (기본 `~/.claude/projects`)
 - `CHATMEM_EMBED_MODEL` — 임베딩 모델 (변경 시 전체 재색인 필요)
-- `CHATMEM_ENRICH_BACKEND` — `claude`(기본) / `anthropic` / `off`
-- `CHATMEM_ENRICH_API_MODEL` — anthropic 백엔드 모델 (기본 `claude-sonnet-5`)
+- `CHATMEM_ENRICH_BACKEND` — `claude`(기본)/`anthropic`/`openai`/`gemini`/`ollama`/`off`
+- `CHATMEM_ENRICH_API_MODEL` — anthropic 모델 (기본 `claude-sonnet-5`)
+- `CHATMEM_OPENAI_MODEL` / `CHATMEM_GEMINI_MODEL` / `CHATMEM_OLLAMA_MODEL` — 각 백엔드 모델
+- `CHATMEM_OLLAMA_URL` — Ollama 엔드포인트 (기본 `http://localhost:11434/v1`)
 
 ## 상태
 
