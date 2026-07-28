@@ -9,10 +9,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
 from .models import Turn
 
 _RRF_K = 60  # RRF 표준 상수
+_KST = timezone(timedelta(hours=9))  # 한국 표준시(고정 오프셋, 서머타임 없음)
+
+
+def _parse_ts(ts: str) -> datetime | None:
+    """저장 타임스탬프(ISO UTC, 'Z' 접미) → aware datetime. Py3.10은 'Z' 미지원이라 치환."""
+    try:
+        return datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _kst_lower_bound(s: str) -> datetime | None:
+    """since 하한(포함). 'YYYY-MM-DD'는 그 KST 달력일의 00:00(KST)→UTC. 전체 타임스탬프면 그대로."""
+    if len(s) == 10:
+        d = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=_KST)
+        return d.astimezone(timezone.utc)
+    return _parse_ts(s)
+
+
+def _kst_upper_bound(s: str) -> datetime | None:
+    """until 상한(배타). 'YYYY-MM-DD'는 그날 전체 포함 → 다음 KST일 00:00(KST)→UTC. 전체 타임스탬프면 그대로."""
+    if len(s) == 10:
+        d = datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=_KST) + timedelta(days=1)
+        return d.astimezone(timezone.utc)
+    return _parse_ts(s)
 
 
 @dataclass(frozen=True)
@@ -71,6 +97,10 @@ def search(
 
     ranked = sorted(fused, key=lambda t: -fused[t])
 
+    # 날짜 필터는 KST 달력일 기준 → UTC 구간으로 변환(정확한 자정 경계).
+    since_dt = _kst_lower_bound(since) if since else None  # 포함 하한
+    until_dt = _kst_upper_bound(until) if until else None  # 배타 상한
+
     hits: list[SearchHit] = []
     seen_questions: set[str] = set()
     for tid in ranked:
@@ -79,13 +109,13 @@ def search(
             continue
         if session and not (turn.session_id.startswith(session) or session in turn.project):
             continue
-        if since and turn.timestamp < since:
-            continue
-        if until:
-            # 날짜만(YYYY-MM-DD) 주면 그날 끝까지 포함(T99 = 어떤 실제 시각보다 큼).
-            bound = until if len(until) > 10 else until + "T99"
-            if turn.timestamp > bound:
-                continue
+        if since_dt or until_dt:
+            tt = _parse_ts(turn.timestamp)
+            if tt is not None:
+                if since_dt and tt < since_dt:
+                    continue
+                if until_dt and tt >= until_dt:
+                    continue
         nq = _norm_q(turn.question)
         if nq and nq in seen_questions:  # 근접중복 다양화
             continue

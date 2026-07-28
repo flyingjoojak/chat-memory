@@ -85,6 +85,22 @@ def test_date_range_since_until(tmp_path):
     assert "s1:u2" in ids
 
 
+def test_kst_boundary_precise(tmp_path):
+    # KST 달력일 2026-07-22 하루(00:00~24:00 KST)만 걸러지는지 — UTC 저장값 경계 검증.
+    db = ArchiveDB(tmp_path / "a.db")
+    vi = VectorIndex(tmp_path / "v.npy", tmp_path / "i.json")
+    _seed(db, vi, [
+        _turn("s1:uA", "STAGE1 A", "x", ts="2026-07-21T15:30:00Z"),  # KST 07-22 00:30 (포함)
+        _turn("s1:uB", "STAGE1 B", "x", ts="2026-07-22T14:30:00Z"),  # KST 07-22 23:30 (포함)
+        _turn("s1:uC", "STAGE1 C", "x", ts="2026-07-22T15:30:00Z"),  # KST 07-23 00:30 (제외)
+        _turn("s1:uZ", "STAGE1 Z", "x", ts="2026-07-21T14:30:00Z"),  # KST 07-21 23:30 (제외)
+    ])
+    e = FakeEmbedder()
+    ids = {h.turn.id for h in search("STAGE1", db, vi, e, k=10,
+                                     since="2026-07-22", until="2026-07-22")}
+    assert ids == {"s1:uA", "s1:uB"}
+
+
 def test_semantic_only_flag_disables_keyword(tmp_path):
     db = ArchiveDB(tmp_path / "a.db")
     vi = VectorIndex(tmp_path / "v.npy", tmp_path / "i.json")
