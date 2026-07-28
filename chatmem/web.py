@@ -167,6 +167,7 @@ h1{font-size:19px;margin:0;font-weight:700}
 .opts select,.opts input[type=date]{font:inherit;color:var(--text);background:var(--surface);
   border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;outline:none}
 .opts input[type=date]{font-variant-numeric:tabular-nums;color-scheme:light dark}
+.opts .dategrp{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 .opts .clr{cursor:pointer;color:var(--muted);border:1px solid var(--border);background:var(--surface);
   border-radius:8px;padding:4px 9px;font:inherit}
 .opts .clr:hover{color:var(--text)}
@@ -239,12 +240,14 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
       <div class="slider" id="dispSlider" data-on="0" title="표시 방식">
         <div class="thumb"></div><span class="opt">📝 정제 우선</span><span class="opt">📄 원문 우선</span>
       </div>
-      <span class="spacer"></span>
-      <label>이후 <input type="date" id="since"></label>
-      <label>이전 <input type="date" id="until"></label>
-      <button type="button" class="clr" id="clrDate" title="이후/이전 날짜 필터를 모두 지웁니다">날짜 초기화</button>
       <label>표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
       <span style="opacity:.65"><kbd>Enter</kbd></span>
+      <span class="spacer"></span>
+      <div class="dategrp">
+        <label>이후 <input type="date" id="since"></label>
+        <label>이전 <input type="date" id="until"></label>
+        <button type="button" class="clr" id="clrDate" title="이후/이전 날짜 필터를 모두 지웁니다">초기화</button>
+      </div>
     </div>
   </div>
   <div class="hits" id="hits"></div>
