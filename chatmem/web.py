@@ -242,7 +242,7 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
       <span class="spacer"></span>
       <label>이후 <input type="date" id="since"></label>
       <label>이전 <input type="date" id="until"></label>
-      <button type="button" class="clr" id="clrDate" title="날짜 초기화">✕ 날짜</button>
+      <button type="button" class="clr" id="clrDate" title="이후/이전 날짜 필터를 모두 지웁니다">날짜 초기화</button>
       <label>표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
       <span style="opacity:.65"><kbd>Enter</kbd></span>
     </div>

@@ -33,6 +33,16 @@ def _trunc(s: str, n: int) -> str:
     return s if len(s) <= n else s[:n] + "..."
 
 
+def _kst(ts: str) -> str:
+    """UTC 저장 타임스탬프 → KST(YYYY-MM-DD HH:MM) 표시. 파싱 실패 시 원문 앞부분."""
+    from datetime import datetime, timedelta, timezone
+    try:
+        dt = datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+        return dt.astimezone(timezone(timedelta(hours=9))).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return (ts or "")[:16].replace("T", " ")
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     db, vi, embedder = _open(need_embedder=True)
     if len(vi) == 0:
@@ -48,7 +58,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         t = h.turn
         via = "+".join(h.sources) if h.sources else "?"
         cos = f"cos={h.cosine:.3f}" if h.cosine is not None else "키워드"
-        print(f"\n[{i}] [{via}] {cos}  {t.timestamp}  ({t.project})")
+        print(f"\n[{i}] [{via}] {cos}  {_kst(t.timestamp)}  세션 {t.session_id[:8]}")
         print(f"    Q: {_trunc(t.question, 200)}")
         print(f"    A: {_trunc(t.answer, 200)}")
         if t.actions:
@@ -57,7 +67,7 @@ def cmd_search(args: argparse.Namespace) -> int:
             print(f"    - 정제: {_trunc(h.summary, 160)}")
         if h.tags:
             print(f"    - 태그: {', '.join(h.tags)}")
-        print(f"    - 세션 {t.session_id[:8]} / 스레드 {len(h.thread)}턴")
+        print(f"    - 스레드 {len(h.thread)}턴")
     return 0
 
 
