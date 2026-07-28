@@ -162,15 +162,21 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
 .fold{display:none;margin-top:9px}
 .fold.open{display:block}
 .raw .rq{margin:0 0 7px;color:var(--text);text-wrap:pretty}
-.raw .ra{color:var(--muted);white-space:pre-wrap;text-wrap:pretty}
+.raw .ra{color:var(--muted);text-wrap:pretty}
 .raw b,.thread b{color:var(--accent);font-weight:600;margin-right:5px}
+.ra strong,.a strong,.rq strong{color:var(--text);font-weight:650}
+.ra .hd,.a .hd{display:block;color:var(--text);font-weight:650;margin:9px 0 2px}
+.ra .code,.a .code{font-family:ui-monospace,Consolas,monospace;font-size:12px;
+  background:var(--surface2);padding:8px 11px;border-radius:8px;overflow-x:auto;white-space:pre;margin:6px 0}
+.ra code,.a code,.rq code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;
+  background:var(--surface2);padding:1px 5px;border-radius:4px}
 .actions{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12px;
   color:var(--text);background:var(--surface2);padding:8px 11px;border-radius:8px;
   overflow-x:auto;white-space:pre}
 .thread{border-left:2px solid var(--border);padding-left:12px}
 .thread .t{font-size:12.5px;color:var(--muted);margin:6px 0}
 .empty{color:var(--muted);text-align:center;padding:44px}
-.a{color:var(--muted);white-space:pre-wrap;cursor:pointer;
+.a{color:var(--muted);cursor:pointer;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .a.open{-webkit-line-clamp:unset;display:block}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
@@ -201,6 +207,17 @@ let semOnly=false, rawFirst=false;
 function stats(){fetch('/api/stats').then(r=>r.json()).then(s=>{
   $('#stats').textContent=`세션 ${s.sessions} · 턴 ${s.turns} · 벡터 ${s.vectors} · 정제 ${s.enriched}`;}).catch(()=>{});}
 function esc(t){return (t||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+// 원문 마크다운을 안전하게 렌더(HTML escape 후 알려진 서식만 변환).
+function md(t){
+  t=esc(t);
+  t=t.replace(/```([\s\S]*?)```/g,(m,c)=>`<div class="code">${c.replace(/^\n+|\n+$/g,'')}</div>`);
+  t=t.replace(/`([^`]+)`/g,'<code>$1</code>');
+  t=t.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  t=t.replace(/^#{1,6}\s+(.+)$/gm,'<span class="hd">$1</span>');
+  t=t.replace(/^\s*[-*]\s+(.+)$/gm,'· $1');
+  t=t.replace(/\n/g,'<br>');
+  return t;
+}
 function tog(el){el.nextElementSibling.classList.toggle('open');}
 window.tog=tog;
 
@@ -213,12 +230,12 @@ function card(h){
   const th=(h.thread||[]).map(x=>`<div class="t"><b>Q</b>${esc(x.question).slice(0,120)}</div>`).join('');
   const thread=th?`<div class="toggle" onclick="tog(this)">▸ 스레드 맥락 ${h.thread.length}턴</div><div class="fold thread">${th}</div>`:'';
   const rawFold=`<div class="toggle" onclick="tog(this)">▸ 원문 Q&amp;A</div>
-    <div class="fold raw"><p class="rq"><b>Q</b>${esc(h.question)||'(질문 없음)'}</p><div class="ra"><b>A</b>${esc(h.answer)||'—'}</div></div>`;
+    <div class="fold raw"><p class="rq"><b>Q</b>${md(h.question)||'(질문 없음)'}</p><div class="ra"><b>A</b>${md(h.answer)||'—'}</div></div>`;
 
   let body;
   if(rawFirst){
     body=`<p class="headline">${esc(h.question)||'<span class="sub">(질문 없음)</span>'}</p>
-      <div class="a" onclick="this.classList.toggle('open')" style="margin-top:7px">${esc(h.answer)||'—'}</div>
+      <div class="a" onclick="this.classList.toggle('open')" style="margin-top:7px">${md(h.answer)||'—'}</div>
       ${h.summary?`<div class="enrich"><span class="mk">📝</span>${esc(h.summary)}</div>`:''}${tags}`;
   }else{
     const head=h.summary?`<span class="mk">📝</span>${esc(h.summary)}`:`${esc(h.question)||'<span class="sub">(요약 없음)</span>'}`;
