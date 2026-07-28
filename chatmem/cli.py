@@ -104,6 +104,7 @@ def cmd_index(args: argparse.Namespace) -> int:
 
 def cmd_enrich(args: argparse.Namespace) -> int:
     from .enrich import enrich_all, enrich_session
+    from .keepawake import keep_system_awake
     from .logutil import batch_log
 
     db, _vi, _ = _open(need_embedder=False)
@@ -112,13 +113,15 @@ def cmd_enrich(args: argparse.Namespace) -> int:
         print(msg)
         batch_log(msg)
 
-    if args.session:
-        n = enrich_session(args.session, db, model=args.model)
-        log(f"세션 {args.session[:8]}: {n}턴 정제")
-    else:
-        total = enrich_all(db, model=args.model, only_missing=not args.all,
-                           limit=args.limit, log_fn=log)
-        log(f"완료: 총 {total}턴 정제.")
+    # 정제 도중 시스템 절전 방지(오래 걸리는 야간 작업이 중간에 안 멈추게).
+    with keep_system_awake():
+        if args.session:
+            n = enrich_session(args.session, db, model=args.model)
+            log(f"세션 {args.session[:8]}: {n}턴 정제")
+        else:
+            total = enrich_all(db, model=args.model, only_missing=not args.all,
+                               limit=args.limit, log_fn=log)
+            log(f"완료: 총 {total}턴 정제.")
     return 0
 
 
