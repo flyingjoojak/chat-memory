@@ -264,7 +264,8 @@ window.tog=tog;
 function card(h){
   const src=(h.sources||[]).map(s=>`<span class="badge ${s==='키워드'?'kw':''}">${s}</span>`).join('');
   const cos=h.cosine!=null?`cos ${h.cosine.toFixed(3)}`:'키워드';
-  const meta=`<div class="meta">${src}<span>${cos}</span>· ${esc(h.project)} · ${esc(h.timestamp).slice(0,16)} · 세션 ${esc(h.session)}</div>`;
+  const when=esc(h.timestamp).slice(0,16).replace('T',' ');
+  const meta=`<div class="meta">${src}<span>${cos}</span>· ${when} · 세션 ${esc(h.session)}</div>`;
   const tags=(h.tags||[]).length?`<div class="tags">${h.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:'';
   const acts=(h.actions||[]).length?`<div class="toggle" onclick="tog(this)">▸ 행동(bash 등) ${h.actions.length}개</div><div class="fold actions">${esc(h.actions.join('\n'))}</div>`:'';
   const th=(h.thread||[]).map(x=>`<div class="titem"><div class="tq" onclick="tog(this)"><b>Q</b>${esc(x.question).slice(0,120)}</div><div class="fold ta">${md(x.answer)||'—'}</div></div>`).join('');
@@ -290,11 +291,11 @@ async function openSession(sid){
   try{
     const r=await (await fetch('/api/session?id='+encodeURIComponent(sid))).json();
     const head=`<div class="ov-head"><span class="close" onclick="closeSession()">← 검색으로</span>`+
-      `<span class="t">${esc(r.project)} · 세션 ${esc(sid).slice(0,8)} · ${r.count}턴</span></div>`;
+      `<span class="t">세션 ${esc(sid).slice(0,8)} · ${r.count}턴</span></div>`;
     const rows=r.turns.map((t,i)=>{
       const hd=t.summary?`<span class="mk">📝</span>${esc(t.summary)}`:(esc(t.question)||'<span class="sub">(요약 없음)</span>');
       const acts=(t.actions||[]).length?`<div class="toggle" onclick="tog(this)">▸ 행동(bash 등) ${t.actions.length}개</div><div class="fold actions">${esc(t.actions.join('\n'))}</div>`:'';
-      return `<div class="sturn"><div class="st-time">#${i+1} · ${esc(t.timestamp).slice(0,16)}</div>`+
+      return `<div class="sturn"><div class="st-time">#${i+1} · ${esc(t.timestamp).slice(0,16).replace('T',' ')}</div>`+
         `<p class="st-head">${hd}</p>`+
         `<div class="toggle" onclick="tog(this)">▸ 원문 Q&amp;A</div>`+
         `<div class="fold raw"><p class="rq"><b>Q</b>${md(t.question)||'(질문 없음)'}</p><div class="ra"><b>A</b>${md(t.answer)||'—'}</div></div>`+
