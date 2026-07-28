@@ -96,133 +96,147 @@ _HTML = r"""<!doctype html>
 <title>chat-memory</title>
 <style>
 :root{
-  --bg:#0f1115; --surface:#171a21; --surface2:#1e222b; --border:#2a2f3a;
-  --text:#e6e8ee; --muted:#9aa3b2; --accent:#6ea8fe; --accent2:#7ee787;
-  --kw:#f0b429; --radius:12px;
+  --bg:#f7f7f8; --surface:#ffffff; --surface2:#eff1f4; --border:#e4e5ea;
+  --text:#1b1c20; --muted:#6b7280; --accent:#2563eb; --accent-soft:#e8effd;
+  --radius:12px; --z-bar:10;
 }
-@media (prefers-color-scheme:light){
-  :root{--bg:#f6f7f9;--surface:#fff;--surface2:#eef1f5;--border:#dce0e6;
-        --text:#1a1d23;--muted:#5b6472;--accent:#2563eb;--accent2:#16a34a;--kw:#b45309;}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0d0e11; --surface:#161719; --surface2:#1e2024; --border:#2a2c31;
+        --text:#e9eaec; --muted:#969aa4; --accent:#6b93ff; --accent-soft:#1a2338;}
 }
+:root[data-theme=light]{--bg:#f7f7f8;--surface:#fff;--surface2:#eff1f4;--border:#e4e5ea;
+  --text:#1b1c20;--muted:#6b7280;--accent:#2563eb;--accent-soft:#e8effd;}
+:root[data-theme=dark]{--bg:#0d0e11;--surface:#161719;--surface2:#1e2024;--border:#2a2c31;
+  --text:#e9eaec;--muted:#969aa4;--accent:#6b93ff;--accent-soft:#1a2338;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
-  font:15px/1.6 -apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;}
-.wrap{max-width:860px;margin:0 auto;padding:28px 20px 80px}
-header{display:flex;align-items:baseline;gap:12px;margin-bottom:20px}
-h1{font-size:20px;margin:0;letter-spacing:-.02em}
-.stats{color:var(--muted);font-size:12.5px}
-.search{position:sticky;top:0;z-index:5;background:var(--bg);
-  padding:16px 0 12px;box-shadow:0 8px 12px -8px var(--bg)}
-.search input{width:100%;padding:15px 18px;font-size:16px;color:var(--text);
+  font:15px/1.6 -apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:820px;margin:0 auto;padding:0 20px 80px}
+header{padding:26px 0 4px;display:flex;align-items:baseline;gap:10px}
+h1{font-size:19px;margin:0;font-weight:700}
+.stats{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+
+.bar{position:sticky;top:0;z-index:var(--z-bar);background:var(--bg);padding:14px 0 12px}
+.bar input[type=search]{width:100%;padding:14px 16px;font-size:16px;color:var(--text);
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   outline:none;transition:border-color .15s,box-shadow .15s}
-.search input:focus{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
-.opts{display:flex;align-items:center;gap:10px;margin:11px 2px 0;
-  color:var(--muted);font-size:12.5px;flex-wrap:wrap}
+.bar input[type=search]:focus{border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-soft)}
+.opts{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap;
+  color:var(--muted);font-size:12.5px}
 .opts .spacer{flex:1 1 auto}
+
 .slider{position:relative;display:inline-flex;border:1px solid var(--border);
   border-radius:22px;background:var(--surface);cursor:pointer;user-select:none}
 .slider .thumb{position:absolute;top:0;left:0;height:100%;width:50%;border-radius:22px;z-index:0;
-  background:color-mix(in srgb,var(--accent) 22%,transparent);
-  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 45%,transparent);
-  transition:transform .25s cubic-bezier(.4,0,.2,1)}
-.slider.sem .thumb{transform:translateX(100%)}
-.slider .opt{position:relative;z-index:1;flex:1 1 0;min-width:94px;text-align:center;
-  padding:6px 14px;font-size:12.5px;white-space:nowrap;transition:color .2s,font-weight .2s}
+  background:var(--accent-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent);
+  transition:transform .2s ease-out}
+.slider[data-on="1"] .thumb{transform:translateX(100%)}
+.slider .opt{position:relative;z-index:1;flex:1 1 0;min-width:96px;text-align:center;
+  padding:6px 14px;font-size:12.5px;white-space:nowrap;transition:color .15s}
 .slider .opt:nth-of-type(1){color:var(--accent);font-weight:600}
 .slider .opt:nth-of-type(2){color:var(--muted)}
-.slider.sem .opt:nth-of-type(1){color:var(--muted);font-weight:400}
-.slider.sem .opt:nth-of-type(2){color:var(--accent);font-weight:600}
-.sel{display:inline-flex;align-items:center;gap:6px;user-select:none}
+.slider[data-on="1"] .opt:nth-of-type(1){color:var(--muted);font-weight:400}
+.slider[data-on="1"] .opt:nth-of-type(2){color:var(--accent);font-weight:600}
 .opts select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;padding:4px 9px;cursor:pointer;outline:none}
-.opts select:hover{border-color:var(--accent)}
-.hint{opacity:.65}
-.hits{margin-top:18px;display:flex;flex-direction:column;gap:12px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:15px 17px;transition:border-color .15s}
-.card:hover{border-color:color-mix(in srgb,var(--accent) 40%,var(--border))}
-.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:9px}
-.badge{padding:2px 8px;border-radius:20px;font-weight:600;font-size:10.5px;
-  background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
-.badge.kw{background:color-mix(in srgb,var(--kw) 20%,transparent);color:var(--kw)}
-.q{font-weight:650;margin:0 0 6px;letter-spacing:-.01em}
-.a{color:var(--muted);white-space:pre-wrap;max-height:4.9em;overflow:hidden;position:relative;cursor:pointer}
-.a:not(.open)::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1.7em;
-  background:linear-gradient(transparent,var(--surface));pointer-events:none}
-.a.open{max-height:none}
-.actions{margin-top:8px;font-family:ui-monospace,'Cascadia Code',Consolas,monospace;
-  font-size:12px;color:var(--accent2);background:var(--surface2);padding:7px 10px;
-  border-radius:8px;overflow-x:auto;white-space:pre;display:none}
-.actions.open{display:block}
-.enrich{margin-top:9px;font-size:12.5px}
-.tag{display:inline-block;padding:1px 8px;margin:2px 4px 0 0;border-radius:6px;
-  background:var(--surface2);color:var(--muted);font-size:11px}
-.toggle{margin-top:8px;font-size:12px;color:var(--accent);cursor:pointer;user-select:none}
-.thread{margin-top:9px;border-left:2px solid var(--border);padding-left:12px;display:none}
-.thread.open{display:block}
-.thread .t{font-size:12.5px;color:var(--muted);margin:6px 0}
-.empty{color:var(--muted);text-align:center;padding:40px}
-.cos{font-variant-numeric:tabular-nums}
+  border-radius:8px;padding:4px 8px;cursor:pointer;outline:none}
 kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:11px}
+
+.hits{margin-top:6px;display:flex;flex-direction:column;gap:11px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:15px 17px}
+.meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;
+  color:var(--muted);margin-bottom:10px;font-variant-numeric:tabular-nums}
+.badge{padding:2px 8px;border-radius:20px;font-weight:600;font-size:10.5px;
+  background:var(--accent-soft);color:var(--accent)}
+.badge.kw{background:var(--surface2);color:var(--muted)}
+.headline{font-size:15px;font-weight:600;line-height:1.5;margin:0;text-wrap:pretty}
+.headline .mk{color:var(--accent);margin-right:4px}
+.sub{color:var(--muted);font-weight:400}
+.tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
+.tag{padding:2px 8px;border-radius:6px;background:var(--surface2);color:var(--muted);font-size:11px}
+.enrich{margin-top:9px;font-size:13px;color:var(--muted);text-wrap:pretty}
+.toggle{margin-top:9px;font-size:12px;color:var(--accent);cursor:pointer;user-select:none;
+  display:inline-block}
+.fold{display:none;margin-top:9px}
+.fold.open{display:block}
+.raw .rq{margin:0 0 7px;color:var(--text);text-wrap:pretty}
+.raw .ra{color:var(--muted);white-space:pre-wrap;text-wrap:pretty}
+.raw b,.thread b{color:var(--accent);font-weight:600;margin-right:5px}
+.actions{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12px;
+  color:var(--text);background:var(--surface2);padding:8px 11px;border-radius:8px;
+  overflow-x:auto;white-space:pre}
+.thread{border-left:2px solid var(--border);padding-left:12px}
+.thread .t{font-size:12.5px;color:var(--muted);margin:6px 0}
+.empty{color:var(--muted);text-align:center;padding:44px}
+.a{color:var(--muted);white-space:pre-wrap;cursor:pointer;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.a.open{-webkit-line-clamp:unset;display:block}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header><h1>chat-memory</h1><span class="stats" id="stats"></span></header>
-  <div class="search">
-    <input id="q" placeholder="대화 검색…  (예: 급여 계산, STAGE1, 신선도 감쇠)" autofocus>
+  <div class="bar">
+    <input type="search" id="q" placeholder="대화 검색…  예: 급여 계산 · STAGE1 · 신선도 감쇠" autofocus>
     <div class="opts">
-      <div class="slider" id="modeSlider" title="클릭하면 검색 모드 전환">
-        <div class="thumb"></div>
-        <span class="opt">🔀 하이브리드</span>
-        <span class="opt">🧠 의미만</span>
+      <div class="slider" id="modeSlider" data-on="0" title="검색 모드">
+        <div class="thumb"></div><span class="opt">🔀 하이브리드</span><span class="opt">🧠 의미만</span>
+      </div>
+      <div class="slider" id="dispSlider" data-on="0" title="표시 방식">
+        <div class="thumb"></div><span class="opt">📝 정제 우선</span><span class="opt">📄 원문 우선</span>
       </div>
       <span class="spacer"></span>
-      <label class="sel">표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
-      <span class="hint"><kbd>Enter</kbd> 검색</span>
+      <label>표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
+      <span style="opacity:.65"><kbd>Enter</kbd></span>
     </div>
   </div>
   <div class="hits" id="hits"></div>
 </div>
 <script>
 const $=s=>document.querySelector(s);
-let semOnly=false;
-async function stats(){
-  try{const s=await (await fetch('/api/stats')).json();
-    $('#stats').textContent=`세션 ${s.sessions} · 턴 ${s.turns} · 벡터 ${s.vectors} · 정제 ${s.enriched}`;}catch(e){}
-}
+let semOnly=false, rawFirst=false;
+function stats(){fetch('/api/stats').then(r=>r.json()).then(s=>{
+  $('#stats').textContent=`세션 ${s.sessions} · 턴 ${s.turns} · 벡터 ${s.vectors} · 정제 ${s.enriched}`;}).catch(()=>{});}
 function esc(t){return (t||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function tog(el){el.nextElementSibling.classList.toggle('open');}
+window.tog=tog;
+
 function card(h){
   const src=(h.sources||[]).map(s=>`<span class="badge ${s==='키워드'?'kw':''}">${s}</span>`).join('');
-  const cos=h.cosine!=null?`<span class="cos">cos ${h.cosine.toFixed(3)}</span>`:'키워드매칭';
-  const acts=(h.actions||[]).length?`<div class="toggle" onclick="this.nextElementSibling.classList.toggle('open')">▸ 행동(bash 등) ${h.actions.length}개</div><div class="actions">${esc(h.actions.join('\n'))}</div>`:'';
-  const tags=(h.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join('');
-  const enrich=(h.summary||tags)?`<div class="enrich">${h.summary?'📝 '+esc(h.summary):''} ${tags}</div>`:'';
-  const thread=(h.thread||[]).map(x=>`<div class="t"><b>Q:</b> ${esc(x.question).slice(0,120)}</div>`).join('');
-  return `<div class="card">
-    <div class="meta">${src} ${cos} · ${esc(h.project)} · ${esc(h.timestamp).slice(0,16)} · 세션 ${esc(h.session)}</div>
-    <p class="q">${esc(h.question)||'<em>(질문 없음)</em>'}</p>
-    <div class="a" onclick="this.classList.toggle('open')">${esc(h.answer)||'—'}</div>
-    ${acts}${enrich}
-    ${thread?`<div class="toggle" onclick="this.nextElementSibling.classList.toggle('open')">▸ 스레드 맥락 ${h.thread.length}턴</div><div class="thread">${thread}</div>`:''}
-  </div>`;
+  const cos=h.cosine!=null?`cos ${h.cosine.toFixed(3)}`:'키워드';
+  const meta=`<div class="meta">${src}<span>${cos}</span>· ${esc(h.project)} · ${esc(h.timestamp).slice(0,16)} · 세션 ${esc(h.session)}</div>`;
+  const tags=(h.tags||[]).length?`<div class="tags">${h.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:'';
+  const acts=(h.actions||[]).length?`<div class="toggle" onclick="tog(this)">▸ 행동(bash 등) ${h.actions.length}개</div><div class="fold actions">${esc(h.actions.join('\n'))}</div>`:'';
+  const th=(h.thread||[]).map(x=>`<div class="t"><b>Q</b>${esc(x.question).slice(0,120)}</div>`).join('');
+  const thread=th?`<div class="toggle" onclick="tog(this)">▸ 스레드 맥락 ${h.thread.length}턴</div><div class="fold thread">${th}</div>`:'';
+  const rawFold=`<div class="toggle" onclick="tog(this)">▸ 원문 Q&amp;A</div>
+    <div class="fold raw"><p class="rq"><b>Q</b>${esc(h.question)||'(질문 없음)'}</p><div class="ra"><b>A</b>${esc(h.answer)||'—'}</div></div>`;
+
+  let body;
+  if(rawFirst){
+    body=`<p class="headline">${esc(h.question)||'<span class="sub">(질문 없음)</span>'}</p>
+      <div class="a" onclick="this.classList.toggle('open')" style="margin-top:7px">${esc(h.answer)||'—'}</div>
+      ${h.summary?`<div class="enrich"><span class="mk">📝</span>${esc(h.summary)}</div>`:''}${tags}`;
+  }else{
+    const head=h.summary?`<span class="mk">📝</span>${esc(h.summary)}`:`${esc(h.question)||'<span class="sub">(요약 없음)</span>'}`;
+    body=`<p class="headline">${head}</p>${tags}${rawFold}`;
+  }
+  return `<div class="card">${meta}${body}${acts}${thread}</div>`;
 }
-let timer;
+let hits=[];
+function render(){$('#hits').innerHTML=hits.length?hits.map(card).join(''):'<div class="empty">결과 없음</div>';}
 async function go(){
-  const q=$('#q').value.trim(); if(!q){$('#hits').innerHTML='';return;}
+  const q=$('#q').value.trim(); if(!q){hits=[];$('#hits').innerHTML='';return;}
   $('#hits').innerHTML='<div class="empty">검색 중…</div>';
   const p=new URLSearchParams({q,k:$('#k').value,semantic_only:semOnly});
-  try{
-    const r=await (await fetch('/api/search?'+p)).json();
-    $('#hits').innerHTML=(r.hits&&r.hits.length)?r.hits.map(card).join(''):'<div class="empty">결과 없음</div>';
-  }catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
+  try{const r=await (await fetch('/api/search?'+p)).json(); hits=r.hits||[]; render();}
+  catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
 }
-$('#modeSlider').addEventListener('click',()=>{
-  semOnly=!semOnly;
-  $('#modeSlider').classList.toggle('sem',semOnly);
-  go();
-});
+$('#modeSlider').addEventListener('click',function(){semOnly=!semOnly;this.dataset.on=semOnly?'1':'0';go();});
+$('#dispSlider').addEventListener('click',function(){rawFirst=!rawFirst;this.dataset.on=rawFirst?'1':'0';render();});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
 $('#k').addEventListener('change',go);
 stats();
