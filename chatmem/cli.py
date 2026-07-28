@@ -103,9 +103,16 @@ def cmd_index(args: argparse.Namespace) -> int:
 
 
 def cmd_enrich(args: argparse.Namespace) -> int:
-    from .enrich import enrich_all, enrich_session
+    from .config import ENRICH_BACKEND
+    from .enrich import backend_available, enrich_all, enrich_session
     from .keepawake import keep_system_awake
     from .logutil import batch_log
+
+    backend = args.backend or ENRICH_BACKEND
+    ok, why = backend_available(backend)
+    if not ok:
+        print(f"정제 건너뜀 (backend={backend}): {why}")
+        return 0
 
     db, _vi, _ = _open(need_embedder=False)
 
@@ -116,12 +123,12 @@ def cmd_enrich(args: argparse.Namespace) -> int:
     # 정제 도중 시스템 절전 방지(오래 걸리는 야간 작업이 중간에 안 멈추게).
     with keep_system_awake():
         if args.session:
-            n = enrich_session(args.session, db, model=args.model)
-            log(f"세션 {args.session[:8]}: {n}턴 정제")
+            n = enrich_session(args.session, db, backend=backend, model=args.model)
+            log(f"세션 {args.session[:8]}: {n}턴 정제 (backend={backend})")
         else:
-            total = enrich_all(db, model=args.model, only_missing=not args.all,
-                               limit=args.limit, log_fn=log)
-            log(f"완료: 총 {total}턴 정제.")
+            total = enrich_all(db, backend=backend, model=args.model,
+                               only_missing=not args.all, limit=args.limit, log_fn=log)
+            log(f"완료: 총 {total}턴 정제 (backend={backend}).")
     return 0
 
 
@@ -181,8 +188,10 @@ def main(argv: list[str] | None = None) -> int:
     i.add_argument("--force", action="store_true", help="메모리 가드 무시하고 강제 실행")
     i.set_defaults(func=cmd_index)
 
-    en = sub.add_parser("enrich", help="세션 요약·태그 정제(claude -p)")
-    en.add_argument("--model", default="sonnet")
+    en = sub.add_parser("enrich", help="세션 요약·태그 정제(claude -p / API / off)")
+    en.add_argument("--backend", choices=["claude", "anthropic", "off"], default=None,
+                    help="정제 백엔드 (기본: CHATMEM_ENRICH_BACKEND, 없으면 claude)")
+    en.add_argument("--model", default=None, help="모델 (미지정 시 백엔드별 기본값)")
     en.add_argument("--session", default=None, help="특정 세션만")
     en.add_argument("--limit", type=int, default=None, help="세션 수 제한(테스트용)")
     en.add_argument("--all", action="store_true", help="이미 정제된 것도 재정제")

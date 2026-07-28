@@ -50,3 +50,10 @@ IDLE_SECS = 120
 CONTEXT_PREV_CHARS = 120     # 맥락 임베딩: 직전 질문을 이만큼 prepend
 # 대형 파일도 중간 재개 가능하도록 이 턴 수마다 커서 전진 + 벡터 저장(체크포인트).
 CHECKPOINT_TURNS = 50
+
+# --- 정제 백엔드 (플러그블) ----------------------------------------
+# 정제 LLM 호출 방식. claude=구독(claude -p) / anthropic=API키 / off=정제 안 함.
+# Claude Code 구독이 없는 사람은 anthropic(ANTHROPIC_API_KEY) 또는 off 사용.
+ENRICH_BACKEND = os.environ.get("CHATMEM_ENRICH_BACKEND", "claude")
+ENRICH_CLI_MODEL = os.environ.get("CHATMEM_ENRICH_MODEL", "sonnet")               # claude -p 별칭
+ENRICH_API_MODEL = os.environ.get("CHATMEM_ENRICH_API_MODEL", "claude-sonnet-5")  # API 전체 ID

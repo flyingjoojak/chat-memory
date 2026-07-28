@@ -1,0 +1,4 @@
+# 정제(enrich) 백엔드 = "anthropic"(API키) 사용 시에만 필요.
+# 기본 백엔드 "claude"(claude -p 구독)나 "off"에는 불필요.
+# 설치: pip install -r requirements-enrich.txt
+anthropic>=0.40

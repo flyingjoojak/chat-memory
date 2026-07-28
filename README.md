@@ -45,11 +45,35 @@ python -m chatmem stats
 | `search.py` | **하이브리드 검색**(의미+키워드 BM25 RRF 융합)·dedup·필터·스레드 |
 | `cli.py` | `mem` 커맨드 |
 
+## 정제(요약·태그) 백엔드 — 플러그블
+
+정제는 **선택 기능**이며 3가지 백엔드 중 고를 수 있다(`CHATMEM_ENRICH_BACKEND`):
+
+| 백엔드 | 설명 | 필요 조건 |
+|--------|------|-----------|
+| `claude` (기본) | Claude Code 구독(`claude -p`) | Claude Code 설치·로그인 |
+| `anthropic` | Anthropic API + 공식 SDK | `pip install -r requirements-enrich.txt` + `ANTHROPIC_API_KEY` |
+| `off` | 정제 안 함 (원문 검색만) | 없음 — 정제 없이도 완전 동작 |
+
+```bash
+# API 키 방식 (Claude Code 구독 없이)
+export CHATMEM_ENRICH_BACKEND=anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+python -m chatmem enrich
+
+# 정제 끄기
+CHATMEM_ENRICH_BACKEND=off python -m chatmem enrich
+```
+
+정제 없이도 임베딩·하이브리드 검색은 그대로 동작한다. 정제본은 검색 결과 헤드라인(표시용)일 뿐 검색 자체는 원문 기준이다.
+
 ## 환경변수
 
 - `CHATMEM_DATA_DIR` — 데이터 저장 위치 (기본 `~/chat-memory/data`)
 - `CLAUDE_PROJECTS_DIR` — 로그 소스 (기본 `~/.claude/projects`)
 - `CHATMEM_EMBED_MODEL` — 임베딩 모델 (변경 시 전체 재색인 필요)
+- `CHATMEM_ENRICH_BACKEND` — `claude`(기본) / `anthropic` / `off`
+- `CHATMEM_ENRICH_API_MODEL` — anthropic 백엔드 모델 (기본 `claude-sonnet-5`)
 
 ## 상태
 

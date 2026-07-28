@@ -38,3 +38,29 @@ def test_build_prompt_contains_ids_and_content():
     assert "id=s1:u2" in p
     assert "청킹 질문" in p
     assert "JSON" in p
+
+
+# --- 백엔드 플러그블 ----------------------------------------------------
+def test_resolve_model_defaults():
+    from chatmem.enrich import _resolve_model
+    assert _resolve_model("claude", None) == "sonnet"
+    assert _resolve_model("anthropic", None) == "claude-sonnet-5"
+    assert _resolve_model("claude", "custom-model") == "custom-model"
+
+
+def test_backend_available_off():
+    from chatmem.enrich import backend_available
+    ok, why = backend_available("off")
+    assert ok is False
+    assert "off" in why.lower()
+
+
+def test_generate_dispatch(monkeypatch):
+    import pytest
+    from chatmem import enrich
+    monkeypatch.setattr(enrich, "_call_claude_cli", lambda p, m, **k: f"cli:{m}")
+    monkeypatch.setattr(enrich, "_call_anthropic_api", lambda p, m, **k: f"api:{m}")
+    assert enrich._generate("x", "claude", "sonnet") == "cli:sonnet"
+    assert enrich._generate("x", "anthropic", "claude-sonnet-5") == "api:claude-sonnet-5"
+    with pytest.raises(RuntimeError):
+        enrich._generate("x", "off", "m")
