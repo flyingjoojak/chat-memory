@@ -39,7 +39,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         print("인덱스가 비어있습니다. 먼저 `mem index` 로 백필하세요.")
         return 1
     hits = run_search(args.query, db, vi, embedder, k=args.k,
-                      session=args.session, since=args.since,
+                      session=args.session, since=args.since, until=args.until,
                       keyword=not args.semantic_only)
     if not hits:
         print("결과 없음.")
@@ -206,6 +206,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-k", type=int, default=5)
     s.add_argument("--session", default=None, help="세션ID 접두 또는 프로젝트 부분일치")
     s.add_argument("--since", default=None, help="이 날짜 이후 (예: 2026-07-01)")
+    s.add_argument("--until", default=None, help="이 날짜 이전 (예: 2026-07-24, 그날 포함)")
     s.add_argument("--semantic-only", action="store_true", help="키워드(BM25) 없이 의미검색만")
     s.set_defaults(func=cmd_search)
 

@@ -51,6 +51,7 @@ def search(
     k: int = 5,
     session: str | None = None,
     since: str | None = None,
+    until: str | None = None,
     window: int = 2,
     keyword: bool = True,
 ) -> list[SearchHit]:
@@ -80,6 +81,11 @@ def search(
             continue
         if since and turn.timestamp < since:
             continue
+        if until:
+            # 날짜만(YYYY-MM-DD) 주면 그날 끝까지 포함(T99 = 어떤 실제 시각보다 큼).
+            bound = until if len(until) > 10 else until + "T99"
+            if turn.timestamp > bound:
+                continue
         nq = _norm_q(turn.question)
         if nq and nq in seen_questions:  # 근접중복 다양화
             continue

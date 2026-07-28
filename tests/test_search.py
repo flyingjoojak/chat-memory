@@ -34,9 +34,9 @@ def _seed(db, vi, turns):
     db.commit()
 
 
-def _turn(tid, q, a="", actions=()):
+def _turn(tid, q, a="", actions=(), ts="2026-07-24T00:00:00Z"):
     return Turn(id=tid, session_id="s1", uuid=tid, parent_uuid=None,
-                timestamp="2026-07-24T00:00:00Z", project="p", question=q, answer=a, actions=actions)
+                timestamp=ts, project="p", question=q, answer=a, actions=actions)
 
 
 def test_keyword_search_finds_exact_token(tmp_path):
@@ -64,6 +64,25 @@ def test_hybrid_surfaces_keyword_only_turn(tmp_path):
     assert "s1:u1" in ids
     top = next(h for h in hits if h.turn.id == "s1:u1")
     assert "키워드" in top.sources
+
+
+def test_date_range_since_until(tmp_path):
+    db = ArchiveDB(tmp_path / "a.db")
+    vi = VectorIndex(tmp_path / "v.npy", tmp_path / "i.json")
+    _seed(db, vi, [
+        _turn("s1:u1", "STAGE1 예전", "내용", ts="2026-07-10T09:00:00Z"),
+        _turn("s1:u2", "STAGE1 최근", "내용", ts="2026-07-22T09:00:00Z"),
+    ])
+    e = FakeEmbedder()
+    # since: 7-15 이후 → u2만
+    ids = [h.turn.id for h in search("STAGE1", db, vi, e, k=5, since="2026-07-15")]
+    assert ids == ["s1:u2"]
+    # until: 7-15 이전 → u1만
+    ids = [h.turn.id for h in search("STAGE1", db, vi, e, k=5, until="2026-07-15")]
+    assert ids == ["s1:u1"]
+    # until 날짜만 주면 그날 포함(7-22 이전에 7-22 09:00 포함)
+    ids = [h.turn.id for h in search("STAGE1", db, vi, e, k=5, until="2026-07-22")]
+    assert "s1:u2" in ids
 
 
 def test_semantic_only_flag_disables_keyword(tmp_path):

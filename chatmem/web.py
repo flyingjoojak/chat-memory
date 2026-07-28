@@ -61,6 +61,7 @@ def api_search(
     k: int = 8,
     session: str | None = None,
     since: str | None = None,
+    until: str | None = None,
     semantic_only: bool = False,
 ):
     embedder = _state.get("embedder")
@@ -69,7 +70,8 @@ def api_search(
     db = ArchiveDB()
     vi = VectorIndex()
     hits = run_search(q, db, vi, embedder, k=k, session=session or None,
-                      since=since or None, keyword=not semantic_only)
+                      since=since or None, until=until or None,
+                      keyword=not semantic_only)
     return {"query": q, "count": len(hits), "hits": [_hit_to_dict(h) for h in hits]}
 
 
@@ -162,8 +164,12 @@ h1{font-size:19px;margin:0;font-weight:700}
 .slider .opt:nth-of-type(2){color:var(--muted)}
 .slider[data-on="1"] .opt:nth-of-type(1){color:var(--muted);font-weight:400}
 .slider[data-on="1"] .opt:nth-of-type(2){color:var(--accent);font-weight:600}
-.opts select{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;padding:4px 8px;cursor:pointer;outline:none}
+.opts select,.opts input[type=date]{font:inherit;color:var(--text);background:var(--surface);
+  border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;outline:none}
+.opts input[type=date]{font-variant-numeric:tabular-nums;color-scheme:light dark}
+.opts .clr{cursor:pointer;color:var(--muted);border:1px solid var(--border);background:var(--surface);
+  border-radius:8px;padding:4px 9px;font:inherit}
+.opts .clr:hover{color:var(--text)}
 kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:11px}
 
 .hits{margin-top:6px;display:flex;flex-direction:column;gap:11px}
@@ -234,6 +240,9 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
         <div class="thumb"></div><span class="opt">📝 정제 우선</span><span class="opt">📄 원문 우선</span>
       </div>
       <span class="spacer"></span>
+      <label>이후 <input type="date" id="since"></label>
+      <label>이전 <input type="date" id="until"></label>
+      <button type="button" class="clr" id="clrDate" title="날짜 초기화">✕ 날짜</button>
       <label>표시 <select id="k"><option>5</option><option selected>8</option><option>15</option></select></label>
       <span style="opacity:.65"><kbd>Enter</kbd></span>
     </div>
@@ -247,6 +256,13 @@ let semOnly=false, rawFirst=false;
 function stats(){fetch('/api/stats').then(r=>r.json()).then(s=>{
   $('#stats').textContent=`세션 ${s.sessions} · 턴 ${s.turns} · 벡터 ${s.vectors} · 정제 ${s.enriched}`;}).catch(()=>{});}
 function esc(t){return (t||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+// 저장 타임스탬프는 UTC(...Z). 보는 사람의 로컬(한국이면 KST) 시간으로 표시.
+function fmtTime(ts){
+  const d=new Date(ts);
+  if(isNaN(d)) return (ts||'').slice(0,16).replace('T',' ');
+  const p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 // 원문 마크다운을 안전하게 렌더(HTML escape 후 알려진 서식만 변환).
 function md(t){
   t=esc(t);
@@ -264,8 +280,7 @@ window.tog=tog;
 function card(h){
   const src=(h.sources||[]).map(s=>`<span class="badge ${s==='키워드'?'kw':''}">${s}</span>`).join('');
   const cos=h.cosine!=null?`cos ${h.cosine.toFixed(3)}`:'키워드';
-  const when=esc(h.timestamp).slice(0,16).replace('T',' ');
-  const meta=`<div class="meta">${src}<span>${cos}</span>· ${when} · 세션 ${esc(h.session)}</div>`;
+  const meta=`<div class="meta">${src}<span>${cos}</span>· ${esc(fmtTime(h.timestamp))} · 세션 ${esc(h.session)}</div>`;
   const tags=(h.tags||[]).length?`<div class="tags">${h.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:'';
   const acts=(h.actions||[]).length?`<div class="toggle" onclick="tog(this)">▸ 행동(bash 등) ${h.actions.length}개</div><div class="fold actions">${esc(h.actions.join('\n'))}</div>`:'';
   const th=(h.thread||[]).map(x=>`<div class="titem"><div class="tq" onclick="tog(this)"><b>Q</b>${esc(x.question).slice(0,120)}</div><div class="fold ta">${md(x.answer)||'—'}</div></div>`).join('');
@@ -295,7 +310,7 @@ async function openSession(sid){
     const rows=r.turns.map((t,i)=>{
       const hd=t.summary?`<span class="mk">📝</span>${esc(t.summary)}`:(esc(t.question)||'<span class="sub">(요약 없음)</span>');
       const acts=(t.actions||[]).length?`<div class="toggle" onclick="tog(this)">▸ 행동(bash 등) ${t.actions.length}개</div><div class="fold actions">${esc(t.actions.join('\n'))}</div>`:'';
-      return `<div class="sturn"><div class="st-time">#${i+1} · ${esc(t.timestamp).slice(0,16).replace('T',' ')}</div>`+
+      return `<div class="sturn"><div class="st-time">#${i+1} · ${esc(fmtTime(t.timestamp))}</div>`+
         `<p class="st-head">${hd}</p>`+
         `<div class="toggle" onclick="tog(this)">▸ 원문 Q&amp;A</div>`+
         `<div class="fold raw"><p class="rq"><b>Q</b>${md(t.question)||'(질문 없음)'}</p><div class="ra"><b>A</b>${md(t.answer)||'—'}</div></div>`+
@@ -313,6 +328,9 @@ async function go(){
   const q=$('#q').value.trim(); if(!q){hits=[];$('#hits').innerHTML='';return;}
   $('#hits').innerHTML='<div class="empty">검색 중…</div>';
   const p=new URLSearchParams({q,k:$('#k').value,semantic_only:semOnly});
+  const since=$('#since').value, until=$('#until').value;
+  if(since) p.set('since',since);
+  if(until) p.set('until',until);
   try{const r=await (await fetch('/api/search?'+p)).json(); hits=r.hits||[]; render();}
   catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
 }
@@ -320,6 +338,9 @@ $('#modeSlider').addEventListener('click',function(){semOnly=!semOnly;this.datas
 $('#dispSlider').addEventListener('click',function(){rawFirst=!rawFirst;this.dataset.on=rawFirst?'1':'0';render();});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
 $('#k').addEventListener('change',go);
+$('#since').addEventListener('change',go);
+$('#until').addEventListener('change',go);
+$('#clrDate').addEventListener('click',()=>{$('#since').value='';$('#until').value='';go();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSession();});
 stats();
 </script>
