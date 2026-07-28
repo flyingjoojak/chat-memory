@@ -5,6 +5,28 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# --- 설정 파일 로드 -----------------------------------------------------
+# ~/chat-memory/config.env (또는 CHATMEM_CONFIG)의 KEY=VALUE 를 환경변수로 로드.
+# 실제 환경변수가 있으면 그것이 우선(setdefault) → CLI/스케줄러/웹 모두 한 파일로 설정.
+CONFIG_PATH = Path(os.environ.get("CHATMEM_CONFIG", Path.home() / "chat-memory" / "config.env"))
+
+
+def _load_config_file(path: Path = CONFIG_PATH) -> None:
+    try:
+        if not path.exists():
+            return
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+    except Exception:
+        pass  # 설정 파일 오류가 시스템을 막지 않도록
+
+
+_load_config_file()
+
 # --- 경로 ---------------------------------------------------------------
 # Claude Code가 대화를 자동 저장하는 진실원본 루트.
 PROJECTS_DIR = Path(

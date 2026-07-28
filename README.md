@@ -76,7 +76,20 @@ python -m chatmem enrich --backend off
 
 정제 없이도 임베딩·하이브리드 검색은 그대로 동작한다. 정제본은 검색 결과 헤드라인(표시용)일 뿐 검색 자체는 원문 기준이다.
 
-## 환경변수
+## 설정 (환경변수 or 설정 파일)
+
+설정은 두 방법 중 아무거나. **환경변수가 항상 우선**이고, 없으면 설정 파일 값을 쓴다.
+
+**설정 파일 (권장)** — `~/chat-memory/config.env` 에 `KEY=VALUE` 로 적으면 **CLI·야간 정제 스케줄러·웹 UI가 모두 자동으로 읽는다**(OS 환경변수를 영구 등록하거나 .cmd를 편집할 필요 없음). [`config.env.example`](config.env.example)을 복사해서 시작.
+
+```bash
+cp config.env.example ~/chat-memory/config.env   # 원하는 값만 주석 해제
+python -m chatmem config                          # 현재 유효 설정·파일 위치 확인
+```
+
+> `config.env`는 API 키가 들어갈 수 있어 `.gitignore`로 제외된다. 절대 커밋하지 말 것.
+
+### 키 목록
 
 - `CHATMEM_DATA_DIR` — 데이터 저장 위치 (기본 `~/chat-memory/data`)
 - `CLAUDE_PROJECTS_DIR` — 로그 소스 (기본 `~/.claude/projects`)

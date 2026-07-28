@@ -9,6 +9,11 @@ vector_ids.json
 vector_ids.json.tmp
 *.log
 
+# ── 설정 파일(API 키 포함 가능 — 절대 커밋 금지). 예시(config.env.example)만 커밋 ──
+config.env
+*.env
+!*.env.example
+
 # ── 파이썬 ──
 __pycache__/
 *.py[cod]

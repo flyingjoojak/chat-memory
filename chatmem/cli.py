@@ -152,6 +152,32 @@ def cmd_progress(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_config(args: argparse.Namespace) -> int:
+    """현재 유효 설정 + 설정 파일 위치 표시(값이 어디서 왔는지 확인용)."""
+    from . import config as C
+
+    exists = C.CONFIG_PATH.exists()
+    print(f"설정 파일: {C.CONFIG_PATH}  ({'있음' if exists else '없음 — 만들면 자동 로드'})")
+    print(f"데이터 경로: {C.DATA_DIR}")
+    print(f"로그 소스: {C.PROJECTS_DIR}")
+    print("--- 정제 백엔드 ---")
+    print(f"CHATMEM_ENRICH_BACKEND = {C.ENRICH_BACKEND}")
+    print(f"  claude 모델   = {C.ENRICH_CLI_MODEL}")
+    print(f"  anthropic 모델 = {C.ENRICH_API_MODEL}")
+    print(f"  openai 모델   = {C.ENRICH_OPENAI_MODEL}")
+    print(f"  gemini 모델   = {C.ENRICH_GEMINI_MODEL}")
+    print(f"  ollama 모델   = {C.ENRICH_OLLAMA_MODEL}  @ {C.ENRICH_OLLAMA_URL}")
+    # 키 존재 여부만(값은 절대 출력하지 않음).
+    import os
+    for key in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        print(f"  {key}: {'설정됨' if os.environ.get(key) else '없음'}")
+    print("--- 임베딩 ---")
+    print(f"CHATMEM_EMBED_MODEL = {C.EMBED_MODEL}")
+    if not exists:
+        print(f"\n힌트: `{C.CONFIG_PATH.name}` 를 만들어 KEY=VALUE 로 적으면 CLI·스케줄러·웹이 모두 읽습니다.")
+    return 0
+
+
 def cmd_stats(args: argparse.Namespace) -> int:
     db, vi, _ = _open(need_embedder=False)
     turns = db.conn.execute("SELECT COUNT(*) c FROM turns").fetchone()["c"]
@@ -201,6 +227,9 @@ def main(argv: list[str] | None = None) -> int:
 
     pr = sub.add_parser("progress", help="백필 진행률")
     pr.set_defaults(func=cmd_progress)
+
+    cf = sub.add_parser("config", help="현재 유효 설정·설정 파일 위치 확인")
+    cf.set_defaults(func=cmd_config)
 
     st = sub.add_parser("stats", help="현황")
     st.set_defaults(func=cmd_stats)
