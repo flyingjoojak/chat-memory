@@ -14,12 +14,12 @@ import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
 
 const BACKENDS = [
-  { v: "claude", label: "Claude Code 구독", key: null, modelEnv: "CHATMEM_ENRICH_MODEL", models: ["sonnet", "opus", "haiku"] },
-  { v: "anthropic", label: "Anthropic API", key: "ANTHROPIC_API_KEY", modelEnv: "CHATMEM_ENRICH_API_MODEL", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
-  { v: "openai", label: "OpenAI (GPT)", key: "OPENAI_API_KEY", modelEnv: "CHATMEM_OPENAI_MODEL", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"] },
-  { v: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", modelEnv: "CHATMEM_GEMINI_MODEL", models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"] },
-  { v: "ollama", label: "Ollama (로컬)", key: null, modelEnv: "CHATMEM_OLLAMA_MODEL", models: ["llama3.1", "llama3.2", "qwen2.5", "mistral", "gemma2"] },
-  { v: "off", label: "정제 안 함", key: null, modelEnv: null, models: [] },
+  { v: "claude", label: "Claude Code 구독", key: null, keyEx: "", modelEnv: "CHATMEM_ENRICH_MODEL", models: ["sonnet", "opus", "haiku"] },
+  { v: "anthropic", label: "Anthropic API", key: "ANTHROPIC_API_KEY", keyEx: "sk-ant-api03-...", modelEnv: "CHATMEM_ENRICH_API_MODEL", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
+  { v: "openai", label: "OpenAI (GPT)", key: "OPENAI_API_KEY", keyEx: "sk-... 또는 sk-proj-...", modelEnv: "CHATMEM_OPENAI_MODEL", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"] },
+  { v: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", keyEx: "AIza...", modelEnv: "CHATMEM_GEMINI_MODEL", models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"] },
+  { v: "ollama", label: "Ollama (로컬)", key: null, keyEx: "", modelEnv: "CHATMEM_OLLAMA_MODEL", models: ["llama3.1", "llama3.2", "qwen2.5", "mistral", "gemma2"] },
+  { v: "off", label: "정제 안 함", key: null, keyEx: "", modelEnv: null, models: [] },
 ] as const
 const CUSTOM = "__custom__"
 
@@ -50,6 +50,7 @@ export function SettingsView() {
   const [apiKey, setApiKey] = useState("")
   const [enrichTime, setEnrichTime] = useState("04:00")
   const [interval, setIntervalMin] = useState(10)
+  const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434/v1")
   const [saved, setSaved] = useState(false)
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
@@ -62,7 +63,7 @@ export function SettingsView() {
     getStats().then(setStats).catch(() => {})
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
-      setIntervalMin(c.index_interval)
+      setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url)
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
       setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
@@ -105,6 +106,7 @@ export function SettingsView() {
     }
     if (be.modelEnv && model) u[be.modelEnv] = model
     if (be.key && apiKey) u[be.key] = apiKey
+    if (backend === "ollama" && ollamaUrl) u.CHATMEM_OLLAMA_URL = ollamaUrl
     await putConfig(u)
     setApiKey(""); setSaved(true); setTimeout(() => setSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
@@ -163,8 +165,20 @@ export function SettingsView() {
         {be.key && (
           <Row label={`API 키 ${cfg?.keys[be.key] ? "(설정됨)" : ""}`}>
             <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-              className="h-8 w-56" placeholder={cfg?.keys[be.key] ? "변경하려면 입력" : "sk-..."} />
+              className="h-8 w-56" placeholder={cfg?.keys[be.key] ? "변경하려면 입력" : be.keyEx} />
           </Row>
+        )}
+        {backend === "ollama" && (
+          <>
+            <Row label="Ollama 서버 주소">
+              <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)}
+                className="h-8 w-56" placeholder="http://localhost:11434/v1" />
+            </Row>
+            <div className="border-b py-3 text-xs text-muted-foreground last:border-0">
+              ⚠️ Ollama가 실행 중이어야 하고, 위 모델을 미리 받아둬야 합니다: <code className="cm-inline">ollama pull {model || "llama3.1"}</code>.
+              모델 파일 경로는 Ollama가 관리하므로 따로 지정할 필요 없습니다.
+            </div>
+          </>
         )}
         <Row label="정제 시각 (매일)">
           <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" />
