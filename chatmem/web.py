@@ -32,9 +32,20 @@ _DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
 
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI):
+    import threading
+
     from .embedder import Embedder
 
     _state["embedder"] = Embedder()  # 무거운 모델 1회 로드
+
+    # 의미 지도(3D) 백그라운드 예열 — 첫 진입에도 안 기다리게 캐시 미리 계산.
+    # UMAP numba JIT + 투영이 수십 초라, 데몬 스레드에서 조용히 준비(캐시 있으면 즉시 반환).
+    def _warm():
+        try:
+            _graph3d_data()
+        except Exception:
+            pass
+    threading.Thread(target=_warm, daemon=True).start()
     yield
     _state.clear()
 
@@ -284,66 +295,8 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
-@app.get("/api/graph")
-def api_graph(refresh: bool = False):
-    """의미 지도: UMAP 2D 투영 + 군집 + 태그 라벨. 벡터 수 기반 디스크 캐시(UMAP 재계산 회피)."""
-    from . import config as C
-    from .graph import build_graph
-
-    vi = make_index()
-    n = len(vi)
-    if n == 0:
-        return {"points": [], "clusters": [], "method": None}
-
-    cache_path = C.DATA_DIR / "graph_cache.json"
-    ver = 3  # 그래프 데이터 스키마 버전(UMAP 점 구름). 바뀌면 캐시 무효화.
-    if not refresh and cache_path.exists():
-        try:
-            cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cached.get("n") == n and cached.get("v") == ver:
-                return cached["data"]
-        except Exception:
-            pass
-
-    data = build_graph(vi, ArchiveDB())
-    try:
-        cache_path.write_text(json.dumps({"n": n, "v": ver, "data": data}, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
-    return data
-
-
-@app.get("/api/network")
-def api_network(refresh: bool = False):
-    """k-NN 유사도 네트워크(턴 노드 + 최근접 엣지)."""
-    from . import config as C
-    from .graph import build_network
-
-    vi = make_index()
-    n = len(vi)
-    if n == 0:
-        return {"nodes": [], "edges": [], "clusters": [], "method": None}
-
-    cache_path = C.DATA_DIR / "network_cache.json"
-    ver = 1
-    if not refresh and cache_path.exists():
-        try:
-            cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cached.get("n") == n and cached.get("v") == ver:
-                return cached["data"]
-        except Exception:
-            pass
-    data = build_network(vi, ArchiveDB())
-    try:
-        cache_path.write_text(json.dumps({"n": n, "v": ver, "data": data}, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
-    return data
-
-
-@app.get("/api/graph3d")
-def api_graph3d(refresh: bool = False):
-    """의미 지도 3D: UMAP 3성분 투영 점 구름."""
+def _graph3d_data(refresh: bool = False) -> dict:
+    """의미 지도 3D 데이터(UMAP 3성분) + 벡터 수 기반 디스크 캐시. 엔드포인트·예열 공용."""
     from . import config as C
     from .graph import build_graph
 
@@ -368,6 +321,12 @@ def api_graph3d(refresh: bool = False):
     except Exception:
         pass
     return data
+
+
+@app.get("/api/graph3d")
+def api_graph3d(refresh: bool = False):
+    """의미 지도 3D: UMAP 3성분 투영 점 구름."""
+    return _graph3d_data(refresh)
 
 
 @app.get("/api/stats")

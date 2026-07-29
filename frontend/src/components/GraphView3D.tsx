@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js"
 import { getGraph3D, type Graph3DData, type GraphPoint3D } from "@/lib/api"
 
 const PALETTE = [
@@ -65,11 +65,28 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
-    const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true
-    controls.dampingFactor = 0.08
-    controls.autoRotate = true
-    controls.autoRotateSpeed = 0.6
+    // TrackballControls: 축 고정 없는 자유 회전 + 관성. 좌=회전, 휠클릭/우클릭 드래그=이동.
+    const controls = new TrackballControls(camera, renderer.domElement)
+    controls.rotateSpeed = 3.2
+    controls.panSpeed = 0.8
+    controls.noZoom = true                 // 줌은 커서 기준 커스텀으로 처리
+    controls.staticMoving = false          // 관성 on
+    controls.dynamicDampingFactor = 0.06   // 낮을수록 관성 오래
+    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }
+
+    // 마우스 위치 기준 휠 줌(커서 아래 지점을 향해 확대/축소).
+    function onWheel(e: WheelEvent) {
+      e.preventDefault()
+      const r = renderer.domElement.getBoundingClientRect()
+      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+      const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera)
+      const dist = camera.position.distanceTo(controls.target)
+      const cursor = camera.position.clone().add(rc.ray.direction.clone().multiplyScalar(dist))
+      const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82   // 안쪽으로 갈수록 커서 지점에 접근
+      camera.position.lerpVectors(cursor, camera.position, factor)
+      controls.target.lerpVectors(cursor, controls.target, factor)
+    }
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false })
 
     const ray = new THREE.Raycaster()
     ray.params.Points!.threshold = 4
@@ -87,7 +104,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       if (hit.length && hit[0].index != null) {
         hovering = true
         setTip({ sx: e.clientX, sy: e.clientY, p: pts[hit[0].index] })
-        controls.autoRotate = false
       } else if (hovering) {
         hovering = false; setTip(null)
       }
@@ -107,7 +123,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.addEventListener("pointermove", onPointerMove)
     renderer.domElement.addEventListener("pointerdown", onDown)
     renderer.domElement.addEventListener("pointerup", onUp)
-    renderer.domElement.addEventListener("pointerleave", () => { setTip(null); controls.autoRotate = true })
+    renderer.domElement.addEventListener("pointerleave", () => setTip(null))
 
     let raf = 0
     const loop = () => {
@@ -128,11 +144,13 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const ro = new ResizeObserver(() => {
       w = wrap.clientWidth; h = wrap.clientHeight
       camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h)
+      controls.handleResize()
     })
     ro.observe(wrap)
 
     return () => {
       cancelAnimationFrame(raf); ro.disconnect(); controls.dispose()
+      renderer.domElement.removeEventListener("wheel", onWheel)
       renderer.domElement.removeEventListener("pointermove", onPointerMove)
       renderer.domElement.removeEventListener("pointerdown", onDown)
       renderer.domElement.removeEventListener("pointerup", onUp)
@@ -150,7 +168,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         <h2 className="text-lg font-semibold">의미 지도 3D</h2>
         <span className="text-xs text-muted-foreground">
           {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
-          드래그 회전 / 휠 확대 / 점 클릭→세션 (자동 회전)
+          좌드래그 자유 회전(관성) / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션
         </span>
       </div>
 
