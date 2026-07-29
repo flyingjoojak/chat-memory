@@ -186,14 +186,28 @@ def api_config_put(payload: dict):
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
 _EMBED_ALLOW = {
     "intfloat/multilingual-e5-large": {
-        "note": "최고 품질(다국어). 기본값.", "ram_gb": 6.4, "cps": 0.8},
+        "note": "최고 품질. 기본값.", "ram_gb": 6.4, "cps": 0.8},
     "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": {
-        "note": "중간 품질·RAM(다국어).", "ram_gb": 4.5, "cps": 2.1},
+        "note": "중간 품질·RAM.", "ram_gb": 4.5, "cps": 2.1},
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "가벼움(다국어). 저RAM 기기용.", "ram_gb": 1.2, "cps": 31.0},
+        "note": "가벼움. 저RAM 기기용.", "ram_gb": 1.2, "cps": 31.0},
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": ""}
+
+
+@app.post("/api/verify-enrich")
+def api_verify_enrich(payload: dict):
+    """정제 백엔드 연결 검증(무료 models.list). payload={backend, model?, api_key?, ollama_url?}."""
+    from .enrich import verify_backend
+    backend = str((payload or {}).get("backend", "")).strip()
+    ok, msg = verify_backend(
+        backend,
+        model=(payload or {}).get("model") or None,
+        api_key=(payload or {}).get("api_key") or None,
+        base_url=(payload or {}).get("ollama_url") or None,
+    )
+    return {"ok": ok, "message": msg}
 
 
 @app.get("/api/embed-models")

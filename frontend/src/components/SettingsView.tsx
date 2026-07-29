@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { Check, Loader2, Monitor, Moon, Sun } from "lucide-react"
+import { AlertTriangle, Check, Loader2, Monitor, Moon, Sun, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -7,7 +7,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  getConfig, getEmbedModels, getStats, putConfig, reindex,
+  getConfig, getEmbedModels, getStats, putConfig, reindex, verifyEnrich,
   type Config, type EmbedModel,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
@@ -52,6 +52,9 @@ export function SettingsView() {
   const [interval, setIntervalMin] = useState(10)
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434/v1")
   const [saved, setSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [verify, setVerify] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [blockMsg, setBlockMsg] = useState("")
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
@@ -98,7 +101,20 @@ export function SettingsView() {
     setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
   }
 
-  async function save() {
+  async function runTest() {
+    setTesting(true); setVerify(null); setBlockMsg("")
+    try {
+      const r = await verifyEnrich({
+        backend, model, api_key: apiKey || undefined,
+        ollama_url: backend === "ollama" ? ollamaUrl : undefined,
+      })
+      setVerify({ ok: r.ok, msg: r.message }); return r.ok
+    } catch (e) {
+      setVerify({ ok: false, msg: String(e) }); return false
+    } finally { setTesting(false) }
+  }
+
+  async function commitSave() {
     const u: Record<string, string> = {
       CHATMEM_ENRICH_BACKEND: backend,
       CHATMEM_ENRICH_TIME: enrichTime,
@@ -108,8 +124,19 @@ export function SettingsView() {
     if (be.key && apiKey) u[be.key] = apiKey
     if (backend === "ollama" && ollamaUrl) u.CHATMEM_OLLAMA_URL = ollamaUrl
     await putConfig(u)
-    setApiKey(""); setSaved(true); setTimeout(() => setSaved(false), 1800)
+    setApiKey(""); setVerify(null); setBlockMsg(""); setSaved(true); setTimeout(() => setSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
+  }
+
+  async function save() {
+    setBlockMsg("")
+    // 키가 필요한 백엔드인데 입력도 없고 저장된 것도 없으면 → 저장 차단.
+    if (be.key && !apiKey && !cfg?.keys[be.key]) {
+      setBlockMsg("이 백엔드는 API 키가 필요합니다. 키를 입력한 뒤 저장하세요.")
+      return
+    }
+    // 검증 통과해야 저장. 실패 시 경고만 두고 '그래도 저장'으로 강제 가능.
+    if (await runTest()) await commitSave()
   }
 
   async function doReindex() {
@@ -187,15 +214,40 @@ export function SettingsView() {
 
       <Section title="인덱싱">
         <Row label="증분 인덱싱 간격 (분)">
-          <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} className="h-8 w-24 tabular-nums" />
+          <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)}
+            onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
         </Row>
       </Section>
 
-      <div className="mb-6 flex items-center gap-3">
-        <Button onClick={save}>저장</Button>
+      <div className="mb-2 flex flex-wrap items-center gap-3">
+        {backend !== "off" && (
+          <Button variant="outline" onClick={runTest} disabled={testing}>
+            {testing ? <><Loader2 className="size-4 animate-spin" />테스트 중…</> : "연결 테스트"}
+          </Button>
+        )}
+        <Button onClick={save} disabled={testing}>저장</Button>
         {saved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨 · 스케줄 반영</span>}
-        <span className="text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</span>
       </div>
+      {blockMsg && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <AlertTriangle className="size-4 shrink-0" />{blockMsg}
+        </div>
+      )}
+      {verify && (
+        <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${verify.ok ? "border-primary/40 bg-primary/5 text-primary" : "border-destructive/40 bg-destructive/5 text-destructive"}`}>
+          <div className="flex items-center gap-2">
+            {verify.ok ? <Check className="size-4 shrink-0" /> : <X className="size-4 shrink-0" />}
+            {verify.ok ? "연결 확인됨" : `연결 실패: ${verify.msg}`}
+          </div>
+          {!verify.ok && (
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={commitSave}>그래도 저장</Button>
+              <span className="text-xs text-muted-foreground">Ollama를 나중에 켜거나 일시 오류인 경우</span>
+            </div>
+          )}
+        </div>
+      )}
+      <p className="mb-6 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
 
       <Section title="임베딩 모델">
         {reindexing && (
@@ -207,7 +259,7 @@ export function SettingsView() {
           <Row key={m.model} label={
             <span className="flex flex-col">
               <span className="font-mono text-[13px]">{m.model.split("/").pop()}</span>
-              <span className="text-xs text-muted-foreground">{m.note} · {m.dim}차원 · 디스크 {m.size_gb}GB · <b className="text-foreground/80">임베딩 중 RAM 약 {m.ram_gb}GB</b>{m.est_reindex_min != null ? ` · 재색인 약 ${m.est_reindex_min}분` : ""}</span>
+              <span className="text-xs text-muted-foreground">{m.note} · 디스크 {m.size_gb}GB · <b className="text-foreground/80">임베딩 중 RAM 약 {m.ram_gb}GB</b></span>
             </span>
           }>
             {m.current

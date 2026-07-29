@@ -133,6 +133,56 @@ def _generate(prompt: str, backend: str, model: str) -> str:
     raise RuntimeError(f"알 수 없는 정제 백엔드: {backend}")
 
 
+def _short(e: Exception) -> str:
+    s = str(e).replace("\n", " ")
+    return s[:160] if s else e.__class__.__name__
+
+
+def verify_backend(backend: str, model: str | None = None, api_key: str | None = None,
+                   base_url: str | None = None) -> tuple[bool, str]:
+    """실제 연결 검증(무료·가벼운 models.list 호출). (ok, 메시지).
+
+    api_key/base_url이 주어지면 그것으로, 없으면 환경변수/프리셋으로 검증.
+    """
+    if backend == "off":
+        return True, "정제 안 함"
+    if backend == "claude":
+        if shutil.which("claude") is None:
+            return False, "claude CLI 없음 (Claude Code 설치 필요)"
+        return True, "claude CLI 확인됨"
+    if backend == "anthropic":
+        try:
+            import anthropic
+        except ImportError:
+            return False, "anthropic 패키지 없음 (pip install anthropic)"
+        key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        if not key:
+            return False, "API 키 없음"
+        try:
+            anthropic.Anthropic(api_key=key).models.list()
+            return True, "연결 확인됨"
+        except Exception as e:  # noqa: BLE001
+            return False, _short(e)
+    if backend in _OPENAI_PRESETS:
+        p = _OPENAI_PRESETS[backend]
+        url = base_url or p["base_url"]
+        key = api_key or _openai_key_for(p) or ("not-needed" if backend == "ollama" else None)
+        if key is None:
+            return False, "API 키 없음"
+        try:
+            from openai import OpenAI
+        except ImportError:
+            return False, "openai 패키지 없음 (pip install openai)"
+        try:
+            OpenAI(api_key=key, base_url=url).models.list()
+            return True, "연결 확인됨"
+        except Exception as e:  # noqa: BLE001
+            if backend == "ollama":
+                return False, f"Ollama 연결 실패 — 실행 중인지 확인: {_short(e)}"
+            return False, _short(e)
+    return False, f"알 수 없는 백엔드: {backend}"
+
+
 def backend_available(backend: str) -> tuple[bool, str]:
     """백엔드가 실제로 쓸 수 있는지 + 안 되면 이유(사용자 안내용)."""
     if backend == "off":

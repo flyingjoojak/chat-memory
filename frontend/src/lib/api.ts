@@ -53,6 +53,16 @@ export async function putConfig(updates: Record<string, string>): Promise<{ ok: 
   return r.json()
 }
 
+export async function verifyEnrich(p: {
+  backend: string; model?: string; api_key?: string; ollama_url?: string
+}): Promise<{ ok: boolean; message: string }> {
+  const r = await fetch(`/api/verify-enrich`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}
+
 export interface EmbedModel {
   model: string
   dim: number
