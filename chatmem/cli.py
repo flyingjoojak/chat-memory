@@ -206,20 +206,20 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
     # 1) 데이터 폴더
     C.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"[1/3] 데이터 폴더: {C.DATA_DIR}")
+    print(f"[1/4] 데이터 폴더: {C.DATA_DIR}")
 
     # 2) 설정 파일 — 없으면 내장 템플릿으로 생성(있으면 건드리지 않음).
     #    템플릿을 코드에 내장 → pip 설치(비-editable)에서도 항상 동작.
     if C.CONFIG_PATH.exists():
-        print(f"[2/3] 설정 파일 이미 있음: {C.CONFIG_PATH} (유지)")
+        print(f"[2/4] 설정 파일 이미 있음: {C.CONFIG_PATH} (유지)")
     else:
         C.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         C.CONFIG_PATH.write_text(C.CONFIG_TEMPLATE, encoding="utf-8")
-        print(f"[2/3] 설정 파일 생성: {C.CONFIG_PATH} (필요한 줄만 주석 해제)")
+        print(f"[2/4] 설정 파일 생성: {C.CONFIG_PATH} (필요한 줄만 주석 해제)")
 
     # 3) 로그 소스 존재 확인
     src_ok = C.PROJECTS_DIR.exists()
-    print(f"[3/3] 로그 소스: {C.PROJECTS_DIR} ({'있음' if src_ok else '없음 — Claude Code 사용 이력 필요'})")
+    print(f"[3/4] 로그 소스: {C.PROJECTS_DIR} ({'있음' if src_ok else '없음 — Claude Code 사용 이력 필요'})")
 
     # 4) 스케줄러 자동 등록(OS별). --no-scheduler 로 생략, --dry-run 로 미리보기.
     from . import scheduler
@@ -235,11 +235,19 @@ def cmd_setup(args: argparse.Namespace) -> int:
         except Exception as e:  # 권한·환경 문제 시 수동 안내로 폴백
             print(f"[4/4] 스케줄러 자동 등록 실패({e}). 수동 등록은 AUTOMATION.md 참고.")
 
-    print("\n다음 단계:")
-    print("  1) 첫 백필:      chatmem index")
-    print("  2) 검색 확인:    chatmem \"검색어\"")
-    print("  3) 웹 UI:        python -m chatmem.web   →  http://127.0.0.1:8642")
-    print("  4) 설정 확인:    chatmem config")
+    # 5) 첫 백필 — 기본은 스케줄러에 맡기고, --index 면 지금 즉시 실행.
+    if getattr(args, "index", False):
+        print("\n첫 백필 시작 (임베딩 모델 ~2.2GB 최초 1회 다운로드 — 몇 분 걸릴 수 있음)…")
+        cmd_index(argparse.Namespace(oldest_first=False, force=False))
+
+    print("\n설정 완료! " + (
+        "이제 검색할 수 있어요." if getattr(args, "index", False)
+        else "스케줄러가 10분마다 자동으로 대화를 축적합니다(첫 실행 때 모델 ~2.2GB 다운로드)."))
+    print("  검색:   mem \"검색어\"        (또는 chatmem search ...)")
+    print("  웹 UI:  python -m chatmem.web   →  http://127.0.0.1:8642")
+    if not getattr(args, "index", False):
+        print("  즉시 백필하려면:  chatmem index   (안 해도 스케줄러가 알아서 채웁니다)")
+    print("  설정 확인: chatmem config")
     return 0
 
 

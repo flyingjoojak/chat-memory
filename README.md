@@ -10,32 +10,47 @@ Claude Code 대화를 자동 누적하여 **의미 검색**하는 개인 정보�
 - 턴(질문+응답+행동)으로 파싱 → 청킹 → 로컬 임베딩(e5-large) → SQLite 아카이브 + numpy 벡터 인덱스
 - `mem "질의"` 로 의미 검색 → **원문 + 정제본 + 스레드 맥락** 반환
 
-## 설치
+## 빠른 시작 (가장 쉬움 — 2줄)
+
+[pipx](https://pipx.pypa.io) 로 설치하면 가상환경·PATH를 알아서 처리한다.
 
 ```bash
-pip install -e .            # 코어(fastembed, numpy). sqlite3는 stdlib
-pip install -e ".[web]"     # + 웹 UI (fastapi, uvicorn)
-pip install -e ".[enrich]"  # + 정제 백엔드(anthropic/openai·gemini·ollama)
-pip install -e ".[all]"     # 전부
+pipx install "chat-memory[web] @ git+https://github.com/flyingjoojak/chat-memory.git"
+chatmem setup
 ```
 
-설치하면 콘솔 명령 **`chatmem`** (별칭 **`mem`**)이 생긴다. 최초 검색/인덱싱 시 임베딩 모델(multilingual-e5-large, ~2.2GB)이 자동 다운로드된다.
+`setup` 이 폴더·설정을 만들고 **10분마다 자동 축적하는 스케줄러까지 등록**한다. 이후엔 손 뗘도 대화가 쌓인다(첫 실행 때 임베딩 모델 ~2.2GB 자동 다운로드). 바로 채우고 싶으면 `chatmem setup --index`.
 
-## 사용
+검색:
 
 ```bash
-chatmem setup                     # 최초 1회: 폴더·설정 생성 + 다음 단계 안내
-
-chatmem index                     # 백필/증분 인덱싱 (최근 세션부터)
-
-mem "급여 계산 로직 어떻게 짰지"    # 의미 검색 (bare = search)
-chatmem search "마이그레이션" -k 10 --since 2026-07-01 --until 2026-07-24 --session growth
-
-chatmem stats                     # 현황
-chatmem config                    # 유효 설정·설정파일 위치
+mem "급여 계산 로직 어떻게 짰지"       # bare = search
+python -m chatmem.web                  # 웹 UI → http://127.0.0.1:8642
 ```
 
-> 설치 없이도 `python -m chatmem <서브커맨드>` 로 동일하게 동작한다.
+## 설치 (직접/개발)
+
+pipx가 없거나 소스를 고치려면:
+
+```bash
+git clone https://github.com/flyingjoojak/chat-memory.git && cd chat-memory
+pip install ".[web]"          # 코어+웹. 정제까지: ".[all]"  / 개발: pip install -e ".[all]"
+chatmem setup
+```
+
+extras: `[web]` 웹 UI · `[enrich]` 정제 백엔드(anthropic/openai·gemini·ollama) · `[all]` 전부.
+설치하면 콘솔 명령 **`chatmem`**(별칭 **`mem`**)이 생긴다. 설치 없이 `python -m chatmem <서브커맨드>` 도 동일 동작.
+
+## 명령 요약
+
+```bash
+chatmem setup [--index] [--no-scheduler]   # 온보딩(폴더·설정·스케줄러[·즉시백필])
+chatmem index                              # 백필/증분 인덱싱(스케줄러가 자동 실행)
+mem "검색어"                                # 의미 검색
+chatmem search "..." -k 10 --since 2026-07-01 --until 2026-07-24 --session growth
+chatmem scheduler status|install|uninstall # 자동 축적 스케줄러
+chatmem stats | config | progress          # 현황·설정·백필진행률
+```
 
 ## 구조 (코어 라이브러리 + 얇은 CLI)
 
