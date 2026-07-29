@@ -35,6 +35,7 @@ _PLUMBING_PREFIXES = (
     "[SYSTEM NOTIFICATION",            # 시스템 알림(NOT USER INPUT)
     "<<CHATMEM-ENRICH>>",              # 정제 claude -p 세션(자기오염 방지)
     "다음은 한 Claude Code 세션의 대화 턴들이다",  # 정제 프롬프트 구버전(sentinel 이전)
+    "This session is being continued from a previous conversation",  # 컨텍스트 압축 요약(구버전 로그 폴백)
 )
 
 # 행동 상세로 뽑을 우선 키 순서.
@@ -74,6 +75,9 @@ def is_structural_noise(obj: dict) -> bool:
     if obj.get("isMeta"):
         return True
     if obj.get("isSidechain"):
+        return True
+    # 컨텍스트 압축 요약·트랜스크립트 전용 주입물 = 실제 대화 아님(하니스가 넣은 것).
+    if obj.get("isCompactSummary") or obj.get("isVisibleInTranscriptOnly"):
         return True
     return False
 

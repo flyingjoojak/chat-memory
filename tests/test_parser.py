@@ -45,7 +45,26 @@ def test_structural_noise_types():
     assert is_structural_noise({"type": "file-history-snapshot"})
     assert is_structural_noise({"type": "user", "isMeta": True})
     assert is_structural_noise({"type": "assistant", "isSidechain": True})
+    assert is_structural_noise({"type": "user", "isCompactSummary": True})
+    assert is_structural_noise({"type": "user", "isVisibleInTranscriptOnly": True})
     assert not is_structural_noise({"type": "user", "message": {"role": "user"}})
+
+
+def test_compaction_summary_excluded_from_turns():
+    # 컨텍스트 압축 요약: 플래그로도, 텍스트 접두 폴백으로도 걸러져야.
+    objs = [
+        _user("u1", "진짜 질문"),
+        _assistant("진짜 답변"),
+        {"type": "user", "isCompactSummary": True, "uuid": "c1", "sessionId": "s1",
+         "message": {"role": "user", "content": "This session is being continued from a previous conversation..."}},
+    ]
+    turns = extract_turns(objs)
+    assert len(turns) == 1
+    assert turns[0].question == "진짜 질문"
+    # 플래그 없어도(구버전 로그) 텍스트 접두로 차단
+    assert not is_real_user_prompt(
+        {"type": "user", "message": {"role": "user",
+         "content": "This session is being continued from a previous conversation. Summary: ..."}})
 
 
 def test_sidechain_excluded_from_turns():

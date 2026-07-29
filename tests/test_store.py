@@ -15,6 +15,33 @@ def _turn(tid, session="s1", ts="2026-07-24T00:00:00Z", q="질문", a="답변", 
                 timestamp=ts, project="p", question=q, answer=a, actions=actions)
 
 
+def test_delete_turns_removes_turn_chunks_fts(tmp_path):
+    db = ArchiveDB(tmp_path / "a.db")
+    db.upsert_turn(_turn("s1:u1", q="포트 8088 설정", a="백엔드"))
+    db.upsert_turn(_turn("s1:u2", q="남길 질문", a="남길 답변"))
+    db.add_chunks([Chunk(turn_id="s1:u1", index=0, text="포트 8088 설정")])
+    db.commit()
+    removed = db.delete_turns(["s1:u1"])
+    db.commit()
+    assert removed == ["s1:u1#0"]                       # 벡터 정리용 청크키 반환
+    assert db.get_turn("s1:u1") is None
+    assert db.get_turn("s1:u2") is not None
+    assert db.conn.execute("SELECT COUNT(*) c FROM chunks WHERE turn_id='s1:u1'").fetchone()["c"] == 0
+    # FTS에서도 사라짐
+    assert db.keyword_search("8088") == []
+
+
+def test_vectorindex_remove(tmp_path):
+    vi = VectorIndex(tmp_path / "v.npy", tmp_path / "i.json")
+    vi.add(["a#0", "b#0", "c#0"], np.eye(3, dtype=np.float32))
+    assert len(vi) == 3
+    n = vi.remove(["b#0", "zzz#0"])                      # 없는 키는 무시
+    assert n == 1
+    assert len(vi) == 2
+    assert [k for k, _ in vi.search(np.array([1, 0, 0], dtype=np.float32), k=3)]  # 검색 정상
+    assert "b#0" not in vi.ids
+
+
 def test_turn_upsert_idempotent(tmp_path):
     db = ArchiveDB(tmp_path / "a.db")
     t = _turn("s1:u1", actions=(Action("Edit", "x.py"),))

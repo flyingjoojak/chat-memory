@@ -56,6 +56,17 @@ class VectorIndex:
                 self._pos[key] = start + off
                 self.ids.append(key)
 
+    def remove(self, keys: list[str]) -> int:
+        """주어진 키의 벡터를 제거(행렬·ids·pos 재구축). 제거된 개수 반환."""
+        drop = {k for k in keys if k in self._pos}
+        if not drop or self.matrix is None:
+            return 0
+        keep = [i for i, k in enumerate(self.ids) if k not in drop]
+        self.matrix = self.matrix[keep] if keep else np.zeros((0, self.matrix.shape[1]), dtype=np.float32)
+        self.ids = [self.ids[i] for i in keep]
+        self._pos = {k: i for i, k in enumerate(self.ids)}
+        return len(drop)
+
     def search(self, query_vec: np.ndarray, k: int = 5) -> list[tuple[str, float]]:
         if self.matrix is None or self.matrix.shape[0] == 0:
             return []

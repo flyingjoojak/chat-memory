@@ -149,6 +149,19 @@ class ArchiveDB:
                 (turn.id, self._fts_text(turn.question, turn.answer, turn.actions)),
             )
 
+    def delete_turns(self, turn_ids: list[str]) -> list[str]:
+        """턴·청크·FTS 행을 삭제하고, 제거된 chunk_key 목록을 돌려준다(벡터 인덱스 정리용)."""
+        removed: list[str] = []
+        for tid in turn_ids:
+            rows = self.conn.execute(
+                "SELECT chunk_key FROM chunks WHERE turn_id=?", (tid,)).fetchall()
+            removed.extend(r["chunk_key"] for r in rows)
+            self.conn.execute("DELETE FROM chunks WHERE turn_id=?", (tid,))
+            self.conn.execute("DELETE FROM turns WHERE id=?", (tid,))
+            if self.fts_enabled:
+                self.conn.execute("DELETE FROM turns_fts WHERE turn_id=?", (tid,))
+        return removed
+
     def get_turn(self, turn_id: str) -> Turn | None:
         row = self.conn.execute("SELECT * FROM turns WHERE id=?", (turn_id,)).fetchone()
         return _row_to_turn(row) if row else None
