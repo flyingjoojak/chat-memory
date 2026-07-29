@@ -32,9 +32,9 @@ export const listSessions = () =>
 
 export const getStats = () => getJSON<Stats>(`/api/stats`)
 
-export interface GraphNode { id: string; label: string; size: number; group: number }
-export interface GraphLink { source: string; target: string; weight: number }
-export interface GraphData { nodes: GraphNode[]; links: GraphLink[] }
+export interface GraphPoint { x: number; y: number; c: number; s: string; h: string }
+export interface GraphCluster { id: number; label: string; x: number; y: number; n: number }
+export interface GraphData { points: GraphPoint[]; clusters: GraphCluster[]; method: string | null }
 export const getGraph = () => getJSON<GraphData>(`/api/graph`)
 
 export interface Config {

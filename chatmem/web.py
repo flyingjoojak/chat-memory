@@ -296,7 +296,7 @@ def api_graph(refresh: bool = False):
         return {"points": [], "clusters": [], "method": None}
 
     cache_path = C.DATA_DIR / "graph_cache.json"
-    ver = 2  # 그래프 데이터 스키마 버전(force 그래프). 바뀌면 캐시 무효화.
+    ver = 3  # 그래프 데이터 스키마 버전(UMAP 점 구름). 바뀌면 캐시 무효화.
     if not refresh and cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
