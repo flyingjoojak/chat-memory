@@ -68,23 +68,30 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     // TrackballControls: 축 고정 없는 자유 회전 + 관성. 좌=회전, 휠클릭/우클릭 드래그=이동.
     const controls = new TrackballControls(camera, renderer.domElement)
     controls.rotateSpeed = 3.2
-    controls.panSpeed = 0.8
-    controls.noZoom = true                 // 줌은 커서 기준 커스텀으로 처리
+    controls.panSpeed = 0.25               // 이동 감도(낮게 = 덜 확확 움직임)
+    controls.noZoom = true                 // 줌은 커서 기준 커스텀으로 처리(부드럽게)
     controls.staticMoving = false          // 관성 on
     controls.dynamicDampingFactor = 0.06   // 낮을수록 관성 오래
     controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }
 
-    // 마우스 위치 기준 휠 줌(커서 아래 지점을 향해 확대/축소).
+    // 줌 목표값(거리+타깃) — 휠은 목표만 바꾸고 loop에서 부드럽게 보간(ease).
+    let desiredDist = camera.position.distanceTo(controls.target)
+    const desiredTarget = controls.target.clone()
+    const cursorPt = new THREE.Vector3()
+    const dir = new THREE.Vector3()
+
     function onWheel(e: WheelEvent) {
       e.preventDefault()
       const r = renderer.domElement.getBoundingClientRect()
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
       const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera)
-      const dist = camera.position.distanceTo(controls.target)
-      const cursor = camera.position.clone().add(rc.ray.direction.clone().multiplyScalar(dist))
-      const factor = e.deltaY < 0 ? 0.82 : 1 / 0.82   // 안쪽으로 갈수록 커서 지점에 접근
-      camera.position.lerpVectors(cursor, camera.position, factor)
-      controls.target.lerpVectors(cursor, controls.target, factor)
+      const d = camera.position.distanceTo(controls.target)
+      cursorPt.copy(camera.position).addScaledVector(rc.ray.direction, d)
+      const zin = e.deltaY < 0
+      const step = Math.min(Math.abs(e.deltaY) / 100, 2)     // 노치 크기에 비례(과하지 않게)
+      const factor = Math.pow(zin ? 0.9 : 1 / 0.9, step)
+      desiredDist = THREE.MathUtils.clamp(desiredDist * factor, EXTENT * 0.25, EXTENT * 9)
+      desiredTarget.lerp(cursorPt, zin ? 0.15 : 0.06)         // 커서 쪽으로 타깃 살짝(줌인 시 더)
     }
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false })
 
@@ -128,6 +135,12 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     let raf = 0
     const loop = () => {
       raf = requestAnimationFrame(loop)
+      // 부드러운 줌: 목표 거리/타깃으로 프레임마다 조금씩 보간(ease).
+      controls.target.lerp(desiredTarget, 0.15)
+      const cur = camera.position.distanceTo(controls.target)
+      const nd = THREE.MathUtils.lerp(cur, desiredDist, 0.15)
+      dir.subVectors(camera.position, controls.target)
+      if (dir.lengthSq() > 1e-6) camera.position.copy(controls.target).addScaledVector(dir.normalize(), nd)
       controls.update()
       renderer.render(scene, camera)
       // 라벨 위치 갱신(3D→화면).
