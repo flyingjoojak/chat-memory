@@ -1,16 +1,18 @@
 import { useEffect, useState } from "react"
-import { Search, MessagesSquare, Settings } from "lucide-react"
+import { Search, MessagesSquare, Waypoints, Settings } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
 import { SessionsView } from "@/components/SessionsView"
 import { SettingsView } from "@/components/SettingsView"
+import { GraphView } from "@/components/GraphView"
 import { SessionDetail } from "@/components/SessionDetail"
 import { applyTheme } from "@/lib/theme"
 
-type View = "search" | "sessions" | "settings"
+type View = "search" | "sessions" | "graph" | "settings"
 
 const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
   { v: "search", icon: <Search className="size-[18px]" />, label: "검색" },
   { v: "sessions", icon: <MessagesSquare className="size-[18px]" />, label: "세션" },
+  { v: "graph", icon: <Waypoints className="size-[18px]" />, label: "지도" },
   { v: "settings", icon: <Settings className="size-[18px]" />, label: "설정" },
 ]
 
@@ -43,6 +45,7 @@ export default function App() {
       <main className="overflow-y-auto">
         {view === "search" && <SearchView onOpenSession={setOpenId} />}
         {view === "sessions" && <SessionsView onOpenSession={setOpenId} />}
+        {view === "graph" && <GraphView onOpenSession={setOpenId} />}
         {view === "settings" && <SettingsView />}
       </main>
 

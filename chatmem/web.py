@@ -284,6 +284,55 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
+_graph_cache: dict = {}
+
+
+@app.get("/api/graph")
+def api_graph():
+    """의미 지도: 청크 벡터를 턴 단위로 평균→PCA 2D 투영 + 턴 메타(세션·시각·헤드라인)."""
+    import numpy as np
+
+    vi = make_index()
+    keys, mat = vi.all_vectors()
+    if len(keys) == 0:
+        return {"points": []}
+
+    # 캐시(벡터 수 동일하면 재계산 생략).
+    if _graph_cache.get("n") == len(keys) and "points" in _graph_cache:
+        return {"points": _graph_cache["points"]}
+
+    # 청크 → 턴 단위 평균 벡터.
+    from collections import defaultdict
+    acc: dict[str, list] = defaultdict(list)
+    for k, i in zip(keys, range(len(keys))):
+        acc[k.rsplit("#", 1)[0]].append(i)
+    turn_ids = list(acc)
+    tmat = np.stack([mat[idxs].mean(axis=0) for idxs in acc.values()]).astype(np.float32)
+
+    # PCA 2D(중심화 후 SVD 상위 2성분). 의존성 없이 numpy만.
+    xc = tmat - tmat.mean(axis=0)
+    _u, _s, vt = np.linalg.svd(xc, full_matrices=False)
+    coords = xc @ vt[:2].T  # (T, 2)
+
+    # 턴 메타 조회.
+    db = ArchiveDB()
+    meta = {}
+    for r in db.conn.execute("SELECT id, session_id, timestamp, summary, question FROM turns").fetchall():
+        meta[r["id"]] = (r["session_id"], r["timestamp"], r["summary"] or r["question"] or "")
+
+    pts = []
+    for tid, (x, y) in zip(turn_ids, coords):
+        m = meta.get(tid)
+        if not m:
+            continue
+        sess, ts, head = m
+        pts.append({"id": tid, "session": sess, "x": round(float(x), 4), "y": round(float(y), 4),
+                    "timestamp": ts, "headline": head[:120]})
+    _graph_cache.clear()
+    _graph_cache.update(n=len(keys), points=pts)
+    return {"points": pts}
+
+
 @app.get("/api/stats")
 def api_stats():
     db = ArchiveDB()

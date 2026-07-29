@@ -76,6 +76,12 @@ class VectorIndex:
         top = top[np.argsort(-scores[top])]
         return [(self.ids[i], float(scores[i])) for i in top]
 
+    def all_vectors(self):
+        """(keys, matrix) 전체 반환 — 의미 지도 투영용."""
+        if self.matrix is None or len(self.ids) == 0:
+            return [], np.zeros((0, 0), dtype=np.float32)
+        return list(self.ids), self.matrix
+
     def reset(self) -> None:
         """전체 비우기(모델 교체 재색인용). 메모리·파일 모두 초기화."""
         self.ids = []
@@ -181,6 +187,18 @@ class SqliteVecIndex:
                 n += 1
         self.conn.commit()
         return n
+
+    def all_vectors(self):
+        """(keys, matrix) 전체 반환(int8→float 역양자화) — 의미 지도 투영용."""
+        if not self._dim:
+            return [], np.zeros((0, 0), dtype=np.float32)
+        rows = self.conn.execute(
+            "SELECT k.key, v.embedding FROM vec v JOIN vkeys k ON k.id=v.rowid").fetchall()
+        if not rows:
+            return [], np.zeros((0, 0), dtype=np.float32)
+        keys = [r[0] for r in rows]
+        mat = np.stack([np.frombuffer(r[1], dtype=np.int8).astype(np.float32) / 127.0 for r in rows])
+        return keys, mat
 
     def reset(self) -> None:
         """전체 비우기(모델 교체=차원 변경 대응): 테이블 드롭 후 재생성."""

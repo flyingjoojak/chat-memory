@@ -32,6 +32,11 @@ export const listSessions = () =>
 
 export const getStats = () => getJSON<Stats>(`/api/stats`)
 
+export interface GraphPoint {
+  id: string; session: string; x: number; y: number; timestamp: string; headline: string
+}
+export const getGraph = () => getJSON<{ points: GraphPoint[] }>(`/api/graph`)
+
 export interface Config {
   enrich_backend: string
   models: Record<string, string>
