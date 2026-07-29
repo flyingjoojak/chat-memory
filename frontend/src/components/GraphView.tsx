@@ -97,11 +97,12 @@ export function GraphView({ onOpenSession }: { onOpenSession: (id: string) => vo
     try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) { /* noop */ }
   }
   function onMove(e: React.PointerEvent) {
-    if (!drag.current) return
+    const d = drag.current   // 지역으로 고정: setView 업데이터가 나중 실행돼도 null 참조 안 함
+    if (!d) return
     const { px, py } = toSvg(e.clientX, e.clientY)
-    const dx = px - drag.current.x, dy = py - drag.current.y
+    const dx = px - d.x, dy = py - d.y
     if (Math.abs(dx) + Math.abs(dy) > 4) moved.current = true
-    setView((v) => ({ ...v, x: drag.current!.vx + dx, y: drag.current!.vy + dy }))
+    setView((v) => ({ ...v, x: d.vx + dx, y: d.vy + dy }))
   }
   function onUp(e: React.PointerEvent) {
     drag.current = null
