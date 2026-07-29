@@ -113,3 +113,34 @@ ENRICH_OPENAI_MODEL = os.environ.get("CHATMEM_OPENAI_MODEL", "gpt-4o-mini")
 ENRICH_GEMINI_MODEL = os.environ.get("CHATMEM_GEMINI_MODEL", "gemini-2.0-flash")
 ENRICH_OLLAMA_MODEL = os.environ.get("CHATMEM_OLLAMA_MODEL", "llama3.1")
 ENRICH_OLLAMA_URL = os.environ.get("CHATMEM_OLLAMA_URL", "http://localhost:11434/v1")
+
+# --- 스케줄(설정으로 조정 가능) --------------------------------------
+ENRICH_TIME = os.environ.get("CHATMEM_ENRICH_TIME", "04:00")       # 야간 정제 시각 HH:MM
+INDEX_INTERVAL_MIN = int(os.environ.get("CHATMEM_INDEX_INTERVAL", "10"))  # 증분 인덱싱 주기(분)
+
+
+def write_config(updates: dict[str, str]) -> None:
+    """config.env를 in-place로 갱신(주석·기타 줄 보존). 기존 `KEY=`/`#KEY=` 줄은 교체, 없으면 추가.
+
+    값이 빈 문자열이면 해당 키를 주석 처리(비활성).
+    """
+    path = CONFIG_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    remaining = dict(updates)
+
+    def line_key(ln: str) -> str | None:
+        s = ln.strip().lstrip("#").strip()
+        return s.split("=", 1)[0].strip() if "=" in s else None
+
+    out: list[str] = []
+    for ln in lines:
+        k = line_key(ln)
+        if k in remaining:
+            val = remaining.pop(k)
+            out.append(f"{k}={val}" if val != "" else f"#{k}=")
+        else:
+            out.append(ln)
+    for k, val in remaining.items():
+        out.append(f"{k}={val}" if val != "" else f"#{k}=")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")

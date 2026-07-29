@@ -15,10 +15,21 @@ import subprocess
 import sys
 from pathlib import Path
 
-# 자동 축적 주기(하드코딩 → 추후 설정으로 승격 예정: §9 CHATMEM_INDEX_INTERVAL/ENRICH_TIME)
-INDEX_EVERY_MIN = 10
-ENRICH_HOUR = 4
-ENRICH_MIN = 0
+# 자동 축적 주기 — config(환경변수/config.env)에서 조정. 설정 변경 후 재등록하면 반영.
+from . import config as _C  # noqa: E402
+
+
+def _timing() -> tuple[int, int, int]:
+    """(인덱싱 주기 분, 정제 시 HH, 정제 MM). config를 매 호출 시 재평가."""
+    interval = _C.INDEX_INTERVAL_MIN
+    try:
+        hh, mm = (_C.ENRICH_TIME or "04:00").split(":")
+        return interval, int(hh), int(mm)
+    except (ValueError, AttributeError):
+        return interval, 4, 0
+
+
+INDEX_EVERY_MIN, ENRICH_HOUR, ENRICH_MIN = _timing()
 
 _WIN_INDEX = "chatmem-index"
 _WIN_ENRICH = "chatmem-enrich"
@@ -200,6 +211,9 @@ def _platform() -> str:
 
 
 def install(dry_run: bool = False) -> list[str]:
+    # 최신 설정(시각/간격) 반영 후 등록.
+    global INDEX_EVERY_MIN, ENRICH_HOUR, ENRICH_MIN
+    INDEX_EVERY_MIN, ENRICH_HOUR, ENRICH_MIN = _timing()
     return {"windows": _win_install, "macos": _mac_install,
             "linux": _linux_install}[_platform()](dry_run)
 

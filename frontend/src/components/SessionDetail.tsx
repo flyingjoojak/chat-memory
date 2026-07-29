@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react"
-import { ArrowLeft, ChevronRight, FileText } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { ArrowLeft, ChevronRight, FileText, Search } from "lucide-react"
+import { Input } from "@/components/ui/input"
 import { getSession } from "@/lib/api"
 import { fmtTime, mdToHtml } from "@/lib/format"
 import type { SessionDetail as Detail, SessionTurn } from "@/lib/types"
@@ -35,12 +36,23 @@ function TurnRow({ t, i }: { t: SessionTurn; i: number }) {
 export function SessionDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const [data, setData] = useState<Detail | null>(null)
   const [err, setErr] = useState("")
+  const [filter, setFilter] = useState("")
   useEffect(() => {
     getSession(id).then(setData).catch((e) => setErr(String(e)))
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose()
     window.addEventListener("keydown", esc)
     return () => window.removeEventListener("keydown", esc)
   }, [id, onClose])
+
+  const turns = useMemo(() => {
+    if (!data) return []
+    const q = filter.trim().toLowerCase()
+    if (!q) return data.turns
+    return data.turns.filter((t) =>
+      (t.summary || "").toLowerCase().includes(q) ||
+      t.question.toLowerCase().includes(q) ||
+      t.answer.toLowerCase().includes(q))
+  }, [data, filter])
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
@@ -55,7 +67,16 @@ export function SessionDetail({ id, onClose }: { id: string; onClose: () => void
       <div className="mx-auto flex max-w-3xl flex-col gap-3 px-6 py-5 pb-24">
         {err && <div className="py-10 text-center text-muted-foreground">오류: {err}</div>}
         {!data && !err && <div className="py-10 text-center text-muted-foreground">불러오는 중…</div>}
-        {data?.turns.map((t, i) => <TurnRow key={t.id} t={t} i={i} />)}
+        {data && (
+          <div className="relative mb-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={filter} onChange={(e) => setFilter(e.target.value)}
+              placeholder="이 세션 안에서 검색…" className="h-9 pl-9" />
+            {filter && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground tabular-nums">{turns.length}개</span>}
+          </div>
+        )}
+        {turns.map((t) => <TurnRow key={t.id} t={t} i={data!.turns.indexOf(t)} />)}
+        {data && turns.length === 0 && <div className="py-6 text-center text-muted-foreground">일치하는 턴 없음</div>}
       </div>
     </div>
   )

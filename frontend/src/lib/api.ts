@@ -29,3 +29,26 @@ export const listSessions = () =>
   getJSON<{ sessions: SessionRow[] }>(`/api/sessions`)
 
 export const getStats = () => getJSON<Stats>(`/api/stats`)
+
+export interface Config {
+  enrich_backend: string
+  models: Record<string, string>
+  ollama_url: string
+  enrich_time: string
+  index_interval: number
+  embed_model: string
+  keys: Record<string, boolean>
+  config_path: string
+}
+
+export const getConfig = () => getJSON<Config>(`/api/config`)
+
+export async function putConfig(updates: Record<string, string>): Promise<{ ok: boolean; rescheduled?: boolean }> {
+  const r = await fetch(`/api/config`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  })
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  return r.json()
+}

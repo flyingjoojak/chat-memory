@@ -121,6 +121,67 @@ def api_sessions(limit: int = 500):
     return {"sessions": out}
 
 
+@app.get("/api/config")
+def api_config():
+    """현재 유효 설정(키 값은 존재 여부만). 설정 화면 표시용."""
+    import os
+
+    from . import config as C
+    return {
+        "enrich_backend": C.ENRICH_BACKEND,
+        "models": {
+            "anthropic": C.ENRICH_API_MODEL, "openai": C.ENRICH_OPENAI_MODEL,
+            "gemini": C.ENRICH_GEMINI_MODEL, "ollama": C.ENRICH_OLLAMA_MODEL,
+            "claude": C.ENRICH_CLI_MODEL,
+        },
+        "ollama_url": C.ENRICH_OLLAMA_URL,
+        "enrich_time": C.ENRICH_TIME,
+        "index_interval": C.INDEX_INTERVAL_MIN,
+        "embed_model": C.EMBED_MODEL,
+        "keys": {k: bool(os.environ.get(k)) for k in
+                 ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")},
+        "config_path": str(C.CONFIG_PATH),
+    }
+
+
+@app.put("/api/config")
+def api_config_put(payload: dict):
+    """설정 저장: config.env 갱신 + 실행 중 프로세스 반영 + 필요 시 스케줄러 재등록.
+
+    payload = {"CHATMEM_ENRICH_BACKEND": "...", "OPENAI_API_KEY": "...", ...}
+    빈 문자열 값은 해당 키 비활성(주석).
+    """
+    import importlib
+    import os
+
+    from . import config as C
+
+    updates = {str(k): str(v) for k, v in (payload or {}).items()}
+    if not updates:
+        return {"ok": True, "changed": []}
+
+    C.write_config(updates)                       # 1) 파일 반영
+    for k, v in updates.items():                  # 2) 실행 중 os.environ 반영
+        if v == "":
+            os.environ.pop(k, None)
+        else:
+            os.environ[k] = v
+    importlib.reload(C)                            # 3) config 모듈 재평가(새 env 반영)
+
+    # 4) 스케줄 관련 키가 바뀌면 스케줄러 재등록
+    timing_keys = {"CHATMEM_ENRICH_TIME", "CHATMEM_INDEX_INTERVAL"}
+    rescheduled = False
+    if timing_keys & set(updates):
+        try:
+            from . import scheduler
+            importlib.reload(scheduler)
+            scheduler.install()
+            rescheduled = True
+        except Exception:
+            pass
+    return {"ok": True, "changed": list(updates), "rescheduled": rescheduled}
+
+
 @app.get("/api/stats")
 def api_stats():
     db = ArchiveDB()

@@ -26,3 +26,26 @@ def test_real_env_wins(tmp_path, monkeypatch):
 
 def test_missing_file_is_noop(tmp_path):
     _load_config_file(tmp_path / "nope.env")  # 예외 없이 조용히 통과
+
+
+def test_write_config_creates_and_updates(tmp_path, monkeypatch):
+    from chatmem import config as C
+    f = tmp_path / "config.env"
+    monkeypatch.setattr(C, "CONFIG_PATH", f)
+
+    C.write_config({"CHATMEM_ENRICH_BACKEND": "openai", "OPENAI_API_KEY": "sk-x"})
+    body = f.read_text(encoding="utf-8")
+    assert "CHATMEM_ENRICH_BACKEND=openai" in body
+    assert "OPENAI_API_KEY=sk-x" in body
+
+    # 기존 값 교체 + 주석/기타 줄 보존
+    f.write_text("# 내 메모\nCHATMEM_ENRICH_BACKEND=openai\nFOO=bar\n", encoding="utf-8")
+    C.write_config({"CHATMEM_ENRICH_BACKEND": "gemini"})
+    body = f.read_text(encoding="utf-8")
+    assert "# 내 메모" in body and "FOO=bar" in body
+    assert "CHATMEM_ENRICH_BACKEND=gemini" in body
+    assert "openai" not in body  # 이전 값 사라짐
+
+    # 빈 값 = 비활성(주석 처리)
+    C.write_config({"FOO": ""})
+    assert "#FOO=" in f.read_text(encoding="utf-8")
