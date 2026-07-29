@@ -155,7 +155,7 @@ JSONL 로그 (Claude Code 자동생성)
 ## 6. 예상 규모
 - 코어 라이브러리(파서·청킹·임베딩·인덱스·검색) ~300줄 · CLI ~50줄 · 훅/스케줄러 설정
 - 의존성: fastembed, numpy (이미 설치). 정제용 claude CLI(이미 있음).
-- 전부 로컬·오프라인. 대화 내용 외부 유출 0.
+- 로컬 임베딩·검색(과금 회피 목적). 프라이버시는 하드 제약 아님 — 8장 배포 시 중앙 코어/서버로 확장 가능.
 
 ## 7. 로드맵 — ✅ CLI(코어) 먼저, 프로그램 나중
 
@@ -171,3 +171,62 @@ JSONL 로그 (Claude Code 자동생성)
 ### Phase 2 (나중, 실사용 요구 반영) — 프로그램
 - FastAPI+React 로컬앱: 검색 UI, 브라우징·태그필터, 엔진/모델 변경(벡터수 기반 추천+수동), Obsidian 내보내기, eval 셋 대시보드.
 - 코어 라이브러리 그대로 재사용.
+
+## 8. 배포 로드맵 (다른 사람도 쓰게 + 멀티기기)
+
+> 트리거는 프라이버시가 아니라 **(a) 벡터 ~100만 돌파 또는 (b) 여러 기기 통합 필요** (먼저 오는 것). 대화는 이미 Anthropic으로 가므로 "완전 로컬"은 하드 제약이 아니며, 로컬 임베딩은 순전히 비용(과금 회피) 선택.
+
+### 8.1 벡터 저장 백엔드 — ✅ 배포 결정: sqlite-vec int8 (pluggable)
+실측(4,206벡터·1024d·쿼리200 평균):
+
+| 방식 | 쿼리당 | 크기 | RAM | 정확도(npy기준) | 100만 환산 |
+|------|-------|------|-----|----------------|-----------|
+| npy fp32 (현재) | 0.41ms | 17MB | **전량 RAM** | 기준 | 4.10GB RAM |
+| sqlite-vec fp32 | 18ms | 21MB(디스크) | 극소 | recall@10 97.6% | 5.02GB 디스크 |
+| **sqlite-vec int8** | 6.2ms | **5.4MB(디스크)** | 극소 | recall@10 91.7% · top1 95.5% | **1.28GB 디스크** |
+
+- 결정 근거 = 속도(오히려 npy가 15~40배 빠름) 아님 → **저RAM 유저 지원 + 무한 성장 대비 + 원문·FTS·벡터 파일 하나로 통합**. 6ms는 사람 검색에 무의미.
+- int8 손실(≈8% recall@10)은 하이브리드(FTS 융합)+정제표시로 체감 미미. 필요 시 fp32 원본 보관→int8 거친검색 후 **재랭킹**으로 회복.
+- **백엔드 pluggable**: `개인 1대=npy`(더 빠름) / `배포·저RAM=sqlite-vec`. 이미 `VectorIndex` 추상화돼 있어 구현체 추가만.
+
+### 8.2 배포 아키텍처 — 얇은 클라이언트 + 중앙 코어
+- **클라이언트(각 기기)**: 로그 감시 + 커서 + 원문 턴 텍스트 전송. **모델·벡터·DB 없음**(수 MB). 오프라인 시 커서로 재개.
+- **중앙 코어(1곳)**: 임베딩·저장·FTS·검색·정제. 모델은 여기만. 검색 질의도 서버가 임베딩.
+- 멀티기기 통합은 turn_id(`sessionId:turnUUID` 전역유니크)로 **충돌·중복 없이** 저절로. `device` 태그로 필터.
+- 추가 필요: `/ingest` 엔드포인트, 얇은 캡처 클라, 토큰 인증, (규모 시) pgvector.
+
+### 8.3 배포 형태 — ⬜ 미확정 (아키텍처는 셋 다 동일, 인증·패키징·비용만 다름)
+- A. 셀프호스트(사용자가 기기/서버 하나에 Docker 코어) — 무료 임베딩·데이터 본인, 운영자 비용 0
+- B. 기기 하나를 서버로(데스크탑=코어, 나머지=클라, Tailscale) — 개인 멀티기기의 최저 마찰
+- C. 운영형 SaaS(내가 서버·임베딩·저장 대행, 구독료 회수) — UX 최고, 임베딩 compute·저장·데이터책임을 내가 부담
+
+## 9. 추후 도입 예정 설정 (config 표면 미리보기)
+
+> 현재는 `config.env`(KEY=VALUE, 환경변수 우선) 한 파일로 CLI·스케줄러·웹 공통. 아래는 배포·멀티기기·확장 단계에서 **추가될 설정 항목의 예상 목록**(지금은 미구현, 방향만).
+
+**벡터/저장 (8.1 관련)**
+- `CHATMEM_VECTOR_BACKEND` = `npy`(기본, 로컬 빠름) / `sqlite-vec`(배포·저RAM)
+- `CHATMEM_VECTOR_QUANT` = `float32` / `int8`(1/4 용량) / `binary`(재랭킹용)
+- `CHATMEM_RERANK` = int8/binary 거친검색 후 fp32 원본 재랭킹 on/off
+- (규모 시) `CHATMEM_VECTOR_BACKEND=pgvector` + 접속 URL
+
+**임베딩 (저사양 대응)**
+- `CHATMEM_EMBED_MODEL` 이미 있음 — 저RAM용 `e5-small(384d)` 선택지 문서화
+- `CHATMEM_EMBED_DEVICE` = cpu/gpu(내장그래픽 포함) — 있으면 가속
+- `CHATMEM_EMBED_REMOTE_URL` = 임베딩을 중앙 서버에 위임(클라이언트는 모델 없이)
+
+**배포/네트워크 (8.2 관련)**
+- `CHATMEM_MODE` = `local`(단일) / `client`(얇은 클라) / `server`(중앙 코어)
+- `CHATMEM_SERVER_URL` = 클라이언트가 붙을 중앙 코어 주소
+- `CHATMEM_AUTH_TOKEN` = 인그레스 인증 토큰(사용자별)
+- `CHATMEM_DEVICE_NAME` = 이 기기 태그(멀티기기 필터용)
+- `CHATMEM_BIND` = 서버 바인드 주소/포트(현재 웹 127.0.0.1:8642 고정)
+
+**캡처 범위 (4.6 "제외목록 여지")**
+- `CHATMEM_EXCLUDE_PROJECTS` / `CHATMEM_EXCLUDE_SESSIONS` = 특정 프로젝트·세션 색인 제외
+- `CHATMEM_CAPTURE_SIDECHAIN` = 서브에이전트 대화 포함 여부(현재 제외)
+- `CHATMEM_REDACT` = 저장 전 시크릿 패턴 마스킹 on/off(현재 원문 그대로)
+
+**동작/스케줄 (이미 일부 존재)**
+- 있음: `CHATMEM_ENRICH_BACKEND`(+모델별), `MIN_FREE_MB`, `IDLE_SECS`, `CHECKPOINT_TURNS`, `EMBED_BATCH`
+- 추가 예상: `CHATMEM_ENRICH_TIME`(야간 정제 시각, 현재 04:00 고정), `CHATMEM_INDEX_INTERVAL`(현재 10분 고정), `CHATMEM_LOG_LEVEL`
