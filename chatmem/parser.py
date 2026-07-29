@@ -36,6 +36,10 @@ _PLUMBING_PREFIXES = (
     "<<CHATMEM-ENRICH>>",              # 정제 claude -p 세션(자기오염 방지)
     "다음은 한 Claude Code 세션의 대화 턴들이다",  # 정제 프롬프트 구버전(sentinel 이전)
     "This session is being continued from a previous conversation",  # 컨텍스트 압축 요약(구버전 로그 폴백)
+    "<bash-input",                     # `!` bash 모드 입력(터미널 명령, 대화 아님)
+    "<bash-stdout",                    # `!` bash 모드 표준출력
+    "<bash-stderr",                    # `!` bash 모드 표준오류
+    "[Request interrupted",            # 사용자 중단 마커(주입 이벤트)
 )
 
 # 행동 상세로 뽑을 우선 키 순서.

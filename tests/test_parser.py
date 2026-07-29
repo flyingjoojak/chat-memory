@@ -67,6 +67,19 @@ def test_compaction_summary_excluded_from_turns():
          "content": "This session is being continued from a previous conversation. Summary: ..."}})
 
 
+def test_bash_mode_and_interrupt_excluded():
+    # `!` bash 모드 입력/출력, 중단 마커 = 대화 아님.
+    for txt in ("<bash-input> python -m chatmem progress</bash-input>",
+                "<bash-stdout>...</bash-stdout><bash-stderr></bash-stderr>",
+                "[Request interrupted by user for tool use]"):
+        assert not is_real_user_prompt(
+            {"type": "user", "message": {"role": "user", "content": txt}}), txt
+    # 단어가 문장에 포함된 진짜 질문은 통과(false positive 방지)
+    assert is_real_user_prompt(
+        {"type": "user", "message": {"role": "user",
+         "content": "task-notification 노이즈 필터가 뭐야"}})
+
+
 def test_sidechain_excluded_from_turns():
     objs = [
         _user("u1", "본대화 질문입니다"),
