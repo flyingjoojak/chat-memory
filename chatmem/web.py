@@ -313,6 +313,35 @@ def api_graph(refresh: bool = False):
     return data
 
 
+@app.get("/api/graph3d")
+def api_graph3d(refresh: bool = False):
+    """의미 지도 3D: UMAP 3성분 투영 점 구름."""
+    from . import config as C
+    from .graph import build_graph
+
+    vi = make_index()
+    n = len(vi)
+    if n == 0:
+        return {"points": [], "clusters": [], "method": None, "dims": 3}
+
+    cache_path = C.DATA_DIR / "graph3d_cache.json"
+    ver = 1
+    if not refresh and cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if cached.get("n") == n and cached.get("v") == ver:
+                return cached["data"]
+        except Exception:
+            pass
+
+    data = build_graph(vi, ArchiveDB(), dims=3)
+    try:
+        cache_path.write_text(json.dumps({"n": n, "v": ver, "data": data}, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return data
+
+
 @app.get("/api/stats")
 def api_stats():
     db = ArchiveDB()

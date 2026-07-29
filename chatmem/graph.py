@@ -12,19 +12,19 @@ from collections import Counter, defaultdict
 import numpy as np
 
 
-def _project(mat: np.ndarray) -> tuple[np.ndarray, str]:
+def _project(mat: np.ndarray, dims: int = 2) -> tuple[np.ndarray, str]:
     n = mat.shape[0]
     if n >= 5:
         try:
             import umap
-            return (umap.UMAP(n_components=2, random_state=42, metric="cosine",
+            return (umap.UMAP(n_components=dims, random_state=42, metric="cosine",
                               n_neighbors=min(15, n - 1), min_dist=0.15)
                     .fit_transform(mat).astype(np.float32)), "umap"
         except Exception:
             pass
     xc = mat - mat.mean(axis=0)
     _u, _s, vt = np.linalg.svd(xc, full_matrices=False)
-    comp = vt[:2].T if vt.shape[0] >= 2 else np.eye(mat.shape[1], 2, dtype=np.float32)
+    comp = vt[:dims].T if vt.shape[0] >= dims else np.eye(mat.shape[1], dims, dtype=np.float32)
     return (xc @ comp).astype(np.float32), "pca"
 
 
@@ -40,12 +40,12 @@ def _cluster(coords: np.ndarray) -> np.ndarray:
         return np.zeros(t, dtype=int)
 
 
-def build_graph(vi, db) -> dict:
+def build_graph(vi, db, dims: int = 2) -> dict:
     keys, mat = vi.all_vectors()
     if len(keys) == 0:
-        return {"points": [], "clusters": [], "method": None}
+        return {"points": [], "clusters": [], "method": None, "dims": dims}
 
-    coords, method = _project(mat)          # 청크 단위 그대로 → 밀도
+    coords, method = _project(mat, dims)    # 청크 단위 그대로 → 밀도
     labels = _cluster(coords)
 
     meta, tags = {}, {}
@@ -55,7 +55,7 @@ def build_graph(vi, db) -> dict:
 
     pts = []
     clu_tag: dict[int, Counter] = defaultdict(Counter)
-    clu_pos: dict[int, list[tuple[float, float]]] = defaultdict(list)
+    clu_pos: dict[int, list[np.ndarray]] = defaultdict(list)
     for i, k in enumerate(keys):
         tid = k.rsplit("#", 1)[0]
         m = meta.get(tid)
@@ -63,18 +63,23 @@ def build_graph(vi, db) -> dict:
             continue
         sess, head = m
         c = int(labels[i])
-        x, y = float(coords[i, 0]), float(coords[i, 1])
-        pts.append({"x": round(x, 2), "y": round(y, 2), "c": c, "s": sess, "h": head[:80]})
+        pt = {"x": round(float(coords[i, 0]), 2), "y": round(float(coords[i, 1]), 2),
+              "c": c, "s": sess, "h": head[:80]}
+        if dims == 3:
+            pt["z"] = round(float(coords[i, 2]), 2)
+        pts.append(pt)
         for t in tags.get(tid, []):
             clu_tag[c][t] += 1
-        clu_pos[c].append((x, y))
+        clu_pos[c].append(coords[i])
 
     clusters = []
     for c, pos in clu_pos.items():
-        xs = [p[0] for p in pos]
-        ys = [p[1] for p in pos]
+        cen = np.mean(pos, axis=0)
         top = [t for t, _ in clu_tag[c].most_common(2)]
-        clusters.append({"id": c, "label": " · ".join(top) if top else f"군집 {c + 1}",
-                         "x": round(sum(xs) / len(xs), 2), "y": round(sum(ys) / len(ys), 2), "n": len(pos)})
+        cl = {"id": c, "label": " · ".join(top) if top else f"군집 {c + 1}",
+              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": len(pos)}
+        if dims == 3:
+            cl["z"] = round(float(cen[2]), 2)
+        clusters.append(cl)
     clusters.sort(key=lambda c: -c["n"])
-    return {"points": pts, "clusters": clusters, "method": method}
+    return {"points": pts, "clusters": clusters, "method": method, "dims": dims}

@@ -37,6 +37,11 @@ export interface GraphCluster { id: number; label: string; x: number; y: number;
 export interface GraphData { points: GraphPoint[]; clusters: GraphCluster[]; method: string | null }
 export const getGraph = () => getJSON<GraphData>(`/api/graph`)
 
+export interface GraphPoint3D extends GraphPoint { z: number }
+export interface GraphCluster3D extends GraphCluster { z: number }
+export interface Graph3DData { points: GraphPoint3D[]; clusters: GraphCluster3D[]; method: string | null }
+export const getGraph3D = () => getJSON<Graph3DData>(`/api/graph3d`)
+
 export interface Config {
   enrich_backend: string
   models: Record<string, string>

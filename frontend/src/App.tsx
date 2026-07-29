@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { Search, MessagesSquare, Waypoints, Settings } from "lucide-react"
+import { useEffect, useState, lazy, Suspense } from "react"
+import { Search, MessagesSquare, Waypoints, Box, Settings } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
 import { SessionsView } from "@/components/SessionsView"
 import { SettingsView } from "@/components/SettingsView"
@@ -8,12 +8,16 @@ import { SessionDetail } from "@/components/SessionDetail"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { applyTheme } from "@/lib/theme"
 
-type View = "search" | "sessions" | "graph" | "settings"
+// three.js는 무거우니 3D 탭 열 때만 로드(초기 번들 경량).
+const GraphView3D = lazy(() => import("@/components/GraphView3D").then((m) => ({ default: m.GraphView3D })))
+
+type View = "search" | "sessions" | "graph" | "graph3d" | "settings"
 
 const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
   { v: "search", icon: <Search className="size-[18px]" />, label: "검색" },
   { v: "sessions", icon: <MessagesSquare className="size-[18px]" />, label: "세션" },
   { v: "graph", icon: <Waypoints className="size-[18px]" />, label: "지도" },
+  { v: "graph3d", icon: <Box className="size-[18px]" />, label: "3D" },
   { v: "settings", icon: <Settings className="size-[18px]" />, label: "설정" },
 ]
 
@@ -48,6 +52,11 @@ export default function App() {
           {view === "search" && <SearchView onOpenSession={setOpenId} />}
           {view === "sessions" && <SessionsView onOpenSession={setOpenId} />}
           {view === "graph" && <GraphView onOpenSession={setOpenId} />}
+          {view === "graph3d" && (
+            <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
+              <GraphView3D onOpenSession={setOpenId} />
+            </Suspense>
+          )}
           {view === "settings" && <SettingsView />}
         </ErrorBoundary>
       </main>
