@@ -10,6 +10,15 @@
 set -e
 cd "$(dirname "$0")/.."
 
+# 프론트가 빌드돼 있어야 함(백엔드가 이 dist를 / 에서 서빙). 없으면 빌드.
+if [ ! -f frontend/dist/index.html ]; then
+  echo "frontend 빌드 중…"; (cd frontend && npm run build)
+fi
+
+# --add-data 경로 구분자: Windows=';', Unix=':'
+SEP=":"
+case "${OS:-}${OSTYPE:-}" in *Windows*|*msys*|*cygwin*) SEP=";" ;; esac
+
 pyinstaller --noconfirm --onedir --name chatmem-backend \
   --paths . \
   --collect-all fastembed \
@@ -18,6 +27,7 @@ pyinstaller --noconfirm --onedir --name chatmem-backend \
   --collect-all huggingface_hub \
   --collect-all uvicorn \
   --collect-submodules chatmem \
+  --add-data "frontend/dist${SEP}frontend/dist" \
   packaging/backend_entry.py
 
 echo ""

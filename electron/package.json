@@ -1,0 +1,33 @@
+{
+  "name": "chat-memory-desktop",
+  "version": "0.1.0",
+  "description": "chat-memory 데스크탑 앱 (Electron 셸 + 파이썬 사이드카)",
+  "main": "main.js",
+  "author": "flyingjoojak",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
+  "build": {
+    "appId": "com.chatmemory.app",
+    "productName": "chat-memory",
+    "files": ["main.js", "loading.html"],
+    "extraResources": [
+      { "from": "../dist/chatmem-backend", "to": "backend" }
+    ],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg", "category": "public.app-category.productivity" },
+    "linux": { "target": "AppImage", "category": "Utility" },
+    "publish": [
+      { "provider": "github", "owner": "flyingjoojak", "repo": "chat-memory" }
+    ]
+  }
+}

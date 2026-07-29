@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>chat-memory</title>
+<style>
+  html,body{height:100%;margin:0}
+  body{display:grid;place-items:center;background:#0c0d10;color:#e9eaee;
+    font-family:-apple-system,'Malgun Gothic','Segoe UI',sans-serif}
+  .box{text-align:center}
+  .logo{width:44px;height:44px;border-radius:12px;background:#7ba2ff;color:#0c0d10;
+    display:grid;place-items:center;font-weight:800;font-size:20px;margin:0 auto 16px}
+  .msg{color:#8b919d;font-size:13px;margin-top:10px}
+  .spin{width:22px;height:22px;margin:14px auto 0;border:2px solid #292b32;
+    border-top-color:#7ba2ff;border-radius:50%;animation:s .8s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){.spin{animation:none}}
+</style></head>
+<body><div class="box">
+  <div class="logo">C</div>
+  <div style="font-weight:600">chat-memory</div>
+  <div class="spin"></div>
+  <div class="msg">엔진 준비 중… (첫 실행은 임베딩 모델 다운로드로 시간이 걸릴 수 있어요)</div>
+</div></body></html>

@@ -23,7 +23,11 @@ from .vectorindex import VectorIndex
 
 _state: dict = {}
 # 빌드된 React 프론트(있으면 서빙, 없으면 인라인 _HTML 폴백).
-_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+# PyInstaller 번들이면 sys._MEIPASS 안의 임베드 경로, 아니면 저장소 상대경로.
+import sys as _sys
+_MEIPASS = getattr(_sys, "_MEIPASS", None)
+_DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
+    else (Path(__file__).resolve().parent.parent / "frontend" / "dist")
 
 
 @contextlib.asynccontextmanager
