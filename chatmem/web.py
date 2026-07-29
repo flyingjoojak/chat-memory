@@ -182,11 +182,15 @@ def api_config_put(payload: dict):
     return {"ok": True, "changed": list(updates), "rescheduled": rescheduled}
 
 
-# 임베딩 모델 카탈로그(한국어 대화용으로 의미있는 것만). RAM은 대략 추정.
+# 임베딩 모델 카탈로그(한국어 대화용). ram_gb=임베딩 실행 중 피크 워킹셋 실측(MB→GB),
+# cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
 _EMBED_ALLOW = {
-    "intfloat/multilingual-e5-large": "최고 품질(다국어). 기본값.",
-    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": "중간 품질/용량(다국어).",
-    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": "가벼움(다국어). 저RAM 기기용.",
+    "intfloat/multilingual-e5-large": {
+        "note": "최고 품질(다국어). 기본값.", "ram_gb": 6.4, "cps": 0.8},
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": {
+        "note": "중간 품질·RAM(다국어).", "ram_gb": 4.5, "cps": 2.1},
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+        "note": "가벼움(다국어). 저RAM 기기용.", "ram_gb": 1.2, "cps": 31.0},
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": ""}
@@ -198,18 +202,23 @@ def api_embed_models():
 
     from . import config as C
     cat = {m["model"]: m for m in TextEmbedding.list_supported_models()}
+    total_chunks = ArchiveDB().conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
     out = []
-    for name, note in _EMBED_ALLOW.items():
+    for name, meta in _EMBED_ALLOW.items():
         m = cat.get(name)
         if not m:
             continue
-        size = round(m.get("size_in_GB", 0), 2)
+        cps = meta["cps"]
         out.append({
-            "model": name, "dim": m.get("dim"), "size_gb": size,
-            "ram_gb_est": round(size + 0.4, 1),  # 모델 + onnxruntime 오버헤드 대략
-            "note": note, "current": name == C.EMBED_MODEL,
+            "model": name, "dim": m.get("dim"),
+            "size_gb": round(m.get("size_in_GB", 0), 2),
+            "ram_gb": meta["ram_gb"],                 # 임베딩 중 실사용 피크(실측)
+            "cps": cps,
+            "est_reindex_min": round(total_chunks / cps / 60, 1) if cps else None,
+            "note": meta["note"], "current": name == C.EMBED_MODEL,
         })
-    return {"models": out, "current": C.EMBED_MODEL, "reindex": _reindex_state}
+    return {"models": out, "current": C.EMBED_MODEL,
+            "total_chunks": total_chunks, "reindex": _reindex_state}
 
 
 @app.post("/api/reindex")

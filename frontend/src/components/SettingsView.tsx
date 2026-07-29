@@ -207,7 +207,7 @@ export function SettingsView() {
           <Row key={m.model} label={
             <span className="flex flex-col">
               <span className="font-mono text-[13px]">{m.model.split("/").pop()}</span>
-              <span className="text-xs text-muted-foreground">{m.note} · {m.dim}차원 · 디스크 {m.size_gb}GB · RAM 약 {m.ram_gb_est}GB</span>
+              <span className="text-xs text-muted-foreground">{m.note} · {m.dim}차원 · 디스크 {m.size_gb}GB · <b className="text-foreground/80">임베딩 중 RAM 약 {m.ram_gb}GB</b>{m.est_reindex_min != null ? ` · 재색인 약 ${m.est_reindex_min}분` : ""}</span>
             </span>
           }>
             {m.current
@@ -230,8 +230,10 @@ export function SettingsView() {
             <AlertDialogTitle>임베딩 모델 변경 = 전체 재색인</AlertDialogTitle>
             <AlertDialogDescription>
               <b>{confirmModel?.model.split("/").pop()}</b>로 바꾸면 기존 벡터를 모두 버리고
-              전 대화를 다시 임베딩합니다. 새 모델 최초 다운로드(약 {confirmModel?.size_gb}GB)와
-              재색인에 시간이 걸리며, 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
+              전 대화를 다시 임베딩합니다. 벡터가 모델마다 다른 좌표계라 섞을 수 없어 전체 재색인이 필요합니다.
+              <br /><br />
+              예상: 재색인 <b>약 {confirmModel?.est_reindex_min}분</b>(이 기기 기준) + 새 모델 최초 다운로드 약 {confirmModel?.size_gb}GB.
+              임베딩 중 RAM 약 {confirmModel?.ram_gb}GB를 씁니다. 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

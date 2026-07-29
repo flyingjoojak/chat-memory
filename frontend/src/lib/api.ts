@@ -57,7 +57,9 @@ export interface EmbedModel {
   model: string
   dim: number
   size_gb: number
-  ram_gb_est: number
+  ram_gb: number          // 임베딩 중 실사용 피크 RAM(실측)
+  cps: number             // 청크/초 처리량(실측)
+  est_reindex_min: number | null
   note: string
   current: boolean
 }
