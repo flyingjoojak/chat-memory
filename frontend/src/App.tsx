@@ -5,6 +5,7 @@ import { SessionsView } from "@/components/SessionsView"
 import { SettingsView } from "@/components/SettingsView"
 import { GraphView } from "@/components/GraphView"
 import { SessionDetail } from "@/components/SessionDetail"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { applyTheme } from "@/lib/theme"
 
 type View = "search" | "sessions" | "graph" | "settings"
@@ -41,15 +42,21 @@ export default function App() {
         ))}
       </nav>
 
-      {/* 메인 패널 */}
+      {/* 메인 패널 — 뷰 크래시가 앱 전체를 죽이지 않게 격리 */}
       <main className="overflow-y-auto">
-        {view === "search" && <SearchView onOpenSession={setOpenId} />}
-        {view === "sessions" && <SessionsView onOpenSession={setOpenId} />}
-        {view === "graph" && <GraphView onOpenSession={setOpenId} />}
-        {view === "settings" && <SettingsView />}
+        <ErrorBoundary key={view}>
+          {view === "search" && <SearchView onOpenSession={setOpenId} />}
+          {view === "sessions" && <SessionsView onOpenSession={setOpenId} />}
+          {view === "graph" && <GraphView onOpenSession={setOpenId} />}
+          {view === "settings" && <SettingsView />}
+        </ErrorBoundary>
       </main>
 
-      {openId && <SessionDetail id={openId} onClose={() => setOpenId(null)} />}
+      {openId && (
+        <ErrorBoundary key={openId}>
+          <SessionDetail id={openId} onClose={() => setOpenId(null)} />
+        </ErrorBoundary>
+      )}
     </div>
   )
 }
