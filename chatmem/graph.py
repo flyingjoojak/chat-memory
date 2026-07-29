@@ -40,6 +40,71 @@ def _cluster(coords: np.ndarray) -> np.ndarray:
         return np.zeros(t, dtype=int)
 
 
+def build_network(vi, db, k: int = 6, min_sim: float = 0.35) -> dict:
+    """k-NN 유사도 네트워크: 노드=턴, 엣지=의미 최근접 이웃. '별자리' 시각화용."""
+    keys, mat = vi.all_vectors()
+    if len(keys) == 0:
+        return {"nodes": [], "edges": [], "clusters": [], "method": None}
+
+    # 턴 단위 평균 벡터.
+    acc: dict[str, list[int]] = defaultdict(list)
+    for i, key in enumerate(keys):
+        acc[key.rsplit("#", 1)[0]].append(i)
+    tids = list(acc)
+    tmat = np.stack([mat[idx].mean(axis=0) for idx in acc.values()]).astype(np.float32)
+    tmat = tmat / np.clip(np.linalg.norm(tmat, axis=1, keepdims=True), 1e-8, None)
+
+    coords, method = _project(tmat, 2)
+    labels = _cluster(coords)
+
+    # k-NN 엣지(코사인=정규화 내적).
+    sim = tmat @ tmat.T
+    np.fill_diagonal(sim, -1.0)
+    n = len(tids)
+    kk = min(k, n - 1) if n > 1 else 0
+    edges: set[tuple[int, int]] = set()
+    for i in range(n):
+        if kk <= 0:
+            break
+        for j in np.argpartition(-sim[i], kk - 1)[:kk]:
+            j = int(j)
+            if sim[i, j] < min_sim:
+                continue
+            edges.add((min(i, j), max(i, j)))
+    deg = [0] * n
+    for a, b in edges:
+        deg[a] += 1
+        deg[b] += 1
+
+    meta, tags = {}, {}
+    for r in db.conn.execute("SELECT id, session_id, summary, question, tags FROM turns").fetchall():
+        meta[r["id"]] = (r["session_id"], (r["summary"] or r["question"] or ""))
+        tags[r["id"]] = json.loads(r["tags"]) if r["tags"] else []
+
+    nodes = []
+    clu_tag: dict[int, Counter] = defaultdict(Counter)
+    clu_pos: dict[int, list[tuple[float, float]]] = defaultdict(list)
+    for i, tid in enumerate(tids):
+        m = meta.get(tid, ("", ""))
+        c = int(labels[i])
+        x, y = float(coords[i, 0]), float(coords[i, 1])
+        nodes.append({"x": round(x, 2), "y": round(y, 2), "c": c, "d": deg[i],
+                      "s": m[0], "h": m[1][:80]})
+        for t in tags.get(tid, []):
+            clu_tag[c][t] += 1
+        clu_pos[c].append((x, y))
+
+    clusters = []
+    for c, pos in clu_pos.items():
+        xs = [p[0] for p in pos]
+        ys = [p[1] for p in pos]
+        top = [t for t, _ in clu_tag[c].most_common(2)]
+        clusters.append({"id": c, "label": " · ".join(top) if top else f"군집 {c + 1}",
+                         "x": round(sum(xs) / len(xs), 2), "y": round(sum(ys) / len(ys), 2), "n": len(pos)})
+    clusters.sort(key=lambda c: -c["n"])
+    return {"nodes": nodes, "edges": [[a, b] for a, b in edges], "clusters": clusters, "method": method}
+
+
 def build_graph(vi, db, dims: int = 2) -> dict:
     keys, mat = vi.all_vectors()
     if len(keys) == 0:

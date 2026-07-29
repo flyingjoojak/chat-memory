@@ -37,6 +37,10 @@ export interface GraphCluster { id: number; label: string; x: number; y: number;
 export interface GraphData { points: GraphPoint[]; clusters: GraphCluster[]; method: string | null }
 export const getGraph = () => getJSON<GraphData>(`/api/graph`)
 
+export interface NetNode { x: number; y: number; c: number; d: number; s: string; h: string }
+export interface NetData { nodes: NetNode[]; edges: [number, number][]; clusters: GraphCluster[]; method: string | null }
+export const getNetwork = () => getJSON<NetData>(`/api/network`)
+
 export interface GraphPoint3D extends GraphPoint { z: number }
 export interface GraphCluster3D extends GraphCluster { z: number }
 export interface Graph3DData { points: GraphPoint3D[]; clusters: GraphCluster3D[]; method: string | null }

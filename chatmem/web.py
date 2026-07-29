@@ -313,6 +313,34 @@ def api_graph(refresh: bool = False):
     return data
 
 
+@app.get("/api/network")
+def api_network(refresh: bool = False):
+    """k-NN 유사도 네트워크(턴 노드 + 최근접 엣지)."""
+    from . import config as C
+    from .graph import build_network
+
+    vi = make_index()
+    n = len(vi)
+    if n == 0:
+        return {"nodes": [], "edges": [], "clusters": [], "method": None}
+
+    cache_path = C.DATA_DIR / "network_cache.json"
+    ver = 1
+    if not refresh and cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if cached.get("n") == n and cached.get("v") == ver:
+                return cached["data"]
+        except Exception:
+            pass
+    data = build_network(vi, ArchiveDB())
+    try:
+        cache_path.write_text(json.dumps({"n": n, "v": ver, "data": data}, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return data
+
+
 @app.get("/api/graph3d")
 def api_graph3d(refresh: bool = False):
     """의미 지도 3D: UMAP 3성분 투영 점 구름."""
