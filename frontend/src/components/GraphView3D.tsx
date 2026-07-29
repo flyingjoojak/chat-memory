@@ -67,8 +67,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     // ── 커스텀 카메라 컨트롤 ──
     // 좌드래그 = 화면축 기준 자유 회전(관성) · 휠클릭/우드래그 = 이동(pan) · 휠 = 커서 기준 줌.
     const target = new THREE.Vector3(0, 0, 0)
-    let desiredDist = camera.position.distanceTo(target)
-    const desiredTarget = target.clone()
     const ROT = 0.006
     let drag: "rotate" | "pan" | null = null
     let lastX = 0, lastY = 0, downX = 0, downY = 0
@@ -96,7 +94,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       basis()
       const scale = camera.position.distanceTo(target) * 0.0012
       const mv = _right.multiplyScalar(-dx * scale).add(_up.multiplyScalar(dy * scale))
-      target.add(mv); desiredTarget.add(mv); camera.position.add(mv)
+      target.add(mv); camera.position.add(mv)
     }
 
     const ray = new THREE.Raycaster()
@@ -119,12 +117,18 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       const r = renderer.domElement.getBoundingClientRect()
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
       const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera)
+      // 커서 아래(타깃 깊이) 월드 지점 — 이 점을 화면에 고정한 채 확대/축소.
       cursorPt.copy(camera.position).addScaledVector(rc.ray.direction, camera.position.distanceTo(target))
-      const zin = e.deltaY < 0
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1   // deltaMode 정규화
-      const step = Math.min((Math.abs(e.deltaY) * unit) / 140, 1.2)
-      desiredDist = THREE.MathUtils.clamp(desiredDist * Math.pow(zin ? 0.9 : 1 / 0.9, step), EXTENT * 0.25, EXTENT * 9)
-      desiredTarget.lerp(cursorPt, zin ? 0.15 : 0.06)
+      const step = Math.min((Math.abs(e.deltaY) * unit) / 400, 0.35)
+      let factor = Math.pow(e.deltaY < 0 ? 0.82 : 1 / 0.82, step)
+      const dist = camera.position.distanceTo(target)
+      if (factor < 1 && dist < EXTENT * 0.3) return    // 충분히 확대되면 수렴(멈춤)
+      if (factor > 1 && dist > EXTENT * 12) return
+      // 카메라·타깃을 커서 지점으로 함께 접근/후퇴 → 커서 기준 줌(그 점은 화면 고정).
+      camera.position.lerpVectors(cursorPt, camera.position, factor)
+      target.lerpVectors(cursorPt, target, factor)
+      camera.lookAt(target)
     }
     function onDown(e: PointerEvent) {
       downX = lastX = e.clientX; downY = lastY = e.clientY
@@ -164,14 +168,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       raf = requestAnimationFrame(loop)
       // 회전 관성(놓은 뒤 잔여 속도로 계속 돌다 감쇠).
       if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
-        rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95
+        rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
       }
-      // 부드러운 줌: 목표 거리/타깃으로 프레임마다 보간(ease).
-      target.lerp(desiredTarget, 0.15)
-      const nd = THREE.MathUtils.lerp(camera.position.distanceTo(target), desiredDist, 0.15)
-      _dir.subVectors(camera.position, target)
-      if (_dir.lengthSq() > 1e-6) camera.position.copy(target).addScaledVector(_dir.normalize(), nd)
-      camera.lookAt(target)
       renderer.render(scene, camera)
       for (const { c, v } of cluVecs) {
         const el = labelRefs.current.get(c.id); if (!el) continue
