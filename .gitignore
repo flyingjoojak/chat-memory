@@ -34,3 +34,7 @@ fastembed_cache/
 Thumbs.db
 .vscode/
 .idea/
+
+# PyInstaller
+*.spec
+packaging/*.log
