@@ -223,6 +223,11 @@ class ArchiveDB:
             (file_path, offset, size, mtime, time.time()),
         )
 
+    def clear_cursors(self) -> None:
+        """모든 파일 커서 초기화 → 다음 인덱싱이 전 세션을 처음부터 재처리(모델 교체 재색인용)."""
+        self.conn.execute("DELETE FROM cursors")
+        self.conn.commit()
+
     # --- 메타 -----------------------------------------------------------
     def get_meta(self, key: str) -> str | None:
         row = self.conn.execute("SELECT value FROM meta WHERE key=?", (key,)).fetchone()

@@ -1,19 +1,27 @@
-import { useEffect, useState } from "react"
-import { Check, Monitor, Moon, Sun } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Check, Loader2, Monitor, Moon, Sun } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { getConfig, getStats, putConfig, type Config } from "@/lib/api"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
+  getConfig, getEmbedModels, getStats, putConfig, reindex,
+  type Config, type EmbedModel,
+} from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
 
 const BACKENDS = [
-  { v: "claude", label: "Claude Code 구독", key: null, needsModel: "claude" },
-  { v: "anthropic", label: "Anthropic API", key: "ANTHROPIC_API_KEY", needsModel: "anthropic" },
-  { v: "openai", label: "OpenAI (GPT)", key: "OPENAI_API_KEY", needsModel: "openai" },
-  { v: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", needsModel: "gemini" },
-  { v: "ollama", label: "Ollama (로컬)", key: null, needsModel: "ollama" },
-  { v: "off", label: "정제 안 함", key: null, needsModel: null },
+  { v: "claude", label: "Claude Code 구독", key: null, modelEnv: "CHATMEM_ENRICH_MODEL", models: ["sonnet", "opus", "haiku"] },
+  { v: "anthropic", label: "Anthropic API", key: "ANTHROPIC_API_KEY", modelEnv: "CHATMEM_ENRICH_API_MODEL", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
+  { v: "openai", label: "OpenAI (GPT)", key: "OPENAI_API_KEY", modelEnv: "CHATMEM_OPENAI_MODEL", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"] },
+  { v: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", modelEnv: "CHATMEM_GEMINI_MODEL", models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"] },
+  { v: "ollama", label: "Ollama (로컬)", key: null, modelEnv: "CHATMEM_OLLAMA_MODEL", models: ["llama3.1", "llama3.2", "qwen2.5", "mistral", "gemma2"] },
+  { v: "off", label: "정제 안 함", key: null, modelEnv: null, models: [] },
 ] as const
+const CUSTOM = "__custom__"
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -23,7 +31,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     </section>
   )
 }
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b py-3.5 last:border-0">
       <span className="text-sm">{label}</span>
@@ -38,20 +46,56 @@ export function SettingsView() {
   const [cfg, setCfg] = useState<Config | null>(null)
   const [backend, setBackend] = useState("claude")
   const [model, setModel] = useState("")
+  const [customModel, setCustomModel] = useState(false)
   const [apiKey, setApiKey] = useState("")
   const [enrichTime, setEnrichTime] = useState("04:00")
   const [interval, setIntervalMin] = useState(10)
   const [saved, setSaved] = useState(false)
 
+  const [embed, setEmbed] = useState<EmbedModel[]>([])
+  const [reindexing, setReindexing] = useState(false)
+  const [reindexMsg, setReindexMsg] = useState("")
+  const [confirmModel, setConfirmModel] = useState<EmbedModel | null>(null)
+  const poll = useRef<number | null>(null)
+
   useEffect(() => {
     getStats().then(setStats).catch(() => {})
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
-      setIntervalMin(c.index_interval); setModel(c.models[c.enrich_backend] ?? "")
+      setIntervalMin(c.index_interval)
+      const cur = c.models[c.enrich_backend] ?? ""
+      const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
+      setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
     }).catch(() => {})
+    loadEmbed()
+    return () => { if (poll.current) window.clearInterval(poll.current) }
   }, [])
 
+  function loadEmbed() {
+    getEmbedModels().then((r) => {
+      setEmbed(r.models); setReindexing(r.reindex.running); setReindexMsg(r.reindex.msg)
+      if (r.reindex.running && !poll.current) startPoll()
+    }).catch(() => {})
+  }
+  function startPoll() {
+    poll.current = window.setInterval(async () => {
+      const r = await getEmbedModels()
+      setEmbed(r.models); setReindexMsg(r.reindex.msg)
+      if (!r.reindex.running) {
+        setReindexing(false)
+        if (poll.current) { window.clearInterval(poll.current); poll.current = null }
+      }
+    }, 2000)
+  }
+
   const be = BACKENDS.find((b) => b.v === backend)!
+
+  function onBackendChange(v: string) {
+    setBackend(v)
+    const cur = cfg?.models[v] ?? ""
+    const opts = BACKENDS.find((b) => b.v === v)?.models ?? []
+    setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
+  }
 
   async function save() {
     const u: Record<string, string> = {
@@ -59,16 +103,18 @@ export function SettingsView() {
       CHATMEM_ENRICH_TIME: enrichTime,
       CHATMEM_INDEX_INTERVAL: String(interval),
     }
-    const modelEnv: Record<string, string> = {
-      anthropic: "CHATMEM_ENRICH_API_MODEL", openai: "CHATMEM_OPENAI_MODEL",
-      gemini: "CHATMEM_GEMINI_MODEL", ollama: "CHATMEM_OLLAMA_MODEL", claude: "CHATMEM_ENRICH_MODEL",
-    }
-    if (be.needsModel && model) u[modelEnv[be.needsModel]] = model
+    if (be.modelEnv && model) u[be.modelEnv] = model
     if (be.key && apiKey) u[be.key] = apiKey
     await putConfig(u)
-    setApiKey("")
-    setSaved(true); setTimeout(() => setSaved(false), 1800)
+    setApiKey(""); setSaved(true); setTimeout(() => setSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
+  }
+
+  async function doReindex() {
+    if (!confirmModel) return
+    const m = confirmModel.model
+    setConfirmModel(null); setReindexing(true); setReindexMsg("시작…")
+    await reindex(m); startPoll()
   }
 
   const themes: { v: ThemeMode; icon: React.ReactNode; label: string }[] = [
@@ -96,14 +142,22 @@ export function SettingsView() {
 
       <Section title="정제 AI">
         <Row label="백엔드">
-          <select value={backend} onChange={(e) => { setBackend(e.target.value); setModel(cfg?.models[e.target.value] ?? "") }}
+          <select value={backend} onChange={(e) => onBackendChange(e.target.value)}
             className="rounded-md border bg-background px-2 py-1.5 outline-none">
             {BACKENDS.map((b) => <option key={b.v} value={b.v}>{b.label}</option>)}
           </select>
         </Row>
-        {be.needsModel && (
+        {be.modelEnv && (
           <Row label="모델">
-            <Input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-56" placeholder="모델명" />
+            <select value={customModel ? CUSTOM : model}
+              onChange={(e) => { if (e.target.value === CUSTOM) { setCustomModel(true) } else { setCustomModel(false); setModel(e.target.value) } }}
+              className="rounded-md border bg-background px-2 py-1.5 outline-none">
+              {be.models.map((m) => <option key={m} value={m}>{m}</option>)}
+              <option value={CUSTOM}>기타(직접 입력)</option>
+            </select>
+            {customModel && (
+              <Input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-44" placeholder="모델명 입력" />
+            )}
           </Row>
         )}
         {be.key && (
@@ -121,15 +175,33 @@ export function SettingsView() {
         <Row label="증분 인덱싱 간격 (분)">
           <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} className="h-8 w-24 tabular-nums" />
         </Row>
-        <Row label="임베딩 모델">
-          <span className="text-muted-foreground">{cfg?.embed_model ?? "—"}</span>
-        </Row>
       </Section>
 
       <div className="mb-6 flex items-center gap-3">
         <Button onClick={save}>저장</Button>
         {saved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨 · 스케줄 반영</span>}
+        <span className="text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</span>
       </div>
+
+      <Section title="임베딩 모델">
+        {reindexing && (
+          <div className="flex items-center gap-2 border-b py-3.5 text-sm text-primary">
+            <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
+          </div>
+        )}
+        {embed.map((m) => (
+          <Row key={m.model} label={
+            <span className="flex flex-col">
+              <span className="font-mono text-[13px]">{m.model.split("/").pop()}</span>
+              <span className="text-xs text-muted-foreground">{m.note} · {m.dim}차원 · 디스크 {m.size_gb}GB · RAM 약 {m.ram_gb_est}GB</span>
+            </span>
+          }>
+            {m.current
+              ? <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
+              : <Button variant="outline" size="sm" disabled={reindexing} onClick={() => setConfirmModel(m)}>변경</Button>}
+          </Row>
+        ))}
+      </Section>
 
       <Section title="저장소 현황">
         <Row label="세션">{stats?.sessions ?? "—"}개</Row>
@@ -137,6 +209,23 @@ export function SettingsView() {
         <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
         <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
       </Section>
+
+      <AlertDialog open={!!confirmModel} onOpenChange={(o) => !o && setConfirmModel(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>임베딩 모델 변경 = 전체 재색인</AlertDialogTitle>
+            <AlertDialogDescription>
+              <b>{confirmModel?.model.split("/").pop()}</b>로 바꾸면 기존 벡터를 모두 버리고
+              전 대화를 다시 임베딩합니다. 새 모델 최초 다운로드(약 {confirmModel?.size_gb}GB)와
+              재색인에 시간이 걸리며, 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>취소</AlertDialogCancel>
+            <AlertDialogAction onClick={doReindex}>재색인 시작</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

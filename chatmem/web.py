@@ -182,6 +182,77 @@ def api_config_put(payload: dict):
     return {"ok": True, "changed": list(updates), "rescheduled": rescheduled}
 
 
+# 임베딩 모델 카탈로그(한국어 대화용으로 의미있는 것만). RAM은 대략 추정.
+_EMBED_ALLOW = {
+    "intfloat/multilingual-e5-large": "최고 품질(다국어). 기본값.",
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": "중간 품질/용량(다국어).",
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": "가벼움(다국어). 저RAM 기기용.",
+}
+
+_reindex_state: dict = {"running": False, "done": 0, "msg": ""}
+
+
+@app.get("/api/embed-models")
+def api_embed_models():
+    from fastembed import TextEmbedding
+
+    from . import config as C
+    cat = {m["model"]: m for m in TextEmbedding.list_supported_models()}
+    out = []
+    for name, note in _EMBED_ALLOW.items():
+        m = cat.get(name)
+        if not m:
+            continue
+        size = round(m.get("size_in_GB", 0), 2)
+        out.append({
+            "model": name, "dim": m.get("dim"), "size_gb": size,
+            "ram_gb_est": round(size + 0.4, 1),  # 모델 + onnxruntime 오버헤드 대략
+            "note": note, "current": name == C.EMBED_MODEL,
+        })
+    return {"models": out, "current": C.EMBED_MODEL, "reindex": _reindex_state}
+
+
+@app.post("/api/reindex")
+def api_reindex(payload: dict):
+    """임베딩 모델 교체 + 전체 재색인(백그라운드). 기존 벡터를 버리고 새 모델로 다시 임베딩."""
+    import threading
+
+    model = str((payload or {}).get("model", "")).strip()
+    if not model or model not in _EMBED_ALLOW:
+        return {"ok": False, "error": "알 수 없는 모델"}
+    if _reindex_state["running"]:
+        return {"ok": False, "error": "이미 재색인 중"}
+
+    def worker():
+        from . import config as C
+        from .embedder import Embedder
+        from .indexer import index_all
+        _reindex_state.update(running=True, done=0, msg="시작")
+        try:
+            C.write_config({"CHATMEM_EMBED_MODEL": model})
+            # 새 모델 = 다른 차원 → 기존 벡터 폐기 후 처음부터 재임베딩.
+            for p in (C.VECTORS_PATH, C.VECTOR_IDS_PATH):
+                Path(p).unlink(missing_ok=True)
+            db = ArchiveDB()
+            db.clear_cursors()
+            vi = VectorIndex()
+            emb = Embedder(model)
+
+            def log(msg):
+                _reindex_state["msg"] = msg
+            total = index_all(db, vi, emb, log_fn=log)
+            db.set_meta("embed_model", model)
+            _state["embedder"] = emb  # 실행 중 검색도 새 모델로
+            _reindex_state.update(done=total, msg=f"완료: {total}턴")
+        except Exception as e:  # noqa: BLE001
+            _reindex_state["msg"] = f"오류: {e}"
+        finally:
+            _reindex_state["running"] = False
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"ok": True, "started": True}
+
+
 @app.get("/api/stats")
 def api_stats():
     db = ArchiveDB()

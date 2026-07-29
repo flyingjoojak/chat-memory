@@ -52,3 +52,24 @@ export async function putConfig(updates: Record<string, string>): Promise<{ ok: 
   if (!r.ok) throw new Error(`HTTP ${r.status}`)
   return r.json()
 }
+
+export interface EmbedModel {
+  model: string
+  dim: number
+  size_gb: number
+  ram_gb_est: number
+  note: string
+  current: boolean
+}
+export interface ReindexState { running: boolean; done: number; msg: string }
+
+export const getEmbedModels = () =>
+  getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)
+
+export async function reindex(model: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+  const r = await fetch(`/api/reindex`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  })
+  return r.json()
+}
