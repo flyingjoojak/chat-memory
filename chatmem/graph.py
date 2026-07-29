@@ -46,11 +46,20 @@ def build_network(vi, db, k: int = 6, min_sim: float = 0.35) -> dict:
     if len(keys) == 0:
         return {"nodes": [], "edges": [], "clusters": [], "method": None}
 
-    # 턴 단위 평균 벡터.
+    meta, tags = {}, {}
+    for r in db.conn.execute("SELECT id, session_id, summary, question, tags FROM turns").fetchall():
+        meta[r["id"]] = (r["session_id"], (r["summary"] or r["question"] or ""))
+        tags[r["id"]] = json.loads(r["tags"]) if r["tags"] else []
+
+    # 턴 단위 평균 벡터(원문 있는 턴만 — 고아 벡터 제외).
     acc: dict[str, list[int]] = defaultdict(list)
     for i, key in enumerate(keys):
-        acc[key.rsplit("#", 1)[0]].append(i)
+        tid = key.rsplit("#", 1)[0]
+        if tid in meta:
+            acc[tid].append(i)
     tids = list(acc)
+    if len(tids) == 0:
+        return {"nodes": [], "edges": [], "clusters": [], "method": None}
     tmat = np.stack([mat[idx].mean(axis=0) for idx in acc.values()]).astype(np.float32)
     tmat = tmat / np.clip(np.linalg.norm(tmat, axis=1, keepdims=True), 1e-8, None)
 
@@ -75,11 +84,6 @@ def build_network(vi, db, k: int = 6, min_sim: float = 0.35) -> dict:
     for a, b in edges:
         deg[a] += 1
         deg[b] += 1
-
-    meta, tags = {}, {}
-    for r in db.conn.execute("SELECT id, session_id, summary, question, tags FROM turns").fetchall():
-        meta[r["id"]] = (r["session_id"], (r["summary"] or r["question"] or ""))
-        tags[r["id"]] = json.loads(r["tags"]) if r["tags"] else []
 
     nodes = []
     clu_tag: dict[int, Counter] = defaultdict(Counter)
