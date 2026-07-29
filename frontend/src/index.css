@@ -146,6 +146,11 @@
 .cm-md .cm-h { display: block; font-weight: 650; margin: 9px 0 2px; }
 .cm-md strong { font-weight: 650; }
 
+/* 의미 지도 점 등장 */
+@keyframes cm-pop { from { opacity: 0 } to { opacity: var(--o, 0.9) } }
+.cm-pt { animation: cm-pop .5s ease-out both }
+@media (prefers-reduced-motion: reduce) { .cm-pt { animation: none !important; opacity: var(--o, 0.9) } }
+
 /* 은은한 스크롤바 */
 * { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
