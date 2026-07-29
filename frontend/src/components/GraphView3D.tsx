@@ -88,7 +88,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       const d = camera.position.distanceTo(controls.target)
       cursorPt.copy(camera.position).addScaledVector(rc.ray.direction, d)
       const zin = e.deltaY < 0
-      const step = Math.min(Math.abs(e.deltaY) / 100, 2)     // 노치 크기에 비례(과하지 않게)
+      // deltaMode 정규화(줄=1→~16px, 페이지=2→~400px) + 상한 → 기기·OS 스크롤 설정 무관 일관.
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
+      const step = Math.min((Math.abs(e.deltaY) * unit) / 140, 1.2)
       const factor = Math.pow(zin ? 0.9 : 1 / 0.9, step)
       desiredDist = THREE.MathUtils.clamp(desiredDist * factor, EXTENT * 0.25, EXTENT * 9)
       desiredTarget.lerp(cursorPt, zin ? 0.15 : 0.06)         // 커서 쪽으로 타깃 살짝(줌인 시 더)
