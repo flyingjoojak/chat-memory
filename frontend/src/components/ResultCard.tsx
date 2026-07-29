@@ -29,9 +29,10 @@ interface Props {
   hit: Hit
   rawFirst: boolean
   onOpenSession: (id: string) => void
+  hideSessionLink?: boolean
 }
 
-export function ResultCard({ hit, rawFirst, onOpenSession }: Props) {
+export function ResultCard({ hit, rawFirst, onOpenSession, hideSessionLink }: Props) {
   const cos = hit.cosine != null ? `cos ${hit.cosine.toFixed(3)}` : "키워드"
   const headline = hit.summary
     ? <><FileText className="inline size-3.5 mr-1.5 -mt-0.5 text-primary/70" />{hit.summary}</>
@@ -94,12 +95,14 @@ export function ResultCard({ hit, rawFirst, onOpenSession }: Props) {
           </div>
         </Fold>
       )}
-      <button
-        onClick={() => onOpenSession(hit.session_full)}
-        className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        이 세션 전체 보기 <ExternalLink className="size-3" />
-      </button>
+      {!hideSessionLink && (
+        <button
+          onClick={() => onOpenSession(hit.session_full)}
+          className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          이 세션 전체 보기 <ExternalLink className="size-3" />
+        </button>
+      )}
     </Card>
   )
 }

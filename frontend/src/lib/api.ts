@@ -12,6 +12,7 @@ export interface SearchParams {
   semanticOnly?: boolean
   since?: string
   until?: string
+  session?: string
 }
 
 export function search(p: SearchParams): Promise<SearchResult> {
@@ -19,6 +20,7 @@ export function search(p: SearchParams): Promise<SearchResult> {
   if (p.semanticOnly) usp.set("semantic_only", "true")
   if (p.since) usp.set("since", p.since)
   if (p.until) usp.set("until", p.until)
+  if (p.session) usp.set("session", p.session)
   return getJSON<SearchResult>(`/api/search?${usp}`)
 }
 

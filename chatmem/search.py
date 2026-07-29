@@ -81,7 +81,8 @@ def search(
     window: int = 2,
     keyword: bool = True,
 ) -> list[SearchHit]:
-    depth = k * 8
+    # 세션 스코프면 후보를 크게 잡아 그 세션 턴이 전역 상위 밖이어도 표면화되게 함.
+    depth = max(k * 8, 1000) if session else k * 8
     sem_order, cosine = _semantic_turn_ranks(query, db, vi, embedder, depth)
     kw_order = [tid for tid, _ in db.keyword_search(query, limit=depth)] if keyword else []
 
