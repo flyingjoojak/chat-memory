@@ -41,6 +41,9 @@ export interface Config {
   embed_model: string
   keys: Record<string, boolean>
   config_path: string
+  projects_dir: string
+  projects_exists: boolean
+  jsonl_count: number
 }
 
 export const getConfig = () => getJSON<Config>(`/api/config`)

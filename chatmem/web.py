@@ -141,6 +141,11 @@ def api_config():
         "keys": {k: bool(os.environ.get(k)) for k in
                  ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")},
         "config_path": str(C.CONFIG_PATH),
+        # Claude Code 로그 소스 — 각 사용자 홈 기준 자동 해석, 필요 시 직접 지정.
+        "projects_dir": str(C.PROJECTS_DIR),
+        "projects_exists": C.PROJECTS_DIR.exists(),
+        "jsonl_count": (sum(1 for _ in C.PROJECTS_DIR.glob("**/*.jsonl"))
+                        if C.PROJECTS_DIR.exists() else 0),
     }
 
 

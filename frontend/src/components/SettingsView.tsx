@@ -55,6 +55,8 @@ export function SettingsView() {
   const [testing, setTesting] = useState(false)
   const [verify, setVerify] = useState<{ ok: boolean; msg: string } | null>(null)
   const [blockMsg, setBlockMsg] = useState("")
+  const [projectsDir, setProjectsDir] = useState("")
+  const [projSaved, setProjSaved] = useState(false)
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
@@ -66,7 +68,7 @@ export function SettingsView() {
     getStats().then(setStats).catch(() => {})
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
-      setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url)
+      setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir)
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
       setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
@@ -137,6 +139,12 @@ export function SettingsView() {
     }
     // 검증 통과해야 저장. 실패 시 경고만 두고 '그래도 저장'으로 강제 가능.
     if (await runTest()) await commitSave()
+  }
+
+  async function saveProjects() {
+    await putConfig({ CLAUDE_PROJECTS_DIR: projectsDir })
+    setProjSaved(true); setTimeout(() => setProjSaved(false), 1800)
+    getConfig().then(setCfg).catch(() => {})
   }
 
   async function doReindex() {
@@ -267,6 +275,26 @@ export function SettingsView() {
               : <Button variant="outline" size="sm" disabled={reindexing} onClick={() => setConfirmModel(m)}>변경</Button>}
           </Row>
         ))}
+      </Section>
+
+      <Section title="Claude Code 로그 폴더">
+        <div className="py-3.5">
+          <div className="mb-2 flex items-center gap-2 text-sm">
+            {cfg?.projects_exists
+              ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · JSONL {cfg?.jsonl_count}개 감지</span>
+              : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)}
+              className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.claude/projects" />
+            <Button size="sm" variant="outline" onClick={saveProjects}>저장</Button>
+            {projSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            기본값은 각 사용자 홈의 <code className="cm-inline">~/.claude/projects</code>로 자동 지정됩니다.
+            Claude Code 로그가 다른 위치에 있으면 여기서 지정하세요.
+          </p>
+        </div>
       </Section>
 
       <Section title="저장소 현황">
