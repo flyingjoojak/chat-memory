@@ -296,17 +296,18 @@ def api_graph(refresh: bool = False):
         return {"points": [], "clusters": [], "method": None}
 
     cache_path = C.DATA_DIR / "graph_cache.json"
+    ver = 2  # 그래프 데이터 스키마 버전(force 그래프). 바뀌면 캐시 무효화.
     if not refresh and cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cached.get("n") == n:
+            if cached.get("n") == n and cached.get("v") == ver:
                 return cached["data"]
         except Exception:
             pass
 
     data = build_graph(vi, ArchiveDB())
     try:
-        cache_path.write_text(json.dumps({"n": n, "data": data}, ensure_ascii=False), encoding="utf-8")
+        cache_path.write_text(json.dumps({"n": n, "v": ver, "data": data}, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass
     return data
