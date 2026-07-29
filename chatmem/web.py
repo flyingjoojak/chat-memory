@@ -284,53 +284,32 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
-_graph_cache: dict = {}
-
-
 @app.get("/api/graph")
-def api_graph():
-    """의미 지도: 청크 벡터를 턴 단위로 평균→PCA 2D 투영 + 턴 메타(세션·시각·헤드라인)."""
-    import numpy as np
+def api_graph(refresh: bool = False):
+    """의미 지도: UMAP 2D 투영 + 군집 + 태그 라벨. 벡터 수 기반 디스크 캐시(UMAP 재계산 회피)."""
+    from . import config as C
+    from .graph import build_graph
 
     vi = make_index()
-    keys, mat = vi.all_vectors()
-    if len(keys) == 0:
-        return {"points": []}
+    n = len(vi)
+    if n == 0:
+        return {"points": [], "clusters": [], "method": None}
 
-    # 캐시(벡터 수 동일하면 재계산 생략).
-    if _graph_cache.get("n") == len(keys) and "points" in _graph_cache:
-        return {"points": _graph_cache["points"]}
+    cache_path = C.DATA_DIR / "graph_cache.json"
+    if not refresh and cache_path.exists():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            if cached.get("n") == n:
+                return cached["data"]
+        except Exception:
+            pass
 
-    # 청크 → 턴 단위 평균 벡터.
-    from collections import defaultdict
-    acc: dict[str, list] = defaultdict(list)
-    for k, i in zip(keys, range(len(keys))):
-        acc[k.rsplit("#", 1)[0]].append(i)
-    turn_ids = list(acc)
-    tmat = np.stack([mat[idxs].mean(axis=0) for idxs in acc.values()]).astype(np.float32)
-
-    # PCA 2D(중심화 후 SVD 상위 2성분). 의존성 없이 numpy만.
-    xc = tmat - tmat.mean(axis=0)
-    _u, _s, vt = np.linalg.svd(xc, full_matrices=False)
-    coords = xc @ vt[:2].T  # (T, 2)
-
-    # 턴 메타 조회.
-    db = ArchiveDB()
-    meta = {}
-    for r in db.conn.execute("SELECT id, session_id, timestamp, summary, question FROM turns").fetchall():
-        meta[r["id"]] = (r["session_id"], r["timestamp"], r["summary"] or r["question"] or "")
-
-    pts = []
-    for tid, (x, y) in zip(turn_ids, coords):
-        m = meta.get(tid)
-        if not m:
-            continue
-        sess, ts, head = m
-        pts.append({"id": tid, "session": sess, "x": round(float(x), 4), "y": round(float(y), 4),
-                    "timestamp": ts, "headline": head[:120]})
-    _graph_cache.clear()
-    _graph_cache.update(n=len(keys), points=pts)
-    return {"points": pts}
+    data = build_graph(vi, ArchiveDB())
+    try:
+        cache_path.write_text(json.dumps({"n": n, "data": data}, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return data
 
 
 @app.get("/api/stats")
