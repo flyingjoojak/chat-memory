@@ -121,42 +121,63 @@ _HTML = r"""<!doctype html>
 <title>chat-memory</title>
 <style>
 :root{
-  --bg:#f7f7f8; --surface:#ffffff; --surface2:#eff1f4; --border:#e4e5ea;
-  --text:#1b1c20; --muted:#6b7280; --accent:#2563eb; --accent-soft:#e8effd;
-  --radius:12px; --z-bar:10;
+  --bg:#f5f6f8; --surface:#ffffff; --surface2:#eef0f4; --border:#e3e5ea;
+  --text:#16181d; --muted:#697080; --accent:#2f6bed; --accent-soft:#e9f0fe;
+  --shadow:0 1px 2px rgba(16,18,25,.04); --shadow-lg:0 6px 20px rgba(16,18,25,.10);
+  --radius:13px; --radius-sm:9px; --z-bar:10;
 }
 @media (prefers-color-scheme:dark){
-  :root{--bg:#0d0e11; --surface:#161719; --surface2:#1e2024; --border:#2a2c31;
-        --text:#e9eaec; --muted:#969aa4; --accent:#6b93ff; --accent-soft:#1a2338;}
+  :root{--bg:#0c0d10; --surface:#151619; --surface2:#1d1f25; --border:#292b32;
+        --text:#e9eaee; --muted:#8b919d; --accent:#7ba2ff; --accent-soft:#172033;
+        --shadow:0 1px 2px rgba(0,0,0,.3); --shadow-lg:0 8px 24px rgba(0,0,0,.45);}
 }
-:root[data-theme=light]{--bg:#f7f7f8;--surface:#fff;--surface2:#eff1f4;--border:#e4e5ea;
-  --text:#1b1c20;--muted:#6b7280;--accent:#2563eb;--accent-soft:#e8effd;}
-:root[data-theme=dark]{--bg:#0d0e11;--surface:#161719;--surface2:#1e2024;--border:#2a2c31;
-  --text:#e9eaec;--muted:#969aa4;--accent:#6b93ff;--accent-soft:#1a2338;}
+:root[data-theme=light]{--bg:#f5f6f8;--surface:#fff;--surface2:#eef0f4;--border:#e3e5ea;
+  --text:#16181d;--muted:#697080;--accent:#2f6bed;--accent-soft:#e9f0fe;
+  --shadow:0 1px 2px rgba(16,18,25,.04);--shadow-lg:0 6px 20px rgba(16,18,25,.10);}
+:root[data-theme=dark]{--bg:#0c0d10;--surface:#151619;--surface2:#1d1f25;--border:#292b32;
+  --text:#e9eaee;--muted:#8b919d;--accent:#7ba2ff;--accent-soft:#172033;
+  --shadow:0 1px 2px rgba(0,0,0,.3);--shadow-lg:0 8px 24px rgba(0,0,0,.45);}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);
-  font:15px/1.6 -apple-system,'Segoe UI',Roboto,'Malgun Gothic',sans-serif;
-  -webkit-font-smoothing:antialiased}
-.wrap{max-width:820px;margin:0 auto;padding:0 20px 80px}
-header{padding:26px 0 4px;display:flex;align-items:baseline;gap:10px}
-h1{font-size:19px;margin:0;font-weight:700}
-.stats{color:var(--muted);font-size:12.5px;font-variant-numeric:tabular-nums}
+  font:15px/1.6 -apple-system,'Segoe UI',Roboto,'Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.wrap{max-width:880px;margin:0 auto;padding:0 22px 96px}
 
-.bar{position:sticky;top:0;z-index:var(--z-bar);background:var(--bg);padding:14px 0 12px}
-.bar input[type=search]{width:100%;padding:14px 16px;font-size:16px;color:var(--text);
+/* 앱 상단바 */
+.appbar{position:sticky;top:0;z-index:calc(var(--z-bar) + 1);background:var(--bg);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 0 12px;border-bottom:1px solid transparent}
+.brand{display:flex;align-items:center;gap:9px}
+.brand .logo{width:22px;height:22px;border-radius:7px;background:var(--accent);
+  display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;box-shadow:var(--shadow)}
+h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em}
+.bar-right{display:flex;align-items:center;gap:12px}
+.stats{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.icon-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface);color:var(--muted);cursor:pointer;font-size:14px;
+  display:grid;place-items:center;transition:color .15s,border-color .15s,transform .1s}
+.icon-btn:hover{color:var(--text);border-color:var(--accent)}
+.icon-btn:active{transform:scale(.94)}
+
+/* 검색 히어로 */
+.bar{position:sticky;top:56px;z-index:var(--z-bar);background:var(--bg);padding:8px 0 12px}
+.searchbox{position:relative;display:flex;align-items:center}
+.search-ico{position:absolute;left:16px;color:var(--muted);pointer-events:none}
+.bar input[type=search]{width:100%;padding:15px 16px 15px 44px;font-size:16px;color:var(--text);
   background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  outline:none;transition:border-color .15s,box-shadow .15s}
+  box-shadow:var(--shadow);outline:none;transition:border-color .15s,box-shadow .15s}
+.bar input[type=search]::placeholder{color:var(--muted)}
 .bar input[type=search]:focus{border-color:var(--accent);
   box-shadow:0 0 0 3px var(--accent-soft)}
-.opts{display:flex;align-items:center;gap:10px;margin-top:11px;flex-wrap:wrap;
+.opts{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;
   color:var(--muted);font-size:12.5px}
 .opts .spacer{flex:1 1 auto}
 
 .slider{position:relative;display:inline-flex;border:1px solid var(--border);
-  border-radius:22px;background:var(--surface);cursor:pointer;user-select:none}
+  border-radius:22px;background:var(--surface);cursor:pointer;user-select:none;box-shadow:var(--shadow)}
 .slider .thumb{position:absolute;top:0;left:0;height:100%;width:50%;border-radius:22px;z-index:0;
   background:var(--accent-soft);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--accent) 40%,transparent);
-  transition:transform .2s ease-out}
+  transition:transform .2s cubic-bezier(.16,1,.3,1)}
 .slider[data-on="1"] .thumb{transform:translateX(100%)}
 .slider .opt{position:relative;z-index:1;flex:1 1 0;min-width:96px;text-align:center;
   padding:6px 14px;font-size:12.5px;white-space:nowrap;transition:color .15s}
@@ -165,74 +186,117 @@ h1{font-size:19px;margin:0;font-weight:700}
 .slider[data-on="1"] .opt:nth-of-type(1){color:var(--muted);font-weight:400}
 .slider[data-on="1"] .opt:nth-of-type(2){color:var(--accent);font-weight:600}
 .opts select,.opts input[type=date]{font:inherit;color:var(--text);background:var(--surface);
-  border:1px solid var(--border);border-radius:8px;padding:4px 8px;cursor:pointer;outline:none}
+  border:1px solid var(--border);border-radius:8px;padding:5px 8px;cursor:pointer;outline:none;
+  box-shadow:var(--shadow)}
 .opts input[type=date]{font-variant-numeric:tabular-nums;color-scheme:light dark}
+.opts label{display:inline-flex;align-items:center;gap:6px}
 .opts .dategrp{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
 .opts .clr{cursor:pointer;color:var(--muted);border:1px solid var(--border);background:var(--surface);
-  border-radius:8px;padding:4px 9px;font:inherit}
-.opts .clr:hover{color:var(--text)}
+  border-radius:8px;padding:5px 10px;font:inherit;transition:color .15s,border-color .15s}
+.opts .clr:hover{color:var(--text);border-color:var(--accent)}
 kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:11px}
 
-.hits{margin-top:6px;display:flex;flex-direction:column;gap:11px}
+/* 결과 요약 줄 */
+.resultbar{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums;
+  margin:4px 2px 2px;min-height:16px}
+.resultbar b{color:var(--text);font-weight:650}
+
+.hits{margin-top:8px;display:flex;flex-direction:column;gap:12px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:15px 17px}
+  padding:16px 18px;box-shadow:var(--shadow);
+  transition:border-color .15s,box-shadow .18s,transform .18s}
+.card:hover{border-color:color-mix(in srgb,var(--accent) 35%,var(--border));
+  box-shadow:var(--shadow-lg);transform:translateY(-1px)}
 .meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;font-size:11.5px;
-  color:var(--muted);margin-bottom:10px;font-variant-numeric:tabular-nums}
-.badge{padding:2px 8px;border-radius:20px;font-weight:600;font-size:10.5px;
+  color:var(--muted);margin-bottom:11px;font-variant-numeric:tabular-nums}
+.meta .dot{opacity:.5}
+.badge{padding:2px 9px;border-radius:20px;font-weight:600;font-size:10.5px;
   background:var(--accent-soft);color:var(--accent)}
 .badge.kw{background:var(--surface2);color:var(--muted)}
-.headline{font-size:15px;font-weight:600;line-height:1.5;margin:0;text-wrap:pretty}
-.headline .mk{color:var(--accent);margin-right:4px}
+.headline{font-size:15.5px;font-weight:650;line-height:1.55;margin:0;text-wrap:pretty;
+  letter-spacing:-.005em}
+.headline .mk,.enrich .mk,.st-head .mk{color:var(--accent);margin-right:5px}
 .sub{color:var(--muted);font-weight:400}
-.tags{margin-top:8px;display:flex;flex-wrap:wrap;gap:5px}
-.tag{padding:2px 8px;border-radius:6px;background:var(--surface2);color:var(--muted);font-size:11px}
-.enrich{margin-top:9px;font-size:13px;color:var(--muted);text-wrap:pretty}
-.toggle{margin-top:9px;font-size:12px;color:var(--accent);cursor:pointer;user-select:none;
-  display:inline-block}
-.fold{display:none;margin-top:9px}
+.tags{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
+.tag{padding:2px 9px;border-radius:6px;background:var(--surface2);color:var(--muted);font-size:11px}
+.enrich{margin-top:10px;font-size:13px;color:var(--muted);text-wrap:pretty}
+.toggle{margin-top:11px;margin-right:14px;font-size:12px;color:var(--muted);cursor:pointer;
+  user-select:none;display:inline-block;transition:color .12s}
+.toggle:hover{color:var(--accent)}
+.fold{display:none;margin-top:10px}
 .fold.open{display:block}
-.raw .rq{margin:0 0 7px;color:var(--text);text-wrap:pretty}
+.raw .rq{margin:0 0 8px;color:var(--text);text-wrap:pretty}
 .raw .ra{color:var(--muted);text-wrap:pretty}
 .raw b,.thread b{color:var(--accent);font-weight:600;margin-right:5px}
 .ra strong,.a strong,.rq strong{color:var(--text);font-weight:650}
 .ra .hd,.a .hd{display:block;color:var(--text);font-weight:650;margin:9px 0 2px}
-.ra .code,.a .code{font-family:ui-monospace,Consolas,monospace;font-size:12px;
-  background:var(--surface2);padding:8px 11px;border-radius:8px;overflow-x:auto;white-space:pre;margin:6px 0}
+.ra .code,.a .code{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12px;
+  background:var(--surface2);padding:9px 12px;border-radius:var(--radius-sm);overflow-x:auto;white-space:pre;margin:7px 0}
 .ra code,.a code,.rq code{font-family:ui-monospace,Consolas,monospace;font-size:.9em;
   background:var(--surface2);padding:1px 5px;border-radius:4px}
 .actions{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-size:12px;
-  color:var(--text);background:var(--surface2);padding:8px 11px;border-radius:8px;
+  color:var(--text);background:var(--surface2);padding:9px 12px;border-radius:var(--radius-sm);
   overflow-x:auto;white-space:pre}
-.thread{border-left:2px solid var(--border);padding-left:12px}
-.titem{margin:7px 0}
-.tq{cursor:pointer;font-size:12.5px;color:var(--muted);text-wrap:pretty}
+.thread{border-left:2px solid var(--border);padding-left:13px}
+.titem{margin:8px 0}
+.tq{cursor:pointer;font-size:12.5px;color:var(--muted);text-wrap:pretty;transition:color .12s}
 .tq:hover{color:var(--text)}
-.ta{font-size:12.5px;color:var(--muted);margin-top:5px;padding-left:10px;
+.ta{font-size:12.5px;color:var(--muted);margin-top:5px;padding-left:11px;
   border-left:2px solid var(--border);text-wrap:pretty}
-.empty{color:var(--muted);text-align:center;padding:44px}
+
+/* 상태(빈/로딩/결과없음) */
+.empty{text-align:center;padding:52px 20px;color:var(--muted)}
+.empty .big{font-size:34px;line-height:1;margin-bottom:14px;opacity:.85}
+.empty .msg{font-size:14px;margin-bottom:18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chip{padding:6px 13px;border-radius:20px;border:1px solid var(--border);background:var(--surface);
+  color:var(--text);font-size:12.5px;cursor:pointer;box-shadow:var(--shadow);
+  transition:border-color .15s,color .15s,transform .1s}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.chip:active{transform:scale(.96)}
+.skel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px 18px;box-shadow:var(--shadow)}
+.skel .ln{height:11px;border-radius:6px;background:var(--surface2);margin:9px 0;animation:pulse 1.2s ease-in-out infinite}
+.skel .ln.w1{width:38%}.skel .ln.w2{width:88%}.skel .ln.w3{width:66%}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 
 /* 세션 전체 보기 오버레이 */
 .overlay{position:fixed;inset:0;z-index:100;background:var(--bg);overflow-y:auto;display:none}
 .overlay.open{display:block}
-.ov-head{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--border);
-  padding:15px 20px;display:flex;align-items:center;gap:14px;z-index:1}
+.ov-head{position:sticky;top:0;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+  padding:15px 22px;display:flex;align-items:center;gap:14px;z-index:1}
 .ov-head .close{cursor:pointer;color:var(--accent);font-size:13.5px;font-weight:600;user-select:none}
+.ov-head .close:hover{opacity:.75}
 .ov-head .t{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-.ov-body{max-width:820px;margin:0 auto;padding:16px 20px 80px;display:flex;flex-direction:column;gap:10px}
-.sturn{border:1px solid var(--border);border-radius:10px;padding:12px 15px;background:var(--surface)}
-.st-time{font-size:11px;color:var(--muted);margin-bottom:5px;font-variant-numeric:tabular-nums}
-.st-head{font-size:14px;font-weight:600;line-height:1.5;margin:0;text-wrap:pretty}
+.ov-body{max-width:880px;margin:0 auto;padding:18px 22px 96px;display:flex;flex-direction:column;gap:11px}
+.sturn{border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;background:var(--surface);box-shadow:var(--shadow)}
+.st-time{font-size:11px;color:var(--muted);margin-bottom:6px;font-variant-numeric:tabular-nums}
+.st-head{font-size:14px;font-weight:600;line-height:1.55;margin:0;text-wrap:pretty}
 .a{color:var(--muted);cursor:pointer;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .a.open{-webkit-line-clamp:unset;display:block}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><h1>chat-memory</h1><span class="stats" id="stats"></span></header>
+  <header class="appbar">
+    <div class="brand"><span class="logo">C</span><h1>chat-memory</h1></div>
+    <div class="bar-right">
+      <span class="stats" id="stats"></span>
+      <button id="themeBtn" class="icon-btn" aria-label="라이트/다크 테마 전환" title="테마 전환">◐</button>
+    </div>
+  </header>
   <div class="bar">
-    <input type="search" id="q" placeholder="대화 검색…  예: 급여 계산 · STAGE1 · 신선도 감쇠" autofocus>
+    <div class="searchbox">
+      <svg class="search-ico" width="18" height="18" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input type="search" id="q" placeholder="대화 검색…  예: 급여 계산 · STAGE1 · 신선도 감쇠"
+             autofocus autocomplete="off" spellcheck="false">
+    </div>
     <div class="opts">
       <div class="slider" id="modeSlider" data-on="0" title="검색 모드">
         <div class="thumb"></div><span class="opt">🔀 하이브리드</span><span class="opt">🧠 의미만</span>
@@ -250,6 +314,7 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
       </div>
     </div>
   </div>
+  <div class="resultbar" id="resultbar"></div>
   <div class="hits" id="hits"></div>
 </div>
 <div class="overlay" id="overlay"></div>
@@ -325,18 +390,55 @@ async function openSession(sid){
 }
 function closeSession(){const o=$('#overlay');o.classList.remove('open');o.innerHTML='';document.body.style.overflow='';}
 window.openSession=openSession; window.closeSession=closeSession;
-let hits=[];
-function render(){$('#hits').innerHTML=hits.length?hits.map(card).join(''):'<div class="empty">결과 없음</div>';}
+const EXAMPLES=['급여 계산','STAGE1 우회','마이그레이션','sqlite-vec','정제 백엔드'];
+let hits=[], searched=false;
+function renderEmpty(){
+  $('#resultbar').textContent='';
+  $('#hits').innerHTML=`<div class="empty"><div class="big">🔎</div>
+    <div class="msg">대화에서 찾을 내용을 입력하세요.</div>
+    <div class="chips">${EXAMPLES.map(e=>`<span class="chip" onclick="pick('${e}')">${e}</span>`).join('')}</div></div>`;
+}
+function skeleton(){
+  $('#hits').innerHTML=Array.from({length:3}).map(()=>
+    '<div class="skel"><div class="ln w1"></div><div class="ln w2"></div><div class="ln w3"></div></div>').join('');
+}
+function render(){
+  if(!hits.length){
+    if(searched){
+      $('#resultbar').innerHTML='결과 <b>0</b>개';
+      $('#hits').innerHTML='<div class="empty"><div class="big">∅</div>'
+        +'<div class="msg">결과가 없어요. 다른 표현이나 날짜 범위로 바꿔보세요.</div></div>';
+    }else{ renderEmpty(); }
+    return;
+  }
+  $('#resultbar').innerHTML=`결과 <b>${hits.length}</b>개`;
+  $('#hits').innerHTML=hits.map(card).join('');
+}
 async function go(){
-  const q=$('#q').value.trim(); if(!q){hits=[];$('#hits').innerHTML='';return;}
-  $('#hits').innerHTML='<div class="empty">검색 중…</div>';
+  const q=$('#q').value.trim();
+  if(!q){searched=false;hits=[];renderEmpty();return;}
+  searched=true; skeleton(); $('#resultbar').textContent='검색 중…';
   const p=new URLSearchParams({q,k:$('#k').value,semantic_only:semOnly});
   const since=$('#since').value, until=$('#until').value;
   if(since) p.set('since',since);
   if(until) p.set('until',until);
   try{const r=await (await fetch('/api/search?'+p)).json(); hits=r.hits||[]; render();}
-  catch(e){$('#hits').innerHTML='<div class="empty">오류: '+e+'</div>';}
+  catch(e){$('#resultbar').textContent='';
+    $('#hits').innerHTML='<div class="empty"><div class="msg">오류: '+esc(String(e))+'</div></div>';}
 }
+function pick(q){$('#q').value=q; go(); $('#q').focus();}
+window.pick=pick;
+
+// 테마: localStorage 우선, 없으면 OS(prefers-color-scheme) 따름.
+function applyTheme(t){ if(t) document.documentElement.dataset.theme=t; else delete document.documentElement.dataset.theme; }
+applyTheme(localStorage.getItem('cm-theme'));
+$('#themeBtn').addEventListener('click',()=>{
+  const cur=document.documentElement.dataset.theme;
+  const dark = cur ? cur==='dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+  const next = dark ? 'light' : 'dark';
+  applyTheme(next); localStorage.setItem('cm-theme',next);
+});
+
 $('#modeSlider').addEventListener('click',function(){semOnly=!semOnly;this.dataset.on=semOnly?'1':'0';go();});
 $('#dispSlider').addEventListener('click',function(){rawFirst=!rawFirst;this.dataset.on=rawFirst?'1':'0';render();});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter')go();});
@@ -345,7 +447,7 @@ $('#since').addEventListener('change',go);
 $('#until').addEventListener('change',go);
 $('#clrDate').addEventListener('click',()=>{$('#since').value='';$('#until').value='';go();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSession();});
-stats();
+stats(); renderEmpty();
 </script>
 </body>
 </html>"""
