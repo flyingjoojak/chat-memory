@@ -11,15 +11,19 @@ from __future__ import annotations
 
 import contextlib
 import json
+from pathlib import Path
 
 from fastapi import FastAPI, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from .search import search as run_search
 from .store import ArchiveDB, _actions_from_json
 from .vectorindex import VectorIndex
 
 _state: dict = {}
+# 빌드된 React 프론트(있으면 서빙, 없으면 인라인 _HTML 폴백).
+_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @contextlib.asynccontextmanager
@@ -96,6 +100,27 @@ def api_session(id: str = Query(...), limit: int = 2000):
     return {"session": id, "project": proj["project"] if proj else "", "count": len(turns), "turns": turns}
 
 
+@app.get("/api/sessions")
+def api_sessions(limit: int = 500):
+    """세션 목록(최근순): id·턴수·시작/끝 시각·대표 헤드라인(첫 정제/질문)."""
+    db = ArchiveDB()
+    rows = db.conn.execute(
+        "SELECT session_id, COUNT(*) n, MIN(timestamp) started, MAX(timestamp) ended "
+        "FROM turns GROUP BY session_id ORDER BY ended DESC LIMIT ?", (limit,)
+    ).fetchall()
+    out = []
+    for r in rows:
+        head = db.conn.execute(
+            "SELECT summary, question FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
+            (r["session_id"],)).fetchone()
+        out.append({
+            "session": r["session_id"], "count": r["n"],
+            "started": r["started"], "ended": r["ended"],
+            "headline": (head["summary"] or head["question"] or "") if head else "",
+        })
+    return {"sessions": out}
+
+
 @app.get("/api/stats")
 def api_stats():
     db = ArchiveDB()
@@ -108,9 +133,12 @@ def api_stats():
     }
 
 
-@app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    return _HTML
+@app.get("/")
+def index():
+    # 빌드된 React 앱이 있으면 그것을, 없으면 기존 인라인 HTML을 서빙.
+    if (_DIST / "index.html").exists():
+        return FileResponse(str(_DIST / "index.html"))
+    return HTMLResponse(_HTML)
 
 
 _HTML = r"""<!doctype html>
@@ -451,6 +479,11 @@ stats(); renderEmpty();
 </script>
 </body>
 </html>"""
+
+
+# 빌드된 프론트의 정적 자산(/assets/*.js, *.css, 폰트). API 라우트 뒤에 마운트.
+if (_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
 
 
 def main() -> None:

@@ -9,10 +9,15 @@ pytest.importorskip("fastapi")  # 웹 전용 의존성 없으면 스킵
 from chatmem import web  # noqa: E402
 
 
-def test_index_returns_html():
-    html = web.index()
-    assert "<!doctype html>" in html.lower()
-    assert "chat-memory" in html
+def test_index_html_fallback():
+    # 빌드된 프론트가 없을 때 서빙되는 인라인 HTML 폴백 회귀 테스트.
+    assert "<!doctype html>" in web._HTML.lower()
+    assert "chat-memory" in web._HTML
+
+
+def test_index_returns_response():
+    # dist 유무와 무관하게 라우트가 응답 객체를 반환.
+    assert web.index() is not None
 
 
 def test_hit_to_dict_shape():
