@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js"
 import { getGraph3D, type Graph3DData, type GraphPoint3D } from "@/lib/api"
 
 const PALETTE = [
@@ -65,37 +64,40 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
-    // TrackballControls: 축 고정 없는 자유 회전 + 관성. 좌=회전, 휠클릭/우클릭 드래그=이동.
-    const controls = new TrackballControls(camera, renderer.domElement)
-    controls.rotateSpeed = 3.2
-    controls.panSpeed = 0.25               // 이동 감도(낮게 = 덜 확확 움직임)
-    controls.noZoom = true                 // 줌은 커서 기준 커스텀으로 처리(부드럽게)
-    controls.staticMoving = false          // 관성 on
-    controls.dynamicDampingFactor = 0.06   // 낮을수록 관성 오래
-    controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN }
+    // ── 커스텀 카메라 컨트롤 ──
+    // 좌드래그 = 화면축 기준 자유 회전(관성) · 휠클릭/우드래그 = 이동(pan) · 휠 = 커서 기준 줌.
+    const target = new THREE.Vector3(0, 0, 0)
+    let desiredDist = camera.position.distanceTo(target)
+    const desiredTarget = target.clone()
+    const ROT = 0.006
+    let drag: "rotate" | "pan" | null = null
+    let lastX = 0, lastY = 0, downX = 0, downY = 0
+    const av = { x: 0, y: 0 }   // 회전 관성 속도(px/frame)
 
-    // 줌 목표값(거리+타깃) — 휠은 목표만 바꾸고 loop에서 부드럽게 보간(ease).
-    let desiredDist = camera.position.distanceTo(controls.target)
-    const desiredTarget = controls.target.clone()
+    const _off = new THREE.Vector3(), _dir = new THREE.Vector3()
+    const _right = new THREE.Vector3(), _up = new THREE.Vector3()
+    const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion()
     const cursorPt = new THREE.Vector3()
-    const dir = new THREE.Vector3()
 
-    function onWheel(e: WheelEvent) {
-      e.preventDefault()
-      const r = renderer.domElement.getBoundingClientRect()
-      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
-      const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera)
-      const d = camera.position.distanceTo(controls.target)
-      cursorPt.copy(camera.position).addScaledVector(rc.ray.direction, d)
-      const zin = e.deltaY < 0
-      // deltaMode 정규화(줄=1→~16px, 페이지=2→~400px) + 상한 → 기기·OS 스크롤 설정 무관 일관.
-      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
-      const step = Math.min((Math.abs(e.deltaY) * unit) / 140, 1.2)
-      const factor = Math.pow(zin ? 0.9 : 1 / 0.9, step)
-      desiredDist = THREE.MathUtils.clamp(desiredDist * factor, EXTENT * 0.25, EXTENT * 9)
-      desiredTarget.lerp(cursorPt, zin ? 0.15 : 0.06)         // 커서 쪽으로 타깃 살짝(줌인 시 더)
+    function basis() {
+      _dir.copy(target).sub(camera.position).normalize()
+      _right.crossVectors(_dir, camera.up).normalize()
+      _up.crossVectors(_right, _dir).normalize()
     }
-    renderer.domElement.addEventListener("wheel", onWheel, { passive: false })
+    function rotate(dx: number, dy: number) {
+      basis()
+      _q.setFromAxisAngle(_up, -dx * ROT).multiply(_q2.setFromAxisAngle(_right, -dy * ROT))
+      _off.copy(camera.position).sub(target).applyQuaternion(_q)
+      camera.up.applyQuaternion(_q)
+      camera.position.copy(target).add(_off)
+      camera.lookAt(target)
+    }
+    function panBy(dx: number, dy: number) {
+      basis()
+      const scale = camera.position.distanceTo(target) * 0.0012
+      const mv = _right.multiplyScalar(-dx * scale).add(_up.multiplyScalar(dy * scale))
+      target.add(mv); desiredTarget.add(mv); camera.position.add(mv)
+    }
 
     const ray = new THREE.Raycaster()
     ray.params.Points!.threshold = 4
@@ -103,55 +105,80 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const cluVecs = data.clusters.map((c) => ({ c, v: at({ x: c.x, y: c.y, z: c.z } as GraphPoint3D) }))
     const proj = new THREE.Vector3()
 
-    let hovering = false
-    function onPointerMove(e: PointerEvent) {
+    function hitIndex(clientX: number, clientY: number): number {
       const r = renderer.domElement.getBoundingClientRect()
-      mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1
-      mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1
+      mouse.x = ((clientX - r.left) / r.width) * 2 - 1
+      mouse.y = -((clientY - r.top) / r.height) * 2 + 1
       ray.setFromCamera(mouse, camera)
       const hit = ray.intersectObject(points)
-      if (hit.length && hit[0].index != null) {
-        hovering = true
-        setTip({ sx: e.clientX, sy: e.clientY, p: pts[hit[0].index] })
-      } else if (hovering) {
-        hovering = false; setTip(null)
+      return hit.length && hit[0].index != null ? hit[0].index : -1
+    }
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault()
+      const r = renderer.domElement.getBoundingClientRect()
+      const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+      const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera)
+      cursorPt.copy(camera.position).addScaledVector(rc.ray.direction, camera.position.distanceTo(target))
+      const zin = e.deltaY < 0
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1   // deltaMode 정규화
+      const step = Math.min((Math.abs(e.deltaY) * unit) / 140, 1.2)
+      desiredDist = THREE.MathUtils.clamp(desiredDist * Math.pow(zin ? 0.9 : 1 / 0.9, step), EXTENT * 0.25, EXTENT * 9)
+      desiredTarget.lerp(cursorPt, zin ? 0.15 : 0.06)
+    }
+    function onDown(e: PointerEvent) {
+      downX = lastX = e.clientX; downY = lastY = e.clientY
+      drag = e.button === 0 ? "rotate" : "pan"   // 좌=회전, 휠클릭/우클릭=이동
+      av.x = 0; av.y = 0
+      if (e.button !== 0) e.preventDefault()
+      try { renderer.domElement.setPointerCapture(e.pointerId) } catch (_) { /* noop */ }
+    }
+    function onMove(e: PointerEvent) {
+      if (drag) {
+        const dx = e.clientX - lastX, dy = e.clientY - lastY
+        lastX = e.clientX; lastY = e.clientY
+        if (drag === "rotate") { rotate(dx, dy); av.x = dx; av.y = dy } else panBy(dx, dy)
+      } else {
+        const i = hitIndex(e.clientX, e.clientY)
+        setTip(i >= 0 ? { sx: e.clientX, sy: e.clientY, p: pts[i] } : null)
       }
     }
-    // 클릭 vs 회전 구분.
-    let downX = 0, downY = 0
-    function onDown(e: PointerEvent) { downX = e.clientX; downY = e.clientY }
     function onUp(e: PointerEvent) {
-      if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 5) return
-      const r = renderer.domElement.getBoundingClientRect()
-      mouse.x = ((e.clientX - r.left) / r.width) * 2 - 1
-      mouse.y = -((e.clientY - r.top) / r.height) * 2 + 1
-      ray.setFromCamera(mouse, camera)
-      const hit = ray.intersectObject(points)
-      if (hit.length && hit[0].index != null) openRef.current(pts[hit[0].index].s)
+      const click = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) <= 5
+      const wasRotate = drag === "rotate"
+      drag = null
+      try { renderer.domElement.releasePointerCapture(e.pointerId) } catch (_) { /* noop */ }
+      if (click && wasRotate) { const i = hitIndex(e.clientX, e.clientY); if (i >= 0) openRef.current(pts[i].s) }
     }
-    renderer.domElement.addEventListener("pointermove", onPointerMove)
+    const onCtx = (e: Event) => e.preventDefault()
+    renderer.domElement.addEventListener("wheel", onWheel, { passive: false })
     renderer.domElement.addEventListener("pointerdown", onDown)
+    renderer.domElement.addEventListener("pointermove", onMove)
     renderer.domElement.addEventListener("pointerup", onUp)
+    renderer.domElement.addEventListener("pointercancel", onUp)
     renderer.domElement.addEventListener("pointerleave", () => setTip(null))
+    renderer.domElement.addEventListener("contextmenu", onCtx)
 
     let raf = 0
     const loop = () => {
       raf = requestAnimationFrame(loop)
-      // 부드러운 줌: 목표 거리/타깃으로 프레임마다 조금씩 보간(ease).
-      controls.target.lerp(desiredTarget, 0.15)
-      const cur = camera.position.distanceTo(controls.target)
-      const nd = THREE.MathUtils.lerp(cur, desiredDist, 0.15)
-      dir.subVectors(camera.position, controls.target)
-      if (dir.lengthSq() > 1e-6) camera.position.copy(controls.target).addScaledVector(dir.normalize(), nd)
-      controls.update()
+      // 회전 관성(놓은 뒤 잔여 속도로 계속 돌다 감쇠).
+      if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
+        rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95
+      }
+      // 부드러운 줌: 목표 거리/타깃으로 프레임마다 보간(ease).
+      target.lerp(desiredTarget, 0.15)
+      const nd = THREE.MathUtils.lerp(camera.position.distanceTo(target), desiredDist, 0.15)
+      _dir.subVectors(camera.position, target)
+      if (_dir.lengthSq() > 1e-6) camera.position.copy(target).addScaledVector(_dir.normalize(), nd)
+      camera.lookAt(target)
       renderer.render(scene, camera)
-      // 라벨 위치 갱신(3D→화면).
       for (const { c, v } of cluVecs) {
         const el = labelRefs.current.get(c.id); if (!el) continue
         proj.copy(v).project(camera)
         if (proj.z > 1) { el.style.display = "none"; continue }
-        const X = (proj.x * 0.5 + 0.5) * w, Y = (-proj.y * 0.5 + 0.5) * h
-        el.style.display = "block"; el.style.left = X + "px"; el.style.top = Y + "px"
+        el.style.display = "block"
+        el.style.left = (proj.x * 0.5 + 0.5) * w + "px"; el.style.top = (-proj.y * 0.5 + 0.5) * h + "px"
       }
     }
     loop()
@@ -159,16 +186,17 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const ro = new ResizeObserver(() => {
       w = wrap.clientWidth; h = wrap.clientHeight
       camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h)
-      controls.handleResize()
     })
     ro.observe(wrap)
 
     return () => {
-      cancelAnimationFrame(raf); ro.disconnect(); controls.dispose()
+      cancelAnimationFrame(raf); ro.disconnect()
       renderer.domElement.removeEventListener("wheel", onWheel)
-      renderer.domElement.removeEventListener("pointermove", onPointerMove)
       renderer.domElement.removeEventListener("pointerdown", onDown)
+      renderer.domElement.removeEventListener("pointermove", onMove)
       renderer.domElement.removeEventListener("pointerup", onUp)
+      renderer.domElement.removeEventListener("pointercancel", onUp)
+      renderer.domElement.removeEventListener("contextmenu", onCtx)
       geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
