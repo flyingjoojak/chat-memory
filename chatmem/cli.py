@@ -233,12 +233,39 @@ def cmd_setup(args: argparse.Namespace) -> int:
     src_ok = C.PROJECTS_DIR.exists()
     print(f"[3/3] 로그 소스: {C.PROJECTS_DIR} ({'있음' if src_ok else '없음 — Claude Code 사용 이력 필요'})")
 
+    # 4) 스케줄러 자동 등록(OS별). --no-scheduler 로 생략, --dry-run 로 미리보기.
+    from . import scheduler
+    if getattr(args, "no_scheduler", False):
+        print(f"[4/4] 스케줄러: 건너뜀 (현재: {scheduler.status()})")
+    else:
+        try:
+            lines = scheduler.install(dry_run=getattr(args, "dry_run", False))
+            head = "미리보기" if getattr(args, "dry_run", False) else "등록 완료"
+            print(f"[4/4] 스케줄러 {head}: 10분 인덱싱 + 매일 04:00 정제")
+            for ln in lines:
+                print("      " + ln.replace("\n", "\n      "))
+        except Exception as e:  # 권한·환경 문제 시 수동 안내로 폴백
+            print(f"[4/4] 스케줄러 자동 등록 실패({e}). 수동 등록은 AUTOMATION.md 참고.")
+
     print("\n다음 단계:")
     print("  1) 첫 백필:      chatmem index")
     print("  2) 검색 확인:    chatmem \"검색어\"")
     print("  3) 웹 UI:        python -m chatmem.web   →  http://127.0.0.1:8642")
     print("  4) 설정 확인:    chatmem config")
-    print("\n자동 축적(스케줄러) 등록은 OS별로 AUTOMATION.md 참고(크로스플랫폼 자동화는 준비 중).")
+    return 0
+
+
+def cmd_scheduler(args: argparse.Namespace) -> int:
+    from . import scheduler
+    if args.action == "status":
+        print(scheduler.status())
+        return 0
+    fn = scheduler.install if args.action == "install" else scheduler.uninstall
+    lines = fn(dry_run=args.dry_run)
+    verb = {"install": "등록", "uninstall": "제거"}[args.action]
+    print(f"스케줄러 {verb}{' (미리보기)' if args.dry_run else ''}:")
+    for ln in lines:
+        print("  " + ln.replace("\n", "\n  "))
     return 0
 
 
@@ -287,8 +314,15 @@ def main(argv: list[str] | None = None) -> int:
     cf = sub.add_parser("config", help="현재 유효 설정·설정 파일 위치 확인")
     cf.set_defaults(func=cmd_config)
 
-    se = sub.add_parser("setup", help="최초 온보딩(폴더·설정 생성 + 안내)")
+    se = sub.add_parser("setup", help="최초 온보딩(폴더·설정 생성 + 스케줄러 등록)")
+    se.add_argument("--no-scheduler", action="store_true", help="스케줄러 자동 등록 생략")
+    se.add_argument("--dry-run", action="store_true", help="스케줄러 등록 미리보기(실행 안 함)")
     se.set_defaults(func=cmd_setup)
+
+    sc = sub.add_parser("scheduler", help="자동 축적 스케줄러 등록/제거/상태")
+    sc.add_argument("action", choices=["install", "uninstall", "status"])
+    sc.add_argument("--dry-run", action="store_true", help="실행 없이 계획만 출력")
+    sc.set_defaults(func=cmd_scheduler)
 
     st = sub.add_parser("stats", help="현황")
     st.set_defaults(func=cmd_stats)
