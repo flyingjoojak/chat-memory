@@ -243,11 +243,27 @@ def cmd_setup(args: argparse.Namespace) -> int:
     print("\n설정 완료! " + (
         "이제 검색할 수 있어요." if getattr(args, "index", False)
         else "스케줄러가 10분마다 자동으로 대화를 축적합니다(첫 실행 때 모델 ~2.2GB 다운로드)."))
-    print("  검색:   mem \"검색어\"        (또는 chatmem search ...)")
-    print("  웹 UI:  python -m chatmem.web   →  http://127.0.0.1:8642")
+    print("  검색:      mem \"검색어\"        (또는 chatmem search ...)")
+    print("  데스크탑 앱: chatmem app        (네이티브 창 — 옵시디언처럼)")
+    print("  웹 UI:      python -m chatmem.web   →  http://127.0.0.1:8642")
     if not getattr(args, "index", False):
         print("  즉시 백필하려면:  chatmem index   (안 해도 스케줄러가 알아서 채웁니다)")
     print("  설정 확인: chatmem config")
+    return 0
+
+
+def cmd_app(args: argparse.Namespace) -> int:
+    """데스크탑 앱(네이티브 창)으로 검색 UI 실행."""
+    try:
+        from . import desktop
+    except ImportError:
+        print("데스크탑 앱은 pywebview가 필요합니다:  pip install \"chat-memory[desktop]\"")
+        return 1
+    try:
+        desktop.run(port=args.port)
+    except ImportError:
+        print("pywebview 미설치. 설치:  pip install \"chat-memory[desktop]\"")
+        return 1
     return 0
 
 
@@ -314,6 +330,10 @@ def main(argv: list[str] | None = None) -> int:
     se.add_argument("--no-scheduler", action="store_true", help="스케줄러 자동 등록 생략")
     se.add_argument("--dry-run", action="store_true", help="스케줄러 등록 미리보기(실행 안 함)")
     se.set_defaults(func=cmd_setup)
+
+    ap = sub.add_parser("app", help="데스크탑 앱(네이티브 창)으로 실행")
+    ap.add_argument("--port", type=int, default=None, help="로컬 포트(기본 8642, 사용중이면 자동)")
+    ap.set_defaults(func=cmd_app)
 
     sc = sub.add_parser("scheduler", help="자동 축적 스케줄러 등록/제거/상태")
     sc.add_argument("action", choices=["install", "uninstall", "status"])

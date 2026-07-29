@@ -24,9 +24,12 @@ chatmem setup
 검색:
 
 ```bash
-mem "급여 계산 로직 어떻게 짰지"       # bare = search
-python -m chatmem.web                  # 웹 UI → http://127.0.0.1:8642
+mem "급여 계산 로직 어떻게 짰지"       # bare = search (터미널)
+chatmem app                            # 데스크탑 앱(네이티브 창 — 옵시디언처럼). [desktop] extra 필요
+python -m chatmem.web                  # 웹 UI → http://127.0.0.1:8642 (브라우저)
 ```
+
+> 데스크탑 앱은 `pip install "chat-memory[desktop]"` (pywebview). Windows는 Edge WebView2 런타임 필요(Win11 기본 포함).
 
 ## 설치 (직접/개발)
 
