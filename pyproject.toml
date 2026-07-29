@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chat-memory"
+version = "0.1.0"
+description = "Claude Code 대화를 자동 누적해 의미 검색하는 개인 정보자산 검색창 (로컬 임베딩·하이브리드 검색)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "flyingjoojak" }]
+keywords = ["claude", "search", "embeddings", "semantic-search", "personal-knowledge"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Environment :: Console",
+]
+
+# 코어: 임베딩·인덱싱·검색에 꼭 필요한 것만. (정제·웹은 선택 extras)
+dependencies = [
+  "fastembed>=0.3",
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
+enrich = ["anthropic>=0.40", "openai>=1.40"]   # 정제 백엔드(anthropic / openai·gemini·ollama). claude/off는 불필요
+all = ["fastapi>=0.110", "uvicorn>=0.29", "anthropic>=0.40", "openai>=1.40"]
+
+[project.urls]
+Repository = "https://github.com/flyingjoojak/chat-memory"
+
+# 두 이름 모두 같은 CLI 진입점. `mem`은 짧은 별칭.
+[project.scripts]
+chatmem = "chatmem.cli:main"
+mem = "chatmem.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["chatmem*"]
+exclude = ["tests*", "scripts*"]

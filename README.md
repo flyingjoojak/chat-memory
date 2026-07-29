@@ -13,24 +13,29 @@ Claude Code 대화를 자동 누적하여 **의미 검색**하는 개인 정보�
 ## 설치
 
 ```bash
-pip install -r requirements.txt   # fastembed, numpy (sqlite3는 stdlib)
+pip install -e .            # 코어(fastembed, numpy). sqlite3는 stdlib
+pip install -e ".[web]"     # + 웹 UI (fastapi, uvicorn)
+pip install -e ".[enrich]"  # + 정제 백엔드(anthropic/openai·gemini·ollama)
+pip install -e ".[all]"     # 전부
 ```
 
-최초 검색/인덱싱 시 임베딩 모델(multilingual-e5-large, ~2.2GB)이 자동 다운로드된다.
+설치하면 콘솔 명령 **`chatmem`** (별칭 **`mem`**)이 생긴다. 최초 검색/인덱싱 시 임베딩 모델(multilingual-e5-large, ~2.2GB)이 자동 다운로드된다.
 
 ## 사용
 
 ```bash
-# 백필/증분 인덱싱 (최근 세션부터)
-python -m chatmem index
+chatmem setup                     # 최초 1회: 폴더·설정 생성 + 다음 단계 안내
 
-# 의미 검색
-python -m chatmem "급여 계산 로직 어떻게 짰지"
-python -m chatmem search "마이그레이션" -k 10 --since 2026-07-01 --session growth
+chatmem index                     # 백필/증분 인덱싱 (최근 세션부터)
 
-# 현황
-python -m chatmem stats
+mem "급여 계산 로직 어떻게 짰지"    # 의미 검색 (bare = search)
+chatmem search "마이그레이션" -k 10 --since 2026-07-01 --until 2026-07-24 --session growth
+
+chatmem stats                     # 현황
+chatmem config                    # 유효 설정·설정파일 위치
 ```
+
+> 설치 없이도 `python -m chatmem <서브커맨드>` 로 동일하게 동작한다.
 
 ## 구조 (코어 라이브러리 + 얇은 CLI)
 

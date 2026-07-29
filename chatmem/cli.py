@@ -200,7 +200,52 @@ def cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    """최초 온보딩: 데이터 폴더·설정 파일 생성 + 다음 단계 안내.
+
+    (스케줄러 자동 등록은 크로스플랫폼 단계에서 확장. 지금은 수동 안내.)
+    """
+    import shutil
+    from pathlib import Path
+
+    from . import config as C
+
+    # 1) 데이터 폴더
+    C.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"[1/3] 데이터 폴더: {C.DATA_DIR}")
+
+    # 2) 설정 파일 — 없으면 예시에서 복사(있으면 건드리지 않음)
+    if C.CONFIG_PATH.exists():
+        print(f"[2/3] 설정 파일 이미 있음: {C.CONFIG_PATH} (유지)")
+    else:
+        example = Path(__file__).resolve().parent.parent / "config.env.example"
+        C.CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        if example.exists():
+            shutil.copyfile(example, C.CONFIG_PATH)
+            print(f"[2/3] 설정 파일 생성: {C.CONFIG_PATH} (예시 복사 — 필요값만 주석 해제)")
+        else:
+            C.CONFIG_PATH.write_text(
+                "# chat-memory 설정 (KEY=VALUE). 예: CHATMEM_ENRICH_BACKEND=off\n",
+                encoding="utf-8")
+            print(f"[2/3] 설정 파일 생성: {C.CONFIG_PATH}")
+
+    # 3) 로그 소스 존재 확인
+    src_ok = C.PROJECTS_DIR.exists()
+    print(f"[3/3] 로그 소스: {C.PROJECTS_DIR} ({'있음' if src_ok else '없음 — Claude Code 사용 이력 필요'})")
+
+    print("\n다음 단계:")
+    print("  1) 첫 백필:      chatmem index")
+    print("  2) 검색 확인:    chatmem \"검색어\"")
+    print("  3) 웹 UI:        python -m chatmem.web   →  http://127.0.0.1:8642")
+    print("  4) 설정 확인:    chatmem config")
+    print("\n자동 축적(스케줄러) 등록은 OS별로 AUTOMATION.md 참고(크로스플랫폼 자동화는 준비 중).")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
+    # 콘솔 진입점(chatmem/mem)은 main()을 인자 없이 호출 → sys.argv에서 직접 취함.
+    if argv is None:
+        argv = sys.argv[1:]
     # 출력을 utf-8로 강제 → cp949 콘솔의 인코딩 크래시·한글 깨짐 방지.
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -242,15 +287,20 @@ def main(argv: list[str] | None = None) -> int:
     cf = sub.add_parser("config", help="현재 유효 설정·설정 파일 위치 확인")
     cf.set_defaults(func=cmd_config)
 
+    se = sub.add_parser("setup", help="최초 온보딩(폴더·설정 생성 + 안내)")
+    se.set_defaults(func=cmd_setup)
+
     st = sub.add_parser("stats", help="현황")
     st.set_defaults(func=cmd_stats)
 
-    args, extra = p.parse_known_args(argv)
-    # `mem "질의"` 처럼 서브커맨드 생략 시 검색으로 간주.
+    # `mem "질의"` 처럼 서브커맨드 생략 시 검색으로 간주:
+    # 첫 토큰이 플래그도 아니고 알려진 서브커맨드도 아니면 앞에 'search'를 붙인다.
+    known = set(sub.choices)
+    if argv and not argv[0].startswith("-") and argv[0] not in known:
+        argv = ["search", *argv]
+
+    args = p.parse_args(argv)
     if args.cmd is None:
-        if extra or (argv and not argv[0].startswith("-")):
-            ns = p.parse_args(["search", *(argv or [])])
-            return ns.func(ns)
         p.print_help()
         return 0
     return args.func(args)
