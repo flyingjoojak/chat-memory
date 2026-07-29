@@ -54,6 +54,8 @@ export function GraphView({ onOpenSession }: { onOpenSession: (id: string) => vo
   const [hoverClu, setHoverClu] = useState<number | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const drag = useRef<{ x: number; y: number; vx: number; vy: number } | null>(null)
+  const moved = useRef(false)
+  const [dragging, setDragging] = useState(false)
 
   useEffect(() => { getGraph().then(setData).catch(() => setData({ points: [], clusters: [], method: null })) }, [])
 
@@ -87,13 +89,26 @@ export function GraphView({ onOpenSession }: { onOpenSession: (id: string) => vo
     const f = e.deltaY < 0 ? 1.15 : 1 / 1.15
     setView((v) => ({ k: Math.min(30, Math.max(0.6, v.k * f)), x: px - (px - v.x) * f, y: py - (py - v.y) * f }))
   }
-  function onDown(e: React.MouseEvent) { const { px, py } = toSvg(e.clientX, e.clientY); drag.current = { x: px, y: py, vx: view.x, vy: view.y } }
-  function onMove(e: React.MouseEvent) {
+  function onDown(e: React.PointerEvent) {
+    const { px, py } = toSvg(e.clientX, e.clientY)
+    drag.current = { x: px, y: py, vx: view.x, vy: view.y }
+    moved.current = false
+    setDragging(true)
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch (_) { /* noop */ }
+  }
+  function onMove(e: React.PointerEvent) {
     if (!drag.current) return
     const { px, py } = toSvg(e.clientX, e.clientY)
-    setView((v) => ({ ...v, x: drag.current!.vx + (px - drag.current!.x), y: drag.current!.vy + (py - drag.current!.y) }))
+    const dx = px - drag.current.x, dy = py - drag.current.y
+    if (Math.abs(dx) + Math.abs(dy) > 4) moved.current = true
+    setView((v) => ({ ...v, x: drag.current!.vx + dx, y: drag.current!.vy + dy }))
   }
-  function onUp() { drag.current = null }
+  function onUp(e: React.PointerEvent) {
+    drag.current = null
+    setDragging(false)
+    try { e.currentTarget.releasePointerCapture(e.pointerId) } catch (_) { /* noop */ }
+  }
+  function resetView() { setView({ k: 1, x: 0, y: 0 }) }
 
   const labelPos = (cx: number, cy: number) => ({
     left: `${((view.x + view.k * cx) / W) * 100}%`, top: `${((view.y + view.k * cy) / H) * 100}%`,
@@ -120,10 +135,10 @@ export function GraphView({ onOpenSession }: { onOpenSession: (id: string) => vo
             : (
               <>
                 <svg
-                  ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="h-full w-full rounded-xl border bg-card"
-                  style={{ cursor: drag.current ? "grabbing" : "grab" }}
-                  onWheel={onWheel} onMouseDown={onDown} onMouseMove={onMove}
-                  onMouseUp={onUp} onMouseLeave={() => { onUp(); setTip(null) }}
+                  ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="h-full w-full touch-none rounded-xl border bg-card"
+                  style={{ cursor: dragging ? "grabbing" : "grab" }}
+                  onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove}
+                  onPointerUp={onUp} onPointerCancel={onUp}
                 >
                   <g transform={`translate(${view.x} ${view.y}) scale(${view.k})`}>
                     {norm?.hulls.map((h) => (
@@ -141,9 +156,9 @@ export function GraphView({ onOpenSession }: { onOpenSession: (id: string) => vo
                           transition: "opacity .2s", cursor: "pointer",
                           animationDelay: `${Math.min(i * 1.2, 700)}ms`,
                         }}
-                        onMouseEnter={(e) => setTip({ cx: e.clientX, cy: e.clientY, p })}
+                        onMouseEnter={(e) => !dragging && setTip({ cx: e.clientX, cy: e.clientY, p })}
                         onMouseLeave={() => setTip(null)}
-                        onClick={() => onOpenSession(p.session)} />
+                        onClick={() => { if (!moved.current) onOpenSession(p.session) }} />
                     ))}
                   </g>
                 </svg>
@@ -172,6 +187,12 @@ export function GraphView({ onOpenSession }: { onOpenSession: (id: string) => vo
                     </div>
                   ))}
                 </div>
+
+                <button onClick={resetView}
+                  className="absolute bottom-6 left-6 z-20 rounded-lg border bg-card/90 px-3 py-1.5 text-xs
+                    text-muted-foreground shadow-sm backdrop-blur transition-colors hover:text-foreground">
+                  뷰 초기화
+                </button>
 
                 {tip && (
                   <div className="pointer-events-none fixed z-50 max-w-xs rounded-lg border bg-popover px-3 py-2 text-xs shadow-md"
