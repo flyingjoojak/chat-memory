@@ -76,6 +76,14 @@ class VectorIndex:
         top = top[np.argsort(-scores[top])]
         return [(self.ids[i], float(scores[i])) for i in top]
 
+    def reset(self) -> None:
+        """전체 비우기(모델 교체 재색인용). 메모리·파일 모두 초기화."""
+        self.ids = []
+        self.matrix = None
+        self._pos = {}
+        for p in (self.vectors_path, self.ids_path):
+            Path(p).unlink(missing_ok=True)
+
     def save(self) -> None:
         """원자적 저장: temp에 쓰고 rename → kill 중에도 파일 손상 없음."""
         self.vectors_path.parent.mkdir(parents=True, exist_ok=True)
@@ -89,3 +97,107 @@ class VectorIndex:
         tmp_i = self.ids_path.with_name(self.ids_path.name + ".tmp")
         tmp_i.write_text(json.dumps(self.ids, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp_i, self.ids_path)
+
+
+class SqliteVecIndex:
+    """sqlite-vec 백엔드: 벡터를 디스크(sqlite)에 int8로 저장 → RAM 극소·용량 1/4.
+
+    인터페이스는 VectorIndex와 동일(add/search/remove/reset/save/__len__).
+    정규화 벡터를 [-127,127] int8로 양자화, cosine 거리로 KNN. score=1-거리(높을수록 유사).
+    """
+
+    def __init__(self, db_path=None):
+        import sqlite3
+
+        import sqlite_vec
+
+        from .config import VECTORS_DB_PATH
+        self.db_path = Path(db_path or VECTORS_DB_PATH)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(self.db_path))
+        self.conn.enable_load_extension(True)
+        sqlite_vec.load(self.conn)
+        self.conn.enable_load_extension(False)
+        self.conn.execute("CREATE TABLE IF NOT EXISTS vmeta(k TEXT PRIMARY KEY, v TEXT)")
+        self.conn.execute(
+            "CREATE TABLE IF NOT EXISTS vkeys(id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE)")
+        self._dim = self._get_dim()
+        if self._dim:
+            self._ensure_vec(self._dim)
+
+    def _get_dim(self) -> int | None:
+        row = self.conn.execute("SELECT v FROM vmeta WHERE k='dim'").fetchone()
+        return int(row[0]) if row else None
+
+    def _ensure_vec(self, dim: int) -> None:
+        self.conn.execute(
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS vec USING vec0("
+            f"embedding int8[{dim}] distance_metric=cosine)")
+        if self._dim is None:
+            self.conn.execute("INSERT OR REPLACE INTO vmeta(k,v) VALUES('dim',?)", (str(dim),))
+            self._dim = dim
+
+    @staticmethod
+    def _q8(vec) -> bytes:
+        return np.clip(np.round(np.asarray(vec, dtype=np.float32) * 127), -127, 127).astype(np.int8).tobytes()
+
+    def __len__(self) -> int:
+        return self.conn.execute("SELECT COUNT(*) FROM vkeys").fetchone()[0]
+
+    def add(self, keys: list[str], matrix) -> None:
+        if len(keys) == 0:
+            return
+        matrix = np.asarray(matrix, dtype=np.float32)
+        self._ensure_vec(matrix.shape[1])
+        cur = self.conn.cursor()
+        for key, vec in zip(keys, matrix):
+            row = cur.execute("SELECT id FROM vkeys WHERE key=?", (key,)).fetchone()
+            if row:  # 멱등 재임베딩: 기존 rowid 벡터 교체
+                rid = row[0]
+                cur.execute("DELETE FROM vec WHERE rowid=?", (rid,))
+            else:
+                cur.execute("INSERT INTO vkeys(key) VALUES(?)", (key,))
+                rid = cur.lastrowid
+            cur.execute("INSERT INTO vec(rowid, embedding) VALUES(?, vec_int8(?))", (rid, self._q8(vec)))
+        self.conn.commit()
+
+    def search(self, query_vec, k: int = 5) -> list[tuple[str, float]]:
+        if not self._dim or len(self) == 0:
+            return []
+        rows = self.conn.execute(
+            "SELECT v.rowid, v.distance, k.key FROM vec v JOIN vkeys k ON k.id=v.rowid "
+            "WHERE v.embedding MATCH vec_int8(?) AND k=? ORDER BY v.distance",
+            (self._q8(query_vec), k)).fetchall()
+        return [(r[2], 1.0 - float(r[1])) for r in rows]  # cosine 유사도 = 1 - 거리
+
+    def remove(self, keys: list[str]) -> int:
+        n = 0
+        cur = self.conn.cursor()
+        for key in keys:
+            row = cur.execute("SELECT id FROM vkeys WHERE key=?", (key,)).fetchone()
+            if row:
+                cur.execute("DELETE FROM vec WHERE rowid=?", (row[0],))
+                cur.execute("DELETE FROM vkeys WHERE id=?", (row[0],))
+                n += 1
+        self.conn.commit()
+        return n
+
+    def reset(self) -> None:
+        """전체 비우기(모델 교체=차원 변경 대응): 테이블 드롭 후 재생성."""
+        self.conn.execute("DROP TABLE IF EXISTS vec")
+        self.conn.execute("DELETE FROM vkeys")
+        self.conn.execute("DELETE FROM vmeta")
+        self.conn.commit()
+        self._dim = None
+
+    def save(self) -> None:
+        self.conn.commit()  # sqlite는 커밋이 곧 영속화
+
+
+def make_index(backend: str | None = None):
+    """설정에 따라 벡터 인덱스 백엔드 선택. npy(기본) / sqlite-vec(배포)."""
+    from .config import VECTOR_BACKEND
+    b = (backend or VECTOR_BACKEND or "npy").lower()
+    if b in ("sqlite-vec", "sqlite_vec", "sqlitevec"):
+        return SqliteVecIndex()
+    return VectorIndex()

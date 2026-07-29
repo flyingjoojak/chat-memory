@@ -62,7 +62,12 @@ DATA_DIR = Path(os.environ.get("CHATMEM_DATA_DIR", Path.home() / "chat-memory" /
 DB_PATH = DATA_DIR / "archive.db"
 VECTORS_PATH = DATA_DIR / "vectors.npy"
 VECTOR_IDS_PATH = DATA_DIR / "vector_ids.json"
+VECTORS_DB_PATH = DATA_DIR / "vectors.db"   # sqlite-vec 백엔드용
 LOG_PATH = DATA_DIR / "batch.log"
+
+# 벡터 저장 백엔드: npy(전량 RAM·빠름·개인) / sqlite-vec(디스크·int8·저RAM·배포).
+# 프리즈된 배포 exe는 backend_entry.py에서 sqlite-vec로 기본 설정.
+VECTOR_BACKEND = os.environ.get("CHATMEM_VECTOR_BACKEND", "npy")
 
 # --- 임베딩 -------------------------------------------------------------
 # 색인·검색 공통. 변경 시 전체 재색인 필요(벡터 비호환).

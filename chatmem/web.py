@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .search import search as run_search
 from .store import ArchiveDB, _actions_from_json
-from .vectorindex import VectorIndex
+from .vectorindex import make_index
 
 _state: dict = {}
 # 빌드된 React 프론트(있으면 서빙, 없으면 인라인 _HTML 폴백).
@@ -76,7 +76,7 @@ def api_search(
     if embedder is None:
         return {"error": "모델 로딩 중", "hits": []}
     db = ArchiveDB()
-    vi = VectorIndex()
+    vi = make_index()
     hits = run_search(q, db, vi, embedder, k=k, session=session or None,
                       since=since or None, until=until or None,
                       keyword=not semantic_only)
@@ -262,12 +262,11 @@ def api_reindex(payload: dict):
         _reindex_state.update(running=True, done=0, msg="시작")
         try:
             C.write_config({"CHATMEM_EMBED_MODEL": model})
-            # 새 모델 = 다른 차원 → 기존 벡터 폐기 후 처음부터 재임베딩.
-            for p in (C.VECTORS_PATH, C.VECTOR_IDS_PATH):
-                Path(p).unlink(missing_ok=True)
+            # 새 모델 = 다른 차원 → 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
             db = ArchiveDB()
             db.clear_cursors()
-            vi = VectorIndex()
+            vi = make_index()
+            vi.reset()
             emb = Embedder(model)
 
             def log(msg):
@@ -288,7 +287,7 @@ def api_reindex(payload: dict):
 @app.get("/api/stats")
 def api_stats():
     db = ArchiveDB()
-    vi = VectorIndex()
+    vi = make_index()
     return {
         "turns": db.conn.execute("SELECT COUNT(*) c FROM turns").fetchone()["c"],
         "sessions": db.conn.execute("SELECT COUNT(DISTINCT session_id) c FROM turns").fetchone()["c"],

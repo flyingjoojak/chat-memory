@@ -7,6 +7,11 @@ Electron 메인이 이 exe를 spawn하고 포트를 넘긴다:
 import os
 import sys
 
+# 배포(PyInstaller 프리즈) exe는 벡터 백엔드를 sqlite-vec(디스크·int8·저RAM)로 기본 설정.
+# 개발(python) 실행은 npy 기본 유지. chatmem import 전에 설정해야 config가 반영.
+if getattr(sys, "frozen", False):
+    os.environ.setdefault("CHATMEM_VECTOR_BACKEND", "sqlite-vec")
+
 
 def main() -> None:
     port = 8765

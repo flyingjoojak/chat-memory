@@ -11,12 +11,12 @@ import sys
 from .config import DB_PATH, EMBED_MODEL
 from .search import search as run_search
 from .store import ArchiveDB
-from .vectorindex import VectorIndex
+from .vectorindex import make_index
 
 
 def _open(need_embedder: bool):
     db = ArchiveDB()
-    vi = VectorIndex()
+    vi = make_index()
     embedder = None
     if need_embedder:
         stored = db.get_meta("embed_model")
@@ -81,7 +81,7 @@ def cmd_index(args: argparse.Namespace) -> int:
     set_low_priority()  # 포그라운드 작업에 CPU 양보
 
     db = ArchiveDB()   # 값싼 오픈(모델 로드 없음)
-    vi = VectorIndex()
+    vi = make_index()
 
     # 1) 새 대화 없으면 모델 로드조차 안 하고 즉시 종료(자리 비우면 스파이크 0). 로그도 안 남김.
     if not args.force and not has_new_data(db):
