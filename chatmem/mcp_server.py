@@ -38,6 +38,7 @@ def search_memory(query: str, k: int = 5, semantic_only: bool = False,
     query: 자연어 질의(개념·의역 가능). k: 결과 수(기본 5). since/until: 'YYYY-MM-DD'(KST) 날짜 범위.
     각 결과에 session 값이 있으니, 더 자세한 맥락이 필요하면 get_session(session)으로 세션 전체를 열람하라.
     """
+    from .config import EMBED_MODEL
     from .search import search as run_search
     from .store import ArchiveDB
     from .vectorindex import make_index
@@ -45,12 +46,18 @@ def search_memory(query: str, k: int = 5, semantic_only: bool = False,
     db, vi = ArchiveDB(), make_index()
     if len(vi) == 0:
         return "인덱스가 비어 있습니다(아직 대화가 색인되지 않음)."
+    # 저장 벡터의 모델과 현재 설정 모델이 다르면 의미 검색이 부정확 → 경고.
+    stored = db.get_meta("embed_model")
+    warn = ""
+    if stored and stored != EMBED_MODEL:
+        warn = (f"⚠️ 임베딩 모델 불일치: 저장 벡터={stored} / 설정={EMBED_MODEL}. "
+                f"의미 검색 결과가 부정확할 수 있습니다. 재색인 후 MCP(클라이언트) 재시작이 필요합니다.\n\n")
     hits = run_search(query, db, vi, _embedder(), k=max(1, min(k, 20)),
                       since=since or None, until=until or None, keyword=not semantic_only)
     if not hits:
         return f"'{query}' 에 대한 결과가 없습니다."
 
-    blocks = [f"검색어: {query} — {len(hits)}개 결과\n"]
+    blocks = [warn + f"검색어: {query} — {len(hits)}개 결과\n"]
     for i, h in enumerate(hits, 1):
         t = h.turn
         head = h.summary or t.question or "(제목 없음)"
