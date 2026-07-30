@@ -194,19 +194,25 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       target.add(mv); camera.position.add(mv)
     }
 
-    const ray = new THREE.Raycaster()
-    ray.params.Points!.threshold = 1.6   // 점 바로 위에서만 인식(범위 축소)
-    const mouse = new THREE.Vector2()
     const cluVecs = data.clusters.map((c) => ({ c, v: at({ x: c.x, y: c.y, z: c.z } as GraphPoint3D) }))
     const proj = new THREE.Vector3()
+    const _pp = new THREE.Vector3()
+    const PICK_PX = 5   // 화면상 이 반경(px) 안에서만 점 인식 → 3D 깊이와 무관하게 '보이는 대로'
 
+    // 스크린 좌표 최근접 점 판정(원근 왜곡 없음). world-space 레이캐스터보다 직관적.
     function hitIndex(clientX: number, clientY: number): number {
       const r = renderer.domElement.getBoundingClientRect()
-      mouse.x = ((clientX - r.left) / r.width) * 2 - 1
-      mouse.y = -((clientY - r.top) / r.height) * 2 + 1
-      ray.setFromCamera(mouse, camera)
-      const hit = ray.intersectObject(points)
-      return hit.length && hit[0].index != null ? hit[0].index : -1
+      const mx = clientX - r.left, my = clientY - r.top
+      let best = -1, bestD = PICK_PX * PICK_PX
+      for (let i = 0; i < pts.length; i++) {
+        _pp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).project(camera)
+        if (_pp.z > 1) continue   // 뒤/클립된 점 제외
+        const sx = (_pp.x * 0.5 + 0.5) * w, sy = (-_pp.y * 0.5 + 0.5) * h
+        const dx = sx - mx, dy = sy - my
+        const d = dx * dx + dy * dy
+        if (d < bestD) { bestD = d; best = i }
+      }
+      return best
     }
 
     function onWheel(e: WheelEvent) {
