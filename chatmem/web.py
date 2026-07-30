@@ -302,7 +302,7 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
-_GRAPH3D_VER = 1
+_GRAPH3D_VER = 2
 _graph3d_recomputing = {"on": False}
 
 

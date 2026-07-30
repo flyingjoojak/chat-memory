@@ -35,7 +35,8 @@ export const getStats = () => getJSON<Stats>(`/api/stats`)
 // 의미 지도(3D). 점=임베딩 청크, 군집=주제.
 export interface GraphPoint3D { x: number; y: number; z: number; c: number; s: string; h: string }
 export interface GraphCluster3D { id: number; label: string; x: number; y: number; z: number; n: number }
-export interface Graph3DData { points: GraphPoint3D[]; clusters: GraphCluster3D[]; method: string | null }
+// paths: 같은 세션 점들을 시간순으로 잇는 인덱스 경로(성좌 선)
+export interface Graph3DData { points: GraphPoint3D[]; clusters: GraphCluster3D[]; paths?: number[][]; method: string | null }
 export const getGraph3D = () => getJSON<Graph3DData>(`/api/graph3d`)
 
 export interface Config {

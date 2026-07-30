@@ -49,28 +49,41 @@ def build_graph(vi, db, dims: int = 2) -> dict:
     labels = _cluster(coords)
 
     meta, tags = {}, {}
-    for r in db.conn.execute("SELECT id, session_id, summary, question, tags FROM turns").fetchall():
-        meta[r["id"]] = (r["session_id"], (r["summary"] or r["question"] or ""))
+    for r in db.conn.execute("SELECT id, session_id, summary, question, tags, timestamp FROM turns").fetchall():
+        meta[r["id"]] = (r["session_id"], (r["summary"] or r["question"] or ""), r["timestamp"] or "")
         tags[r["id"]] = json.loads(r["tags"]) if r["tags"] else []
 
     pts = []
     clu_tag: dict[int, Counter] = defaultdict(Counter)
     clu_pos: dict[int, list[np.ndarray]] = defaultdict(list)
+    sess_pts: dict[str, list[tuple[int, str, int]]] = defaultdict(list)  # 세션→[(점index, 시각, 청크idx)]
     for i, k in enumerate(keys):
-        tid = k.rsplit("#", 1)[0]
+        parts = k.rsplit("#", 1)
+        tid = parts[0]
+        cidx = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
         m = meta.get(tid)
         if not m:
             continue
-        sess, head = m
+        sess, head, ts = m
         c = int(labels[i])
         pt = {"x": round(float(coords[i, 0]), 2), "y": round(float(coords[i, 1]), 2),
               "c": c, "s": sess, "h": head[:80]}
         if dims == 3:
             pt["z"] = round(float(coords[i, 2]), 2)
+        ptidx = len(pts)
         pts.append(pt)
+        sess_pts[sess].append((ptidx, ts, cidx))
         for t in tags.get(tid, []):
             clu_tag[c][t] += 1
         clu_pos[c].append(coords[i])
+
+    # 같은 세션 점을 시간순으로 잇는 경로(성좌) — 2개 이상인 세션만.
+    paths = []
+    for lst in sess_pts.values():
+        if len(lst) < 2:
+            continue
+        lst.sort(key=lambda x: (x[1], x[2]))
+        paths.append([p[0] for p in lst])
 
     clusters = []
     for c, pos in clu_pos.items():
@@ -82,4 +95,4 @@ def build_graph(vi, db, dims: int = 2) -> dict:
             cl["z"] = round(float(cen[2]), 2)
         clusters.append(cl)
     clusters.sort(key=lambda c: -c["n"])
-    return {"points": pts, "clusters": clusters, "method": method, "dims": dims}
+    return {"points": pts, "clusters": clusters, "paths": paths, "method": method, "dims": dims}
