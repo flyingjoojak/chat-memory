@@ -98,6 +98,23 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
+    // 강조 레이어: 매칭 점만 크고 밝게(배경 구름 위에 겹쳐 그림). drawRange로 개수 조절.
+    const hlGeo = new THREE.BufferGeometry()
+    const hlPos = new Float32Array(pts.length * 3)
+    const hlCol = new Float32Array(pts.length * 3)
+    hlGeo.setAttribute("position", new THREE.BufferAttribute(hlPos, 3))
+    hlGeo.setAttribute("color", new THREE.BufferAttribute(hlCol, 3))
+    hlGeo.setDrawRange(0, 0)
+    const hlMaterial = new THREE.PointsMaterial({
+      size: 10, sizeAttenuation: true, vertexColors: true, transparent: true,
+      opacity: 1, depthWrite: false, depthTest: false,   // 항상 위에 보이게
+      blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
+    })
+    const hlPoints = new THREE.Points(hlGeo, hlMaterial)
+    hlPoints.renderOrder = 2
+    scene.add(hlPoints)
+    let highlightActive = false
+
     // ── 커스텀 카메라 컨트롤 ──
     // 좌드래그 = 화면축 기준 자유 회전(관성) · 휠클릭/우드래그 = 이동(pan) · 휠 = 커서 기준 줌.
     const target = new THREE.Vector3(0, 0, 0)
@@ -139,14 +156,26 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       return hl.kind === "search" ? hl.sessions.has(p.s) : p.c === hl.c
     }
     function applyHighlight(hl: Highlight) {
+      highlightActive = !!hl
       const matched: THREE.Vector3[] = []
+      let m = 0
       for (let i = 0; i < pts.length; i++) {
         const on = isOn(pts[i], hl)
-        if (on) { _c.set(colorOf(pts[i].c)); if (hl) matched.push(at(pts[i])) }
-        else _c.copy(dimCol)
+        // 배경 구름: 강조 중이면 전부 흐리게, 아니면 군집색 복원.
+        _c.copy(hl ? dimCol : tmp.set(colorOf(pts[i].c)))
         col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b
+        if (hl && on) {
+          const v = at(pts[i]); matched.push(v)
+          hlPos[m * 3] = v.x; hlPos[m * 3 + 1] = v.y; hlPos[m * 3 + 2] = v.z
+          _c.set(colorOf(pts[i].c))
+          hlCol[m * 3] = _c.r; hlCol[m * 3 + 1] = _c.g; hlCol[m * 3 + 2] = _c.b
+          m += 1
+        }
       }
       geo.attributes.color.needsUpdate = true
+      hlGeo.setDrawRange(0, m)
+      hlGeo.attributes.position.needsUpdate = true
+      hlGeo.attributes.color.needsUpdate = true
       // 강조 대상이 있으면 그 중심으로 프레이밍(어디에 있는지 바로 보이게).
       if (hl && matched.length) {
         const cen = new THREE.Vector3()
@@ -237,10 +266,11 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
       }
       // LOD: 멀리서 보면 점을 흐리게(주제 라벨이 지배 = 조망), 가까이 오면 점을 또렷하게.
+      // 강조 중이면 배경 구름을 상시 강하게 눌러 매칭 점만 도드라지게.
       const dist = camera.position.distanceTo(target)
       const tt = Math.min(Math.max((dist - EXTENT * 0.8) / (EXTENT * 5), 0), 1)
-      material.opacity = baseOpacity * (1 - tt * 0.6)
-      const labelOpacity = 0.3 + tt * 0.7
+      material.opacity = highlightActive ? 0.14 : baseOpacity * (1 - tt * 0.6)
+      const labelOpacity = highlightActive ? 0.18 : 0.3 + tt * 0.7
       renderer.render(scene, camera)
       for (const { c, v } of cluVecs) {
         const el = labelRefs.current.get(c.id); if (!el) continue
@@ -268,7 +298,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       renderer.domElement.removeEventListener("pointerup", onUp)
       renderer.domElement.removeEventListener("pointercancel", onUp)
       renderer.domElement.removeEventListener("contextmenu", onCtx)
-      geo.dispose(); material.dispose(); renderer.dispose()
+      geo.dispose(); material.dispose(); hlGeo.dispose(); hlMaterial.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
   }, [data])
