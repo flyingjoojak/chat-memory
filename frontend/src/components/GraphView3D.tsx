@@ -20,7 +20,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(true)
-  const [lineMode, setLineMode] = useState<"chain" | "star">("chain")   // 체인=시간순, 별=세션중심 방사
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
   const openRef = useRef(onOpenSession)
@@ -56,23 +55,10 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.style.borderRadius = "12px"
     wrap.appendChild(renderer.domElement)
 
-    // 같은 세션 점을 잇는 선(성좌). 점은 그대로(끌어당김 없음).
-    //  · 체인: 시간순 이웃끼리 연결(대화 궤적)
-    //  · 별  : 세션 중심에서 모든 점으로 방사(허브)
+    // 같은 세션 점을 시간순으로 잇는 선(성좌) — 세션마다 다른 색, 흐리게. 점은 그대로(끌어당김 없음).
     const paths = data.paths ?? []
-    const segs: { a: THREE.Vector3; b: THREE.Vector3; sess: string }[] = []
-    for (const pa of paths) {
-      const sess = pts[pa[0]]?.s ?? ""
-      if (lineMode === "star") {
-        const vs = pa.map((idx) => at(pts[idx]))
-        const cen = new THREE.Vector3()
-        vs.forEach((v) => cen.add(v)); cen.multiplyScalar(1 / vs.length)
-        for (const v of vs) segs.push({ a: cen.clone(), b: v, sess })
-      } else {
-        for (let j = 0; j < pa.length - 1; j++) segs.push({ a: at(pts[pa[j]]), b: at(pts[pa[j + 1]]), sess })
-      }
-    }
-    const segCount = segs.length
+    let segCount = 0
+    for (const pa of paths) segCount += Math.max(0, pa.length - 1)
     let lineCol: Float32Array | null = null       // 라이브 선 색 버퍼(hover 시 갱신)
     let lineColBase: Float32Array | null = null   // 원본 선 색(복원용)
     const lineVertSess: string[] = []             // 선 정점별 세션(hover 매칭용)
@@ -82,13 +68,17 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       const lcol = new Float32Array(segCount * 2 * 3)
       const lc = new THREE.Color()
       let o = 0
-      for (const sg of segs) {
-        lc.setHSL(hueOf(sg.sess) / 360, 0.55, dark ? 0.62 : 0.48)
-        lpos[o] = sg.a.x; lpos[o + 1] = sg.a.y; lpos[o + 2] = sg.a.z
-        lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
-        lpos[o] = sg.b.x; lpos[o + 1] = sg.b.y; lpos[o + 2] = sg.b.z
-        lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
-        lineVertSess.push(sg.sess, sg.sess)
+      for (const pa of paths) {
+        const sess = pts[pa[0]]?.s ?? ""
+        lc.setHSL(hueOf(sess) / 360, 0.55, dark ? 0.62 : 0.48)
+        for (let j = 0; j < pa.length - 1; j++) {
+          const a = at(pts[pa[j]]), b = at(pts[pa[j + 1]])
+          lpos[o] = a.x; lpos[o + 1] = a.y; lpos[o + 2] = a.z
+          lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
+          lpos[o] = b.x; lpos[o + 1] = b.y; lpos[o + 2] = b.z
+          lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
+          lineVertSess.push(sess, sess)
+        }
       }
       const lgeo = new THREE.BufferGeometry()
       lgeo.setAttribute("position", new THREE.BufferAttribute(lpos, 3))
@@ -127,23 +117,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
-    // ── hover: 호버한 세션 자체를 크고 진하게 강조(옵시디언식). 나머지는 배경에 묻히게 ──
+    // ── hover: 호버한 세션 강조 — 나머지 점은 배경에 묻히고, 그 세션 연결선을 밝게. 점 크기는 그대로 ──
     const dimPt = dark ? new THREE.Color(0.07, 0.08, 0.10) : new THREE.Color(0.90, 0.91, 0.93)
     const dimLn = dark ? new THREE.Color(0.05, 0.05, 0.07) : new THREE.Color(0.92, 0.93, 0.95)
-    // 호버 세션 강조용 오버레이(더 큰 점, 세션색, 항상 위).
-    const hlGeo = new THREE.BufferGeometry()
-    const hlPos = new Float32Array(pts.length * 3)
-    hlGeo.setAttribute("position", new THREE.BufferAttribute(hlPos, 3))
-    hlGeo.setDrawRange(0, 0)
-    const hlMat = new THREE.PointsMaterial({
-      size: 9, sizeAttenuation: false, transparent: true, opacity: 1,
-      depthWrite: false, depthTest: false,   // 항상 위에
-      blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
-    })
-    const hlPoints = new THREE.Points(hlGeo, hlMat)
-    hlPoints.renderOrder = 3
-    hlPoints.visible = false
-    scene.add(hlPoints)
     const lmat0 = linesObj ? (linesObj.material as THREE.LineBasicMaterial) : null
     const lineOpBase = dark ? 0.22 : 0.3
 
@@ -151,35 +127,28 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     function setHover(sess: string | null) {
       if (sess === hoverSess) return
       hoverSess = sess
-      if (sess == null) {                       // 복원
-        col.set(colBase); geo.attributes.color.needsUpdate = true
-        hlPoints.visible = false; hlGeo.setDrawRange(0, 0)
-        if (lineCol && lineColBase && linesObj) {
-          lineCol.set(lineColBase)
-          ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
-          linesObj.visible = showLinesRef.current
-          if (lmat0) lmat0.opacity = lineOpBase
-        }
-        return
+      // 점: 호버 세션은 원색 유지, 나머지는 배경색으로 흐리게(크기 변화 없음).
+      if (sess == null) col.set(colBase)
+      else for (let i = 0; i < pts.length; i++) {
+        if (pts[i].s === sess) { col[i * 3] = colBase[i * 3]; col[i * 3 + 1] = colBase[i * 3 + 1]; col[i * 3 + 2] = colBase[i * 3 + 2] }
+        else { col[i * 3] = dimPt.r; col[i * 3 + 1] = dimPt.g; col[i * 3 + 2] = dimPt.b }
       }
-      // 나머지 점은 전부 배경색으로 죽이고, 호버 세션은 오버레이로 크게 강조.
-      for (let i = 0; i < pts.length; i++) { col[i * 3] = dimPt.r; col[i * 3 + 1] = dimPt.g; col[i * 3 + 2] = dimPt.b }
       geo.attributes.color.needsUpdate = true
-      let m = 0
-      for (let i = 0; i < pts.length; i++) if (pts[i].s === sess) {
-        const v = at(pts[i]); hlPos[m * 3] = v.x; hlPos[m * 3 + 1] = v.y; hlPos[m * 3 + 2] = v.z; m++
-      }
-      hlGeo.setDrawRange(0, m); hlGeo.attributes.position.needsUpdate = true
-      hlMat.color.setHSL(hueOf(sess) / 360, 0.7, dark ? 0.62 : 0.5)
-      hlPoints.visible = true
+      // 선: 호버 세션은 원색+진하게, 나머지는 배경색으로.
       if (lineCol && lineColBase && linesObj) {
-        for (let v = 0; v < lineVertSess.length; v++) {
-          if (lineVertSess[v] === sess) { lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] }
-          else { lineCol[v * 3] = dimLn.r; lineCol[v * 3 + 1] = dimLn.g; lineCol[v * 3 + 2] = dimLn.b }
+        if (sess == null) {
+          lineCol.set(lineColBase)
+          if (lmat0) lmat0.opacity = lineOpBase
+          linesObj.visible = showLinesRef.current
+        } else {
+          for (let v = 0; v < lineVertSess.length; v++) {
+            if (lineVertSess[v] === sess) { lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] }
+            else { lineCol[v * 3] = dimLn.r; lineCol[v * 3 + 1] = dimLn.g; lineCol[v * 3 + 2] = dimLn.b }
+          }
+          if (lmat0) lmat0.opacity = dark ? 0.5 : 0.65
+          linesObj.visible = true               // 토글 꺼져 있어도 호버 세션 선은 보이게
         }
         ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
-        linesObj.visible = true                 // 토글 꺼져 있어도 호버 세션 선은 보이게
-        if (lmat0) lmat0.opacity = dark ? 0.5 : 0.65
       }
     }
 
@@ -189,6 +158,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const ROT = 0.006
     let drag: "rotate" | "pan" | null = null
     let lastX = 0, lastY = 0, downX = 0, downY = 0
+    let hoverTimer = 0   // hover는 0.1초 머무를 때만 발동(이동 중 깜빡임 방지)
     const av = { x: 0, y: 0 }   // 회전 관성 속도(px/frame)
 
     const _off = new THREE.Vector3(), _dir = new THREE.Vector3()
@@ -217,7 +187,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     }
 
     const ray = new THREE.Raycaster()
-    ray.params.Points!.threshold = 4
+    ray.params.Points!.threshold = 1.6   // 점 바로 위에서만 인식(범위 축소)
     const mouse = new THREE.Vector2()
     const cluVecs = data.clusters.map((c) => ({ c, v: at({ x: c.x, y: c.y, z: c.z } as GraphPoint3D) }))
     const proj = new THREE.Vector3()
@@ -229,6 +199,16 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       ray.setFromCamera(mouse, camera)
       const hit = ray.intersectObject(points)
       return hit.length && hit[0].index != null ? hit[0].index : -1
+    }
+
+    // 0.1초 머문 뒤에만 tip/hover 발동 — 이동 중엔 타이머가 계속 리셋돼 안 뜸.
+    function scheduleHover(clientX: number, clientY: number) {
+      window.clearTimeout(hoverTimer)
+      hoverTimer = window.setTimeout(() => {
+        const i = hitIndex(clientX, clientY)
+        setTip(i >= 0 ? { sx: clientX, sy: clientY, p: pts[i] } : null)
+        setHover(i >= 0 ? pts[i].s : null)
+      }, 100)
     }
 
     function onWheel(e: WheelEvent) {
@@ -250,6 +230,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       camera.lookAt(target)
     }
     function onDown(e: PointerEvent) {
+      window.clearTimeout(hoverTimer)
       downX = lastX = e.clientX; downY = lastY = e.clientY
       drag = e.button === 0 ? "rotate" : "pan"   // 좌=회전, 휠클릭/우클릭=이동
       av.x = 0; av.y = 0
@@ -262,9 +243,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         lastX = e.clientX; lastY = e.clientY
         if (drag === "rotate") { rotate(dx, dy); av.x = dx; av.y = dy } else panBy(dx, dy)
       } else {
-        const i = hitIndex(e.clientX, e.clientY)
-        setTip(i >= 0 ? { sx: e.clientX, sy: e.clientY, p: pts[i] } : null)
-        setHover(i >= 0 ? pts[i].s : null)
+        setTip(null)                       // 이동 중엔 즉시 숨기고
+        scheduleHover(e.clientX, e.clientY) // 0.1초 머물면 표시
       }
     }
     function onUp(e: PointerEvent) {
@@ -280,7 +260,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.addEventListener("pointermove", onMove)
     renderer.domElement.addEventListener("pointerup", onUp)
     renderer.domElement.addEventListener("pointercancel", onUp)
-    renderer.domElement.addEventListener("pointerleave", () => { setTip(null); setHover(null) })
+    renderer.domElement.addEventListener("pointerleave", () => { window.clearTimeout(hoverTimer); setTip(null); setHover(null) })
     renderer.domElement.addEventListener("contextmenu", onCtx)
 
     let raf = 0
@@ -308,6 +288,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     ro.observe(wrap)
 
     return () => {
+      window.clearTimeout(hoverTimer)
       cancelAnimationFrame(raf); ro.disconnect()
       renderer.domElement.removeEventListener("wheel", onWheel)
       renderer.domElement.removeEventListener("pointerdown", onDown)
@@ -317,11 +298,10 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       renderer.domElement.removeEventListener("contextmenu", onCtx)
       const ln = linesRef.current
       if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
-      hlGeo.dispose(); hlMat.dispose()
       geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
-  }, [data, lineMode])
+  }, [data])
 
   // 씬 재생성 없이 선 표시만 토글.
   useEffect(() => { if (linesRef.current) linesRef.current.visible = showLines }, [showLines])
@@ -343,14 +323,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
           >
             세션 선 {showLines ? "켜짐" : "꺼짐"}
           </button>
-          <div className="inline-flex overflow-hidden rounded-md border text-xs">
-            {(["chain", "star"] as const).map((m) => (
-              <button key={m} type="button" onClick={() => setLineMode(m)}
-                className={`px-2.5 py-1 transition-colors ${lineMode === m ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
-                {m === "chain" ? "체인" : "별"}
-              </button>
-            ))}
-          </div>
           <span className="text-xs text-muted-foreground">
             {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
             좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션
