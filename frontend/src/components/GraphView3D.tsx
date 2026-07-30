@@ -92,7 +92,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     }
     function panBy(dx: number, dy: number) {
       basis()
-      const scale = camera.position.distanceTo(target) * 0.0012
+      const scale = camera.position.distanceTo(target) * 0.0009
       const mv = _right.multiplyScalar(-dx * scale).add(_up.multiplyScalar(dy * scale))
       target.add(mv); camera.position.add(mv)
     }
