@@ -117,38 +117,47 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
-    // ── hover: 호버한 세션 강조 — 나머지 점은 배경에 묻히고, 그 세션 연결선을 밝게. 점 크기는 그대로 ──
+    // ── hover: 호버 세션만 밝게, 나머지는 렌더 루프에서 부드럽게(페이드) 흐려짐 ──
     const dimPt = dark ? new THREE.Color(0.07, 0.08, 0.10) : new THREE.Color(0.90, 0.91, 0.93)
     const dimLn = dark ? new THREE.Color(0.05, 0.05, 0.07) : new THREE.Color(0.92, 0.93, 0.95)
     const lmat0 = linesObj ? (linesObj.material as THREE.LineBasicMaterial) : null
-    const lineOpBase = dark ? 0.22 : 0.3
+    const lineOpBase = dark ? 0.22 : 0.3, lineOpHi = dark ? 0.5 : 0.65
 
-    let hoverSess: string | null = null
+    let focusSess: string | null = null   // 대상 세션(hover)
+    let activeSess: string | null = null  // 페이드 동안 밝게 유지할 세션
+    let focusT = 0                         // 0=전부 밝음 … 1=대상만 밝고 나머지 흐림
+    let focusDirty = false
     function setHover(sess: string | null) {
-      if (sess === hoverSess) return
-      hoverSess = sess
-      // 점: 호버 세션은 원색 유지, 나머지는 배경색으로 흐리게(크기 변화 없음).
-      if (sess == null) col.set(colBase)
-      else for (let i = 0; i < pts.length; i++) {
-        if (pts[i].s === sess) { col[i * 3] = colBase[i * 3]; col[i * 3 + 1] = colBase[i * 3 + 1]; col[i * 3 + 2] = colBase[i * 3 + 2] }
-        else { col[i * 3] = dimPt.r; col[i * 3 + 1] = dimPt.g; col[i * 3 + 2] = dimPt.b }
+      if (sess === focusSess) return
+      focusSess = sess
+      if (sess) activeSess = sess
+      focusDirty = true
+    }
+    // t(0~1)만큼 비대상 점/선을 흐리게 보간. sess=밝게 유지할 세션.
+    function applyFocus(t: number, sess: string | null) {
+      for (let i = 0; i < pts.length; i++) {
+        if (sess != null && pts[i].s === sess) {
+          col[i * 3] = colBase[i * 3]; col[i * 3 + 1] = colBase[i * 3 + 1]; col[i * 3 + 2] = colBase[i * 3 + 2]
+        } else {
+          col[i * 3] = colBase[i * 3] * (1 - t) + dimPt.r * t
+          col[i * 3 + 1] = colBase[i * 3 + 1] * (1 - t) + dimPt.g * t
+          col[i * 3 + 2] = colBase[i * 3 + 2] * (1 - t) + dimPt.b * t
+        }
       }
       geo.attributes.color.needsUpdate = true
-      // 선: 호버 세션은 원색+진하게, 나머지는 배경색으로.
       if (lineCol && lineColBase && linesObj) {
-        if (sess == null) {
-          lineCol.set(lineColBase)
-          if (lmat0) lmat0.opacity = lineOpBase
-          linesObj.visible = showLinesRef.current
-        } else {
-          for (let v = 0; v < lineVertSess.length; v++) {
-            if (lineVertSess[v] === sess) { lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] }
-            else { lineCol[v * 3] = dimLn.r; lineCol[v * 3 + 1] = dimLn.g; lineCol[v * 3 + 2] = dimLn.b }
+        for (let v = 0; v < lineVertSess.length; v++) {
+          if (sess != null && lineVertSess[v] === sess) {
+            lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2]
+          } else {
+            lineCol[v * 3] = lineColBase[v * 3] * (1 - t) + dimLn.r * t
+            lineCol[v * 3 + 1] = lineColBase[v * 3 + 1] * (1 - t) + dimLn.g * t
+            lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] * (1 - t) + dimLn.b * t
           }
-          if (lmat0) lmat0.opacity = dark ? 0.5 : 0.65
-          linesObj.visible = true               // 토글 꺼져 있어도 호버 세션 선은 보이게
         }
         ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
+        if (lmat0) lmat0.opacity = lineOpBase + (lineOpHi - lineOpBase) * t
+        linesObj.visible = showLinesRef.current || activeSess != null
       }
     }
 
@@ -158,7 +167,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const ROT = 0.006
     let drag: "rotate" | "pan" | null = null
     let lastX = 0, lastY = 0, downX = 0, downY = 0
-    let hoverTimer = 0   // hover는 0.1초 머무를 때만 발동(이동 중 깜빡임 방지)
     const av = { x: 0, y: 0 }   // 회전 관성 속도(px/frame)
 
     const _off = new THREE.Vector3(), _dir = new THREE.Vector3()
@@ -201,16 +209,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       return hit.length && hit[0].index != null ? hit[0].index : -1
     }
 
-    // 0.1초 머문 뒤에만 tip/hover 발동 — 이동 중엔 타이머가 계속 리셋돼 안 뜸.
-    function scheduleHover(clientX: number, clientY: number) {
-      window.clearTimeout(hoverTimer)
-      hoverTimer = window.setTimeout(() => {
-        const i = hitIndex(clientX, clientY)
-        setTip(i >= 0 ? { sx: clientX, sy: clientY, p: pts[i] } : null)
-        setHover(i >= 0 ? pts[i].s : null)
-      }, 100)
-    }
-
     function onWheel(e: WheelEvent) {
       e.preventDefault()
       const r = renderer.domElement.getBoundingClientRect()
@@ -230,7 +228,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       camera.lookAt(target)
     }
     function onDown(e: PointerEvent) {
-      window.clearTimeout(hoverTimer)
       downX = lastX = e.clientX; downY = lastY = e.clientY
       drag = e.button === 0 ? "rotate" : "pan"   // 좌=회전, 휠클릭/우클릭=이동
       av.x = 0; av.y = 0
@@ -243,8 +240,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         lastX = e.clientX; lastY = e.clientY
         if (drag === "rotate") { rotate(dx, dy); av.x = dx; av.y = dy } else panBy(dx, dy)
       } else {
-        setTip(null)                       // 이동 중엔 즉시 숨기고
-        scheduleHover(e.clientX, e.clientY) // 0.1초 머물면 표시
+        const i = hitIndex(e.clientX, e.clientY)
+        setTip(i >= 0 ? { sx: e.clientX, sy: e.clientY, p: pts[i] } : null)
+        setHover(i >= 0 ? pts[i].s : null)   // 강조는 렌더 루프에서 부드럽게 페이드
       }
     }
     function onUp(e: PointerEvent) {
@@ -260,7 +258,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.addEventListener("pointermove", onMove)
     renderer.domElement.addEventListener("pointerup", onUp)
     renderer.domElement.addEventListener("pointercancel", onUp)
-    renderer.domElement.addEventListener("pointerleave", () => { window.clearTimeout(hoverTimer); setTip(null); setHover(null) })
+    renderer.domElement.addEventListener("pointerleave", () => { setTip(null); setHover(null) })
     renderer.domElement.addEventListener("contextmenu", onCtx)
 
     let raf = 0
@@ -269,6 +267,13 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       // 회전 관성(놓은 뒤 잔여 속도로 계속 돌다 감쇠).
       if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
         rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
+      }
+      // hover 강조 부드럽게 페이드(대상 있으면 t→1, 없으면 t→0).
+      const ftarget = focusSess ? 1 : 0
+      if (focusDirty || Math.abs(focusT - ftarget) > 0.002) {
+        focusT += (ftarget - focusT) * 0.2
+        if (Math.abs(focusT - ftarget) < 0.004) { focusT = ftarget; focusDirty = false; if (ftarget === 0) activeSess = null }
+        applyFocus(focusT, activeSess)
       }
       renderer.render(scene, camera)
       for (const { c, v } of cluVecs) {
@@ -288,7 +293,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     ro.observe(wrap)
 
     return () => {
-      window.clearTimeout(hoverTimer)
       cancelAnimationFrame(raf); ro.disconnect()
       renderer.domElement.removeEventListener("wheel", onWheel)
       renderer.domElement.removeEventListener("pointerdown", onDown)
