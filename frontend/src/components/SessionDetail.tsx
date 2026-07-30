@@ -28,14 +28,22 @@ function TurnRow({ t, i, defaultOpen = false, highlight = false }: {
         <ChevronRight className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} />원문 Q&A
       </button>
       {open && (
-        <div className="mt-2">
-          <p className="mb-2 text-sm cm-md"><span className="mr-1.5 font-semibold text-primary/70">Q</span>
-            <span dangerouslySetInnerHTML={{ __html: mdToHtml(t.question) || "(질문 없음)" }} /></p>
-          <div className="cm-md text-sm text-muted-foreground flex gap-1.5">
-            <span className="font-semibold text-primary/70">A</span>
-            <span dangerouslySetInnerHTML={{ __html: mdToHtml(t.answer) || "—" }} />
+        <div className="mt-3 space-y-3">
+          {/* 질문 — 오른쪽(사용자) 말풍선 */}
+          <div className="flex flex-col items-end">
+            <span className="mb-1 mr-1 text-[10px] font-medium text-muted-foreground">질문</span>
+            <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 px-3.5 py-2 text-sm ring-1 ring-primary/15">
+              <div className="cm-md text-foreground" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question) || "(질문 없음)" }} />
+            </div>
           </div>
-          {t.actions.length > 0 && <pre className="cm-code cm-md mt-2">{t.actions.join("\n")}</pre>}
+          {/* 답변 — 왼쪽(어시스턴트) 말풍선 */}
+          <div className="flex flex-col items-start">
+            <span className="mb-1 ml-1 text-[10px] font-medium text-muted-foreground">답변</span>
+            <div className="max-w-[85%] overflow-x-auto rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2 text-sm">
+              <div className="cm-md text-foreground" dangerouslySetInnerHTML={{ __html: mdToHtml(t.answer) || "—" }} />
+            </div>
+          </div>
+          {t.actions.length > 0 && <pre className="cm-code cm-md">{t.actions.join("\n")}</pre>}
         </div>
       )}
     </div>
