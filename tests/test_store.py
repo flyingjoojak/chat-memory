@@ -114,3 +114,18 @@ def test_vectorindex_replace_existing_key(tmp_path):
     vi.add(["a"], np.array([[0, 1]], dtype=np.float32))  # 같은 키 → 교체
     assert len(vi) == 1
     assert vi.search(np.array([0, 1], dtype=np.float32), k=1)[0][0] == "a"
+
+
+def test_reconcile_removes_orphan_vectors(tmp_path):
+    from chatmem.indexer import reconcile
+    db = ArchiveDB(tmp_path / "a.db")
+    vi = VectorIndex(tmp_path / "v.npy", tmp_path / "i.json")
+    # 턴 2개 + 각 벡터. 이후 한 턴만 turns에서 삭제해 고아 생성.
+    db.upsert_turn(_turn("s1:u1")); db.upsert_turn(_turn("s1:u2")); db.commit()
+    vi.add(["s1:u1#0", "s1:u2#0"], np.eye(2, 3, dtype=np.float32)); vi.save()
+    db.conn.execute("DELETE FROM turns WHERE id='s1:u2'"); db.commit()  # 원문만 사라진 고아
+    n = reconcile(db, vi, log_fn=lambda m: None)
+    assert n == 1
+    assert vi.keys() == ["s1:u1#0"]
+    # 정리할 게 없으면 0
+    assert reconcile(db, vi, log_fn=lambda m: None) == 0

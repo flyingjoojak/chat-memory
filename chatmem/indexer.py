@@ -169,6 +169,28 @@ def index_file(
     return count
 
 
+def reconcile(db, vi, log_fn=print) -> int:
+    """원문(turns)에 없는 고아 벡터를 인덱스·chunks·FTS에서 정리.
+
+    소스에서 사라졌거나 삭제된 턴의 벡터가 남아 지도/검색에 유령으로 뜨는 것 방지.
+    모델 로드 불필요·값쌈 → 인덱싱 회차마다 안전하게 호출 가능.
+    """
+    keys = vi.keys()
+    if not keys:
+        return 0
+    have = {r["id"] for r in db.conn.execute("SELECT id FROM turns").fetchall()}
+    orphan_keys = [k for k in keys if k.rsplit("#", 1)[0] not in have]
+    if not orphan_keys:
+        return 0
+    orphan_tids = sorted({k.rsplit("#", 1)[0] for k in orphan_keys})
+    db.delete_turns(orphan_tids)   # chunks·FTS 정리(turns엔 이미 없음)
+    db.commit()
+    n = vi.remove(orphan_keys)
+    vi.save()
+    log_fn(f"reconcile: 고아 벡터 {n}개 정리(턴 {len(orphan_tids)})")
+    return n
+
+
 def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print) -> int:
     """모든 세션 파일을 최근순(기본)으로 증분 인덱싱."""
     total = 0

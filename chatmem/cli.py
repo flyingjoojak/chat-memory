@@ -73,7 +73,7 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 def cmd_index(args: argparse.Namespace) -> int:
     from .config import EMBED_MODEL, MIN_FREE_MB
-    from .indexer import has_new_data, index_all
+    from .indexer import has_new_data, index_all, reconcile
     from .keepawake import keep_system_awake
     from .logutil import batch_log
     from .sysmem import available_mb, set_low_priority
@@ -82,6 +82,12 @@ def cmd_index(args: argparse.Namespace) -> int:
 
     db = ArchiveDB()   # 값싼 오픈(모델 로드 없음)
     vi = make_index()
+
+    # 0) 고아 벡터 정리(모델 불필요·값쌈) — 매 회차 안전망.
+    try:
+        reconcile(db, vi, log_fn=batch_log)
+    except Exception as ex:
+        batch_log(f"reconcile 오류: {ex}")
 
     # 1) 새 대화 없으면 모델 로드조차 안 하고 즉시 종료(자리 비우면 스파이크 0). 로그도 안 남김.
     if not args.force and not has_new_data(db):
@@ -185,6 +191,16 @@ def cmd_config(args: argparse.Namespace) -> int:
     print(f"CHATMEM_EMBED_MODEL = {C.EMBED_MODEL}")
     if not exists:
         print(f"\n힌트: `{C.CONFIG_PATH.name}` 를 만들어 KEY=VALUE 로 적으면 CLI·스케줄러·웹이 모두 읽습니다.")
+    return 0
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    """원문 없는 고아 벡터 수동 정리."""
+    from .indexer import reconcile
+    db, vi, _ = _open(need_embedder=False)
+    n = reconcile(db, vi, log_fn=print)
+    if n == 0:
+        print("정리할 고아 벡터 없음.")
     return 0
 
 
@@ -345,6 +361,9 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("action", choices=["install", "uninstall", "status"])
     sc.add_argument("--dry-run", action="store_true", help="실행 없이 계획만 출력")
     sc.set_defaults(func=cmd_scheduler)
+
+    rc = sub.add_parser("reconcile", help="원문 없는 고아 벡터 정리")
+    rc.set_defaults(func=cmd_reconcile)
 
     st = sub.add_parser("stats", help="현황")
     st.set_defaults(func=cmd_stats)

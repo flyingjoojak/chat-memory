@@ -76,6 +76,10 @@ class VectorIndex:
         top = top[np.argsort(-scores[top])]
         return [(self.ids[i], float(scores[i])) for i in top]
 
+    def keys(self) -> list[str]:
+        """전체 chunk_key 목록(벡터 로드 없이) — reconcile용."""
+        return list(self.ids)
+
     def all_vectors(self):
         """(keys, matrix) 전체 반환 — 의미 지도 투영용."""
         if self.matrix is None or len(self.ids) == 0:
@@ -187,6 +191,10 @@ class SqliteVecIndex:
                 n += 1
         self.conn.commit()
         return n
+
+    def keys(self) -> list[str]:
+        """전체 chunk_key 목록 — reconcile용."""
+        return [r[0] for r in self.conn.execute("SELECT key FROM vkeys").fetchall()]
 
     def all_vectors(self):
         """(keys, matrix) 전체 반환(int8→float 역양자화) — 의미 지도 투영용."""
