@@ -20,6 +20,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(true)
+  const [lineMode, setLineMode] = useState<"chain" | "star">("chain")   // 체인=시간순, 별=세션중심 방사
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
   const openRef = useRef(onOpenSession)
@@ -55,10 +56,23 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.style.borderRadius = "12px"
     wrap.appendChild(renderer.domElement)
 
-    // 같은 세션 점을 시간순으로 잇는 선(성좌) — 세션마다 다른 색, 흐리게. 점은 그대로(끌어당김 없음).
+    // 같은 세션 점을 잇는 선(성좌). 점은 그대로(끌어당김 없음).
+    //  · 체인: 시간순 이웃끼리 연결(대화 궤적)
+    //  · 별  : 세션 중심에서 모든 점으로 방사(허브)
     const paths = data.paths ?? []
-    let segCount = 0
-    for (const pa of paths) segCount += Math.max(0, pa.length - 1)
+    const segs: { a: THREE.Vector3; b: THREE.Vector3; sess: string }[] = []
+    for (const pa of paths) {
+      const sess = pts[pa[0]]?.s ?? ""
+      if (lineMode === "star") {
+        const vs = pa.map((idx) => at(pts[idx]))
+        const cen = new THREE.Vector3()
+        vs.forEach((v) => cen.add(v)); cen.multiplyScalar(1 / vs.length)
+        for (const v of vs) segs.push({ a: cen.clone(), b: v, sess })
+      } else {
+        for (let j = 0; j < pa.length - 1; j++) segs.push({ a: at(pts[pa[j]]), b: at(pts[pa[j + 1]]), sess })
+      }
+    }
+    const segCount = segs.length
     let lineCol: Float32Array | null = null       // 라이브 선 색 버퍼(hover 시 갱신)
     let lineColBase: Float32Array | null = null   // 원본 선 색(복원용)
     const lineVertSess: string[] = []             // 선 정점별 세션(hover 매칭용)
@@ -68,17 +82,13 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       const lcol = new Float32Array(segCount * 2 * 3)
       const lc = new THREE.Color()
       let o = 0
-      for (const pa of paths) {
-        const sess = pts[pa[0]]?.s ?? ""
-        lc.setHSL(hueOf(sess) / 360, 0.55, dark ? 0.62 : 0.48)
-        for (let j = 0; j < pa.length - 1; j++) {
-          const a = at(pts[pa[j]]), b = at(pts[pa[j + 1]])
-          lpos[o] = a.x; lpos[o + 1] = a.y; lpos[o + 2] = a.z
-          lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
-          lpos[o] = b.x; lpos[o + 1] = b.y; lpos[o + 2] = b.z
-          lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
-          lineVertSess.push(sess, sess)
-        }
+      for (const sg of segs) {
+        lc.setHSL(hueOf(sg.sess) / 360, 0.55, dark ? 0.62 : 0.48)
+        lpos[o] = sg.a.x; lpos[o + 1] = sg.a.y; lpos[o + 2] = sg.a.z
+        lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
+        lpos[o] = sg.b.x; lpos[o + 1] = sg.b.y; lpos[o + 2] = sg.b.z
+        lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
+        lineVertSess.push(sg.sess, sg.sess)
       }
       const lgeo = new THREE.BufferGeometry()
       lgeo.setAttribute("position", new THREE.BufferAttribute(lpos, 3))
@@ -311,7 +321,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
-  }, [data])
+  }, [data, lineMode])
 
   // 씬 재생성 없이 선 표시만 토글.
   useEffect(() => { if (linesRef.current) linesRef.current.visible = showLines }, [showLines])
@@ -333,6 +343,14 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
           >
             세션 선 {showLines ? "켜짐" : "꺼짐"}
           </button>
+          <div className="inline-flex overflow-hidden rounded-md border text-xs">
+            {(["chain", "star"] as const).map((m) => (
+              <button key={m} type="button" onClick={() => setLineMode(m)}
+                className={`px-2.5 py-1 transition-colors ${lineMode === m ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+                {m === "chain" ? "체인" : "별"}
+              </button>
+            ))}
+          </div>
           <span className="text-xs text-muted-foreground">
             {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
             좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션
