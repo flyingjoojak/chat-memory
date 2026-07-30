@@ -110,35 +110,66 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const colBase = col.slice()   // 원본 군집색(hover 복원용)
     const material = new THREE.PointsMaterial({
       // 화면 고정 픽셀 크기(거리로 안 커지고 안 작아짐) → 확대하면 3D 간격만 벌어져 밀집부가 갈라짐.
-      size: 4.5, sizeAttenuation: false, vertexColors: true, transparent: true,
+      size: 5.5, sizeAttenuation: false, vertexColors: true, transparent: true,
       opacity: dark ? 0.85 : 0.9, depthWrite: false,
       blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
     })
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
-    // ── hover: 같은 세션 점·연결선만 강조, 나머지는 흐리게 ──
-    // 강조 대비를 위해 비강조는 배경에 거의 묻히도록 강하게 흐리게.
+    // ── hover: 호버한 세션 자체를 크고 진하게 강조(옵시디언식). 나머지는 배경에 묻히게 ──
     const dimPt = dark ? new THREE.Color(0.07, 0.08, 0.10) : new THREE.Color(0.90, 0.91, 0.93)
     const dimLn = dark ? new THREE.Color(0.05, 0.05, 0.07) : new THREE.Color(0.92, 0.93, 0.95)
+    // 호버 세션 강조용 오버레이(더 큰 점, 세션색, 항상 위).
+    const hlGeo = new THREE.BufferGeometry()
+    const hlPos = new Float32Array(pts.length * 3)
+    hlGeo.setAttribute("position", new THREE.BufferAttribute(hlPos, 3))
+    hlGeo.setDrawRange(0, 0)
+    const hlMat = new THREE.PointsMaterial({
+      size: 9, sizeAttenuation: false, transparent: true, opacity: 1,
+      depthWrite: false, depthTest: false,   // 항상 위에
+      blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
+    })
+    const hlPoints = new THREE.Points(hlGeo, hlMat)
+    hlPoints.renderOrder = 3
+    hlPoints.visible = false
+    scene.add(hlPoints)
+    const lmat0 = linesObj ? (linesObj.material as THREE.LineBasicMaterial) : null
+    const lineOpBase = dark ? 0.22 : 0.3
+
     let hoverSess: string | null = null
     function setHover(sess: string | null) {
       if (sess === hoverSess) return
       hoverSess = sess
-      if (sess == null) col.set(colBase)
-      else for (let i = 0; i < pts.length; i++) {
-        if (pts[i].s === sess) { col[i * 3] = colBase[i * 3]; col[i * 3 + 1] = colBase[i * 3 + 1]; col[i * 3 + 2] = colBase[i * 3 + 2] }
-        else { col[i * 3] = dimPt.r; col[i * 3 + 1] = dimPt.g; col[i * 3 + 2] = dimPt.b }
+      if (sess == null) {                       // 복원
+        col.set(colBase); geo.attributes.color.needsUpdate = true
+        hlPoints.visible = false; hlGeo.setDrawRange(0, 0)
+        if (lineCol && lineColBase && linesObj) {
+          lineCol.set(lineColBase)
+          ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
+          linesObj.visible = showLinesRef.current
+          if (lmat0) lmat0.opacity = lineOpBase
+        }
+        return
       }
+      // 나머지 점은 전부 배경색으로 죽이고, 호버 세션은 오버레이로 크게 강조.
+      for (let i = 0; i < pts.length; i++) { col[i * 3] = dimPt.r; col[i * 3 + 1] = dimPt.g; col[i * 3 + 2] = dimPt.b }
       geo.attributes.color.needsUpdate = true
+      let m = 0
+      for (let i = 0; i < pts.length; i++) if (pts[i].s === sess) {
+        const v = at(pts[i]); hlPos[m * 3] = v.x; hlPos[m * 3 + 1] = v.y; hlPos[m * 3 + 2] = v.z; m++
+      }
+      hlGeo.setDrawRange(0, m); hlGeo.attributes.position.needsUpdate = true
+      hlMat.color.setHSL(hueOf(sess) / 360, 0.7, dark ? 0.62 : 0.5)
+      hlPoints.visible = true
       if (lineCol && lineColBase && linesObj) {
-        if (sess == null) lineCol.set(lineColBase)
-        else for (let v = 0; v < lineVertSess.length; v++) {
+        for (let v = 0; v < lineVertSess.length; v++) {
           if (lineVertSess[v] === sess) { lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] }
           else { lineCol[v * 3] = dimLn.r; lineCol[v * 3 + 1] = dimLn.g; lineCol[v * 3 + 2] = dimLn.b }
         }
         ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
-        linesObj.visible = sess != null ? true : showLinesRef.current   // hover 시 토글 꺼져 있어도 해당 세션 선은 보이게
+        linesObj.visible = true                 // 토글 꺼져 있어도 호버 세션 선은 보이게
+        if (lmat0) lmat0.opacity = dark ? 0.5 : 0.65
       }
     }
 
@@ -276,6 +307,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       renderer.domElement.removeEventListener("contextmenu", onCtx)
       const ln = linesRef.current
       if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
+      hlGeo.dispose(); hlMat.dispose()
       geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
