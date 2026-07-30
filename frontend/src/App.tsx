@@ -15,7 +15,7 @@ type View = "search" | "sessions" | "graph3d" | "settings"
 const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
   { v: "search", icon: <Search className="size-[18px]" />, label: "검색" },
   { v: "sessions", icon: <MessagesSquare className="size-[18px]" />, label: "세션" },
-  { v: "graph3d", icon: <Box className="size-[18px]" />, label: "지도" },
+  { v: "graph3d", icon: <Box className="size-[18px]" />, label: "조망" },
   { v: "settings", icon: <Settings className="size-[18px]" />, label: "설정" },
 ]
 

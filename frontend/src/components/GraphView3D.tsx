@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { ArrowLeft, Search, X } from "lucide-react"
 import * as THREE from "three"
-import { getGraph3D, type Graph3DData, type GraphPoint3D } from "@/lib/api"
+import { getGraph3D, search, type Graph3DData, type GraphPoint3D } from "@/lib/api"
 
 const PALETTE = [
   "#6ea8fe", "#f4845f", "#5cc8a8", "#c78be0", "#e6b34a", "#7ed957", "#ef6f9b",
@@ -9,15 +10,47 @@ const PALETTE = [
 const colorOf = (c: number) => PALETTE[((c % PALETTE.length) + PALETTE.length) % PALETTE.length]
 const EXTENT = 150
 
+// 지도 하이라이트: 검색 결과(세션 집합) 또는 특정 군집을 강조하고 나머지는 흐리게.
+type Highlight =
+  | { kind: "search"; q: string; sessions: Set<string> }
+  | { kind: "cluster"; c: number; label: string }
+  | null
+
 export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => void }) {
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
+  const [query, setQuery] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [highlight, setHighlight] = useState<Highlight>(null)
+  const [selectedCluster, setSelectedCluster] = useState<number | null>(null)
+
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
   const openRef = useRef(onOpenSession)
   openRef.current = onOpenSession
+  // 씬 재생성 없이 색/카메라만 갱신하기 위해 하이라이트 적용 함수를 노출.
+  const applyRef = useRef<((h: Highlight) => void) | null>(null)
+  const highlightRef = useRef<Highlight>(highlight)
+  highlightRef.current = highlight
 
   useEffect(() => { getGraph3D().then(setData).catch(() => setData({ points: [], clusters: [], method: null })) }, [])
+
+  // 군집 → 그 안의 세션 목록(대표 제목·점 수). 클라이언트에서 점 데이터로 집계 → 군집 드릴다운.
+  const clusterSessions = useMemo(() => {
+    const byCluster = new Map<number, Map<string, { head: string; n: number }>>()
+    for (const p of data?.points ?? []) {
+      let sm = byCluster.get(p.c)
+      if (!sm) { sm = new Map(); byCluster.set(p.c, sm) }
+      const cur = sm.get(p.s)
+      if (cur) cur.n += 1
+      else sm.set(p.s, { head: p.h, n: 1 })
+    }
+    const out = new Map<number, { s: string; head: string; n: number }[]>()
+    for (const [c, sm] of byCluster) {
+      out.set(c, [...sm.entries()].map(([s, v]) => ({ s, head: v.head, n: v.n })).sort((a, b) => b.n - a.n))
+    }
+    return out
+  }, [data])
 
   useEffect(() => {
     const wrap = wrapRef.current
@@ -56,9 +89,10 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     })
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3))
     geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
+    const baseOpacity = dark ? 0.85 : 0.9
     const material = new THREE.PointsMaterial({
       size: 3, sizeAttenuation: true, vertexColors: true, transparent: true,
-      opacity: dark ? 0.85 : 0.9, depthWrite: false,
+      opacity: baseOpacity, depthWrite: false,
       blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
     })
     const points = new THREE.Points(geo, material)
@@ -97,6 +131,38 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       target.add(mv); camera.position.add(mv)
     }
 
+    // ── 하이라이트: 색 버퍼 재계산(강조=군집색 / 비강조=배경 가까운 회색) + 매칭 중심으로 이동 ──
+    const dimCol = dark ? new THREE.Color(0.14, 0.15, 0.17) : new THREE.Color(0.82, 0.84, 0.86)
+    const _c = new THREE.Color()
+    function isOn(p: GraphPoint3D, hl: Highlight): boolean {
+      if (!hl) return true
+      return hl.kind === "search" ? hl.sessions.has(p.s) : p.c === hl.c
+    }
+    function applyHighlight(hl: Highlight) {
+      const matched: THREE.Vector3[] = []
+      for (let i = 0; i < pts.length; i++) {
+        const on = isOn(pts[i], hl)
+        if (on) { _c.set(colorOf(pts[i].c)); if (hl) matched.push(at(pts[i])) }
+        else _c.copy(dimCol)
+        col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b
+      }
+      geo.attributes.color.needsUpdate = true
+      // 강조 대상이 있으면 그 중심으로 프레이밍(어디에 있는지 바로 보이게).
+      if (hl && matched.length) {
+        const cen = new THREE.Vector3()
+        matched.forEach((v) => cen.add(v)); cen.multiplyScalar(1 / matched.length)
+        let rad = 0; matched.forEach((v) => { rad = Math.max(rad, v.distanceTo(cen)) })
+        const dist = Math.min(Math.max(rad * 2.4, EXTENT * 0.8), EXTENT * 8)
+        basis()
+        target.copy(cen)
+        camera.position.copy(cen).addScaledVector(_dir, -dist)
+        camera.lookAt(target)
+        av.x = 0; av.y = 0
+      }
+    }
+    applyRef.current = applyHighlight
+    applyHighlight(highlightRef.current)   // 데이터 재적재 시 현재 강조 재적용
+
     const ray = new THREE.Raycaster()
     ray.params.Points!.threshold = 4
     const mouse = new THREE.Vector2()
@@ -121,7 +187,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       cursorPt.copy(camera.position).addScaledVector(rc.ray.direction, camera.position.distanceTo(target))
       const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1   // deltaMode 정규화
       const step = Math.min((Math.abs(e.deltaY) * unit) / 400, 0.35)
-      let factor = Math.pow(e.deltaY < 0 ? 0.82 : 1 / 0.82, step)
+      const factor = Math.pow(e.deltaY < 0 ? 0.82 : 1 / 0.82, step)
       const dist = camera.position.distanceTo(target)
       if (factor < 1 && dist < EXTENT * 0.3) return    // 충분히 확대되면 수렴(멈춤)
       if (factor > 1 && dist > EXTENT * 12) return
@@ -170,12 +236,18 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
         rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
       }
+      // LOD: 멀리서 보면 점을 흐리게(주제 라벨이 지배 = 조망), 가까이 오면 점을 또렷하게.
+      const dist = camera.position.distanceTo(target)
+      const tt = Math.min(Math.max((dist - EXTENT * 0.8) / (EXTENT * 5), 0), 1)
+      material.opacity = baseOpacity * (1 - tt * 0.6)
+      const labelOpacity = 0.3 + tt * 0.7
       renderer.render(scene, camera)
       for (const { c, v } of cluVecs) {
         const el = labelRefs.current.get(c.id); if (!el) continue
         proj.copy(v).project(camera)
         if (proj.z > 1) { el.style.display = "none"; continue }
         el.style.display = "block"
+        el.style.opacity = String(labelOpacity)
         el.style.left = (proj.x * 0.5 + 0.5) * w + "px"; el.style.top = (-proj.y * 0.5 + 0.5) * h + "px"
       }
     }
@@ -188,6 +260,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     ro.observe(wrap)
 
     return () => {
+      applyRef.current = null
       cancelAnimationFrame(raf); ro.disconnect()
       renderer.domElement.removeEventListener("wheel", onWheel)
       renderer.domElement.removeEventListener("pointerdown", onDown)
@@ -200,16 +273,50 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     }
   }, [data])
 
+  // 하이라이트 변경 시 씬 재생성 없이 색/카메라만 갱신.
+  useEffect(() => { applyRef.current?.(highlight) }, [highlight])
+
+  async function runMapSearch(e: React.FormEvent) {
+    e.preventDefault()
+    const q = query.trim()
+    if (!q) { setHighlight(null); return }
+    setBusy(true); setSelectedCluster(null)
+    try {
+      const r = await search({ q, k: 30 })
+      const sessions = new Set((r.hits ?? []).map((hit) => hit.session_full))
+      setHighlight({ kind: "search", q, sessions })
+    } catch {
+      setHighlight({ kind: "search", q, sessions: new Set() })
+    } finally { setBusy(false) }
+  }
+
+  function selectCluster(id: number, label: string) {
+    setSelectedCluster(id)
+    setHighlight({ kind: "cluster", c: id, label })
+  }
+  function clearHighlight() {
+    setHighlight(null); setSelectedCluster(null); setQuery("")
+  }
+
   const clusters = data?.clusters ?? []
   const hasData = data && data.points.length > 0
+  const drillSessions = selectedCluster != null ? clusterSessions.get(selectedCluster) ?? [] : []
+  const activeClusterLabel = selectedCluster != null
+    ? clusters.find((c) => c.id === selectedCluster)?.label ?? `군집 ${selectedCluster + 1}`
+    : ""
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-6 pt-5">
-        <h2 className="text-lg font-semibold">의미 지도 3D</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-balance">의미 조망 3D</h2>
+          <p className="text-xs text-muted-foreground text-pretty">
+            찾기가 아니라 내 지식의 지형을 조망하는 뷰입니다. 정확히 찾으려면 검색 탭을 쓰세요.
+          </p>
+        </div>
         <span className="text-xs text-muted-foreground">
           {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
-          좌드래그 자유 회전(관성) / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션
+          좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션
         </span>
       </div>
 
@@ -218,6 +325,29 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
           : !hasData ? <div className="grid h-full place-items-center text-muted-foreground">아직 벡터가 없습니다. 먼저 인덱싱을 진행하세요.</div>
             : (
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
+                {/* 지도 안 검색 — 검색 탭과 동일한 하이브리드 검색으로 결과 세션을 지도에 강조 */}
+                <form onSubmit={runMapSearch} className="absolute left-4 top-4 z-20 flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-lg border bg-card/90 px-2.5 py-1.5 shadow-sm backdrop-blur">
+                    <Search className="size-3.5 text-muted-foreground" />
+                    <input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="지도에서 강조할 검색어…"
+                      className="w-44 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                    />
+                    {busy && <span className="text-[10px] text-muted-foreground">검색 중…</span>}
+                  </div>
+                  {highlight && (
+                    <button type="button" onClick={clearHighlight}
+                      className="flex items-center gap-1 rounded-lg border bg-card/90 px-2 py-1.5 text-[11px] text-muted-foreground shadow-sm backdrop-blur hover:text-foreground">
+                      {highlight.kind === "search"
+                        ? `‘${highlight.q}’ · ${highlight.sessions.size}개 세션`
+                        : `주제: ${highlight.label}`}
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </form>
+
                 {clusters.map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
                     className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
@@ -230,16 +360,52 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
                     {c.label}
                   </div>
                 ))}
-                <div className="absolute right-6 top-4 z-20 max-h-[72%] w-56 overflow-y-auto rounded-xl border bg-card/90 p-2 text-xs shadow-md backdrop-blur">
-                  <div className="mb-1 px-1 font-medium text-muted-foreground">주제 군집</div>
-                  {clusters.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 rounded-md px-1.5 py-1">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
-                      <span className="min-w-0 flex-1 truncate">{c.label}</span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
-                    </div>
-                  ))}
+
+                {/* 우측 패널: 주제 군집 목록 ↔ 선택한 군집의 세션 목록(드릴다운) */}
+                <div className="absolute right-6 top-4 z-20 flex max-h-[82%] w-64 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
+                  {selectedCluster == null ? (
+                    <>
+                      <div className="border-b px-3 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 세션</div>
+                      <div className="overflow-y-auto p-1.5">
+                        {clusters.map((c) => (
+                          <button key={c.id} type="button" onClick={() => selectCluster(c.id, c.label)}
+                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
+                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1.5 border-b px-2 py-2">
+                        <button type="button" onClick={clearHighlight}
+                          className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="군집 목록으로">
+                          <ArrowLeft className="size-3.5" />
+                        </button>
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(selectedCluster) }} />
+                        <span className="min-w-0 flex-1 truncate font-medium">{activeClusterLabel}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{drillSessions.length}세션</span>
+                      </div>
+                      <div className="overflow-y-auto p-1.5">
+                        {drillSessions.slice(0, 60).map((sess) => (
+                          <button key={sess.s} type="button" onClick={() => openRef.current(sess.s)}
+                            className="flex w-full items-start gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-muted">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-foreground">{sess.head || "(제목 없음)"}</span>
+                              <span className="block truncate text-[10px] text-muted-foreground">{sess.s.slice(0, 8)} · {sess.n}점</span>
+                            </span>
+                          </button>
+                        ))}
+                        {drillSessions.length > 60 && (
+                          <div className="px-1.5 py-1 text-[10px] text-muted-foreground">+{drillSessions.length - 60}개 세션 더</div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
+
                 {tip && (
                   <div className="pointer-events-none fixed z-50 max-w-xs rounded-lg border bg-popover px-3 py-2 text-xs shadow-md"
                     style={{ left: tip.sx + 14, top: tip.sy + 14 }}>
