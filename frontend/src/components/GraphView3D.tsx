@@ -102,7 +102,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3))
     geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
     const material = new THREE.PointsMaterial({
-      size: 3, sizeAttenuation: true, vertexColors: true, transparent: true,
+      // 화면 고정 픽셀 크기(거리로 안 커짐) → 확대하면 3D 간격이 벌어져 밀집부가 갈라짐.
+      size: 3.5, sizeAttenuation: false, vertexColors: true, transparent: true,
       opacity: dark ? 0.85 : 0.9, depthWrite: false,
       blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
     })
@@ -215,6 +216,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
         rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
       }
+      // 확대(가까움)할수록 점을 조금 작게 → 겹친 점 구분. 멀면 조금 크게.
+      const zoom = Math.min(Math.max((camera.position.distanceTo(target) - EXTENT * 0.3) / (EXTENT * 6), 0), 1)
+      material.size = 2 + zoom * 2.6
       renderer.render(scene, camera)
       for (const { c, v } of cluVecs) {
         const el = labelRefs.current.get(c.id); if (!el) continue
