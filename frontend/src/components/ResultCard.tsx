@@ -28,7 +28,7 @@ function MD({ text }: { text: string }) {
 interface Props {
   hit: Hit
   rawFirst: boolean
-  onOpenSession: (id: string) => void
+  onOpenSession: (id: string, turnId?: string) => void
   hideSessionLink?: boolean
 }
 
@@ -97,7 +97,7 @@ export function ResultCard({ hit, rawFirst, onOpenSession, hideSessionLink }: Pr
       )}
       {!hideSessionLink && (
         <button
-          onClick={() => onOpenSession(hit.session_full)}
+          onClick={() => onOpenSession(hit.session_full, hit.id)}
           className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           이 세션 전체 보기 <ExternalLink className="size-3" />

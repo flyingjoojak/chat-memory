@@ -21,7 +21,9 @@ const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
 
 export default function App() {
   const [view, setView] = useState<View>("search")
-  const [openId, setOpenId] = useState<string | null>(null)
+  // 세션 열기(+ 클릭한 턴이 있으면 그 턴을 펼쳐 보여줌).
+  const [open, setOpen] = useState<{ session: string; turn?: string } | null>(null)
+  const openSession = (session: string, turn?: string) => setOpen({ session, turn })
   useEffect(() => { applyTheme() }, [])
 
   return (
@@ -47,20 +49,20 @@ export default function App() {
       {/* 메인 패널 — 뷰 크래시가 앱 전체를 죽이지 않게 격리 */}
       <main className="overflow-y-auto">
         <ErrorBoundary key={view}>
-          {view === "search" && <SearchView onOpenSession={setOpenId} />}
-          {view === "sessions" && <SessionsView onOpenSession={setOpenId} />}
+          {view === "search" && <SearchView onOpenSession={openSession} />}
+          {view === "sessions" && <SessionsView onOpenSession={openSession} />}
           {view === "graph3d" && (
             <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
-              <GraphView3D onOpenSession={setOpenId} />
+              <GraphView3D onOpenSession={openSession} />
             </Suspense>
           )}
           {view === "settings" && <SettingsView />}
         </ErrorBoundary>
       </main>
 
-      {openId && (
-        <ErrorBoundary key={openId}>
-          <SessionDetail id={openId} onClose={() => setOpenId(null)} />
+      {open && (
+        <ErrorBoundary key={`${open.session}:${open.turn ?? ""}`}>
+          <SessionDetail id={open.session} focusTurn={open.turn} onClose={() => setOpen(null)} />
         </ErrorBoundary>
       )}
     </div>

@@ -6,14 +6,22 @@ import { getSession, search } from "@/lib/api"
 import { fmtTime, mdToHtml } from "@/lib/format"
 import type { SessionDetail as Detail, SessionTurn, Hit } from "@/lib/types"
 
-function TurnRow({ t, i }: { t: SessionTurn; i: number }) {
-  const [open, setOpen] = useState(false)
+function TurnRow({ t, i, defaultOpen = false, highlight = false }: {
+  t: SessionTurn; i: number; defaultOpen?: boolean; highlight?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  const ref = useRef<HTMLDivElement | null>(null)
+  // 방금 클릭한 턴이면 화면 중앙으로 스크롤(로드 직후 1회).
+  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" }) }, [highlight])
   const head = t.summary
     ? <><FileText className="inline size-3.5 mr-1.5 -mt-0.5 text-primary/70" />{t.summary}</>
     : (t.question || <span className="text-muted-foreground">(요약 없음)</span>)
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
-      <div className="mb-1.5 text-[11px] text-muted-foreground tabular-nums">#{i + 1} · {fmtTime(t.timestamp)}</div>
+    <div ref={ref} className={`rounded-xl border bg-card p-4 shadow-sm ${highlight ? "ring-2 ring-primary/60" : ""}`}>
+      <div className="mb-1.5 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+        <span>#{i + 1} · {fmtTime(t.timestamp)}</span>
+        {highlight && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">방금 선택</span>}
+      </div>
       <p className="text-sm font-semibold leading-snug text-balance">{head}</p>
       <button onClick={() => setOpen((v) => !v)}
         className="mt-2.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
@@ -34,7 +42,7 @@ function TurnRow({ t, i }: { t: SessionTurn; i: number }) {
   )
 }
 
-export function SessionDetail({ id, onClose }: { id: string; onClose: () => void }) {
+export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTurn?: string; onClose: () => void }) {
   const [data, setData] = useState<Detail | null>(null)
   const [err, setErr] = useState("")
   const [q, setQ] = useState("")
@@ -94,7 +102,9 @@ export function SessionDetail({ id, onClose }: { id: string; onClose: () => void
             {!searching && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">이 세션에서 결과 없음</div>}
           </>
         ) : (
-          data?.turns.map((t, i) => <TurnRow key={t.id} t={t} i={i} />)
+          data?.turns.map((t, i) => (
+            <TurnRow key={t.id} t={t} i={i} defaultOpen={t.id === focusTurn} highlight={t.id === focusTurn} />
+          ))
         )}
       </div>
     </div>
