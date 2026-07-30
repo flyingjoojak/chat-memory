@@ -59,6 +59,10 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const paths = data.paths ?? []
     let segCount = 0
     for (const pa of paths) segCount += Math.max(0, pa.length - 1)
+    let lineCol: Float32Array | null = null       // 라이브 선 색 버퍼(hover 시 갱신)
+    let lineColBase: Float32Array | null = null   // 원본 선 색(복원용)
+    const lineVertSess: string[] = []             // 선 정점별 세션(hover 매칭용)
+    let linesObj: THREE.LineSegments | null = null
     if (segCount > 0) {
       const lpos = new Float32Array(segCount * 2 * 3)
       const lcol = new Float32Array(segCount * 2 * 3)
@@ -73,6 +77,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
           lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
           lpos[o] = b.x; lpos[o + 1] = b.y; lpos[o + 2] = b.z
           lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
+          lineVertSess.push(sess, sess)
         }
       }
       const lgeo = new THREE.BufferGeometry()
@@ -87,6 +92,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       lines.visible = showLinesRef.current
       scene.add(lines)
       linesRef.current = lines
+      lineCol = lcol; lineColBase = lcol.slice(); linesObj = lines
     }
 
     // 포인트 지오메트리 + 군집색.
@@ -101,6 +107,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     })
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3))
     geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
+    const colBase = col.slice()   // 원본 군집색(hover 복원용)
     const material = new THREE.PointsMaterial({
       // 화면 고정 픽셀 크기(거리로 안 커짐) → 확대하면 3D 간격이 벌어져 밀집부가 갈라짐.
       size: 3.5, sizeAttenuation: false, vertexColors: true, transparent: true,
@@ -109,6 +116,30 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     })
     const points = new THREE.Points(geo, material)
     scene.add(points)
+
+    // ── hover: 같은 세션 점·연결선만 강조, 나머지는 흐리게 ──
+    const dimPt = dark ? new THREE.Color(0.16, 0.17, 0.19) : new THREE.Color(0.80, 0.82, 0.85)
+    const dimLn = dark ? new THREE.Color(0.09, 0.10, 0.12) : new THREE.Color(0.89, 0.90, 0.92)
+    let hoverSess: string | null = null
+    function setHover(sess: string | null) {
+      if (sess === hoverSess) return
+      hoverSess = sess
+      if (sess == null) col.set(colBase)
+      else for (let i = 0; i < pts.length; i++) {
+        if (pts[i].s === sess) { col[i * 3] = colBase[i * 3]; col[i * 3 + 1] = colBase[i * 3 + 1]; col[i * 3 + 2] = colBase[i * 3 + 2] }
+        else { col[i * 3] = dimPt.r; col[i * 3 + 1] = dimPt.g; col[i * 3 + 2] = dimPt.b }
+      }
+      geo.attributes.color.needsUpdate = true
+      if (lineCol && lineColBase && linesObj) {
+        if (sess == null) lineCol.set(lineColBase)
+        else for (let v = 0; v < lineVertSess.length; v++) {
+          if (lineVertSess[v] === sess) { lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] }
+          else { lineCol[v * 3] = dimLn.r; lineCol[v * 3 + 1] = dimLn.g; lineCol[v * 3 + 2] = dimLn.b }
+        }
+        ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
+        linesObj.visible = sess != null ? true : showLinesRef.current   // hover 시 토글 꺼져 있어도 해당 세션 선은 보이게
+      }
+    }
 
     // ── 커스텀 카메라 컨트롤 ──
     // 좌드래그 = 화면축 기준 자유 회전(관성) · 휠클릭/우드래그 = 이동(pan) · 휠 = 커서 기준 줌.
@@ -191,6 +222,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       } else {
         const i = hitIndex(e.clientX, e.clientY)
         setTip(i >= 0 ? { sx: e.clientX, sy: e.clientY, p: pts[i] } : null)
+        setHover(i >= 0 ? pts[i].s : null)
       }
     }
     function onUp(e: PointerEvent) {
@@ -206,7 +238,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.addEventListener("pointermove", onMove)
     renderer.domElement.addEventListener("pointerup", onUp)
     renderer.domElement.addEventListener("pointercancel", onUp)
-    renderer.domElement.addEventListener("pointerleave", () => setTip(null))
+    renderer.domElement.addEventListener("pointerleave", () => { setTip(null); setHover(null) })
     renderer.domElement.addEventListener("contextmenu", onCtx)
 
     let raf = 0
