@@ -295,10 +295,43 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
-def _graph3d_data(refresh: bool = False) -> dict:
-    """의미 지도 3D 데이터(UMAP 3성분) + 벡터 수 기반 디스크 캐시. 엔드포인트·예열 공용."""
+_GRAPH3D_VER = 1
+_graph3d_recomputing = {"on": False}
+
+
+def _graph3d_compute_and_cache(n: int) -> dict:
     from . import config as C
     from .graph import build_graph
+    data = build_graph(make_index(), ArchiveDB(), dims=3)
+    try:
+        (C.DATA_DIR / "graph3d_cache.json").write_text(
+            json.dumps({"n": n, "v": _GRAPH3D_VER, "data": data}, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+    return data
+
+
+def _graph3d_recompute_bg(n: int) -> None:
+    """백그라운드 재계산(중복 방지). 벡터 수 바뀌었을 때 조용히 캐시 갱신."""
+    import threading
+    if _graph3d_recomputing["on"]:
+        return
+    _graph3d_recomputing["on"] = True
+
+    def work():
+        try:
+            _graph3d_compute_and_cache(n)
+        except Exception:
+            pass
+        finally:
+            _graph3d_recomputing["on"] = False
+    threading.Thread(target=work, daemon=True).start()
+
+
+def _graph3d_data(refresh: bool = False) -> dict:
+    """의미 지도 3D 데이터. stale-while-revalidate: 캐시 있으면 즉시 반환하고,
+    벡터 수가 달라졌으면 백그라운드로 재계산(여는 순간 대기 없음)."""
+    from . import config as C
 
     vi = make_index()
     n = len(vi)
@@ -306,21 +339,18 @@ def _graph3d_data(refresh: bool = False) -> dict:
         return {"points": [], "clusters": [], "method": None, "dims": 3}
 
     cache_path = C.DATA_DIR / "graph3d_cache.json"
-    ver = 1
     if not refresh and cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cached.get("n") == n and cached.get("v") == ver:
+            if cached.get("v") == _GRAPH3D_VER:
+                if cached.get("n") != n:
+                    _graph3d_recompute_bg(n)     # 오래된 캐시 → 즉시 반환 + 뒤에서 갱신
                 return cached["data"]
         except Exception:
             pass
 
-    data = build_graph(vi, ArchiveDB(), dims=3)
-    try:
-        cache_path.write_text(json.dumps({"n": n, "v": ver, "data": data}, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
-    return data
+    # 캐시 없음(최초) 또는 강제 → 동기 계산. (보통 시작 시 예열로 이미 채워짐)
+    return _graph3d_compute_and_cache(n)
 
 
 @app.get("/api/graph3d")
