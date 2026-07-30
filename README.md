@@ -99,6 +99,25 @@ python -m chatmem enrich --backend off
 
 정제 없이도 임베딩·하이브리드 검색은 그대로 동작한다. 정제본은 검색 결과 헤드라인(표시용)일 뿐 검색 자체는 원문 기준이다.
 
+## MCP 서버 — 다른 AI가 과거 대화를 검색
+
+`chatmem-mcp` 를 MCP 서버로 등록하면 Claude Code·Desktop 등이 **과거 세션을 직접 검색·조회**한다(로컬 하이브리드 검색, 원문+요약 반환).
+
+```bash
+pip install ".[mcp]"          # mcp SDK
+# Claude Code:
+claude mcp add chat-memory -- chatmem-mcp
+```
+
+Claude Desktop 등 설정 JSON:
+
+```json
+{ "mcpServers": { "chat-memory": { "command": "chatmem-mcp" } } }
+```
+
+노출 도구: `search_memory`(의미+키워드 검색) · `get_session`(세션 전체) · `recent_sessions` · `stats`.
+전부 로컬 데이터(같은 아카이브)를 읽으며, 최초 검색 시 임베딩 모델을 1회 로드한다.
+
 ## 설정 (환경변수 or 설정 파일)
 
 설정은 두 방법 중 아무거나. **환경변수가 항상 우선**이고, 없으면 설정 파일 값을 쓴다.
