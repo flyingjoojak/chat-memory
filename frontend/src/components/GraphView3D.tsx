@@ -220,9 +220,13 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
                 {clusters.map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
-                    className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-md border bg-card/85 px-2 py-0.5 text-[12px] font-semibold shadow-sm backdrop-blur-sm"
-                    style={{ display: "none", color: colorOf(c.id) }}>
-                    <span className="size-2 rounded-full" style={{ background: colorOf(c.id) }} />
+                    className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
+                    style={{
+                      display: "none", color: colorOf(c.id),
+                      // 채운 박스 대신 배경색 후광(halo) — 점을 안 가리고 글자만 또렷.
+                      textShadow: "0 0 2px var(--card),0 0 2px var(--card),0 0 4px var(--card),0 0 4px var(--card),0 0 6px var(--card)",
+                    }}>
+                    <span className="size-2 rounded-full ring-1 ring-[var(--card)]" style={{ background: colorOf(c.id) }} />
                     {c.label}
                   </div>
                 ))}
