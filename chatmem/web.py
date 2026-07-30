@@ -38,13 +38,20 @@ async def _lifespan(app: FastAPI):
 
     _state["embedder"] = Embedder()  # 무거운 모델 1회 로드
 
-    # 의미 지도(3D) 백그라운드 예열 — 첫 진입에도 안 기다리게 캐시 미리 계산.
-    # UMAP numba JIT + 투영이 수십 초라, 데몬 스레드에서 조용히 준비(캐시 있으면 즉시 반환).
+    # 의미 지도(3D)를 백그라운드에서 예열 + 주기적으로 갱신 → 사용자는 항상 즉시·최신.
+    # 오래 사는 웹 서버에서 하므로 UMAP numba JIT은 1회만(짧은 인덱스 프로세스와 대조).
     def _warm():
+        import time
         try:
-            _graph3d_data()
+            _graph3d_data()                 # 시작 시 1회 준비(캐시 있으면 즉시)
         except Exception:
             pass
+        while True:                          # 이후 주기적으로 벡터 수 바뀌면 조용히 재계산
+            time.sleep(180)
+            try:
+                _graph3d_data()              # stale-while-revalidate: 바뀌었으면 백그라운드 갱신 트리거
+            except Exception:
+                pass
     threading.Thread(target=_warm, daemon=True).start()
     yield
     _state.clear()

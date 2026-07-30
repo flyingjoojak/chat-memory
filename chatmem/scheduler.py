@@ -38,7 +38,13 @@ _CRON_END = "# <<< chatmem <<<"
 
 
 def _py() -> str:
-    return sys.executable or "python"
+    # Windows 스케줄 작업은 콘솔 창이 번쩍이지 않게 pythonw.exe 사용(없으면 python).
+    exe = sys.executable or "python"
+    if sys.platform.startswith("win") and exe.lower().endswith("python.exe"):
+        cand = exe[: -len("python.exe")] + "pythonw.exe"
+        if os.path.exists(cand):
+            return cand
+    return exe
 
 
 def _index_cmd() -> list[str]:

@@ -285,6 +285,12 @@ def main(argv: list[str] | None = None) -> int:
     # 콘솔 진입점(chatmem/mem)은 main()을 인자 없이 호출 → sys.argv에서 직접 취함.
     if argv is None:
         argv = sys.argv[1:]
+    # pythonw.exe(콘솔 없음, 스케줄 작업)에선 표준 스트림이 None → print 크래시 방지.
+    import os
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
     # 출력을 utf-8로 강제 → cp949 콘솔의 인코딩 크래시·한글 깨짐 방지.
     for stream in (sys.stdout, sys.stderr):
         try:

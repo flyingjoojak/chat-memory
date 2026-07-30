@@ -220,8 +220,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
                 {clusters.map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
-                    className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap text-[12px] font-semibold"
-                    style={{ display: "none", color: colorOf(c.id), textShadow: "0 1px 4px var(--background),0 0 3px var(--background)" }}>
+                    className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap rounded-md border bg-card/85 px-2 py-0.5 text-[12px] font-semibold shadow-sm backdrop-blur-sm"
+                    style={{ display: "none", color: colorOf(c.id) }}>
+                    <span className="size-2 rounded-full" style={{ background: colorOf(c.id) }} />
                     {c.label}
                   </div>
                 ))}
