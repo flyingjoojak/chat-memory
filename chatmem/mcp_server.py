@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
 
@@ -19,6 +20,38 @@ def _embedder():
         from .embedder import Embedder
         _state["e"] = Embedder()  # 최초 1회 로드(~15초)
     return _state["e"]
+
+
+def _db():
+    # SQLite 읽기 연결 재사용 — 다른 프로세스의 커밋은 다음 쿼리에서 자동 반영되므로 캐시 안전.
+    if "db" not in _state:
+        from .store import ArchiveDB
+        _state["db"] = ArchiveDB()
+    return _state["db"]
+
+
+def _vec_sig() -> float:
+    """벡터 저장 파일들의 최신 수정시각 — 바뀌면 인덱스 캐시를 무효화하기 위한 서명."""
+    from . import config as C
+    sig = 0.0
+    for p in (C.VECTORS_PATH, C.VECTOR_IDS_PATH, C.VECTORS_DB_PATH):
+        try:
+            fp = Path(p)
+            if fp.exists():
+                sig = max(sig, fp.stat().st_mtime)
+        except OSError:
+            pass
+    return sig
+
+
+def _vi():
+    # 인덱스(npy는 전체 로드)를 캐시하되, 파일이 갱신되면(스케줄러 색인) 다시 로드.
+    sig = _vec_sig()
+    if "vi" not in _state or _state.get("vi_sig") != sig:
+        from .vectorindex import make_index
+        _state["vi"] = make_index()
+        _state["vi_sig"] = sig
+    return _state["vi"]
 
 
 def _kst(ts: str) -> str:
@@ -40,10 +73,8 @@ def search_memory(query: str, k: int = 5, semantic_only: bool = False,
     """
     from .config import EMBED_MODEL
     from .search import search as run_search
-    from .store import ArchiveDB
-    from .vectorindex import make_index
 
-    db, vi = ArchiveDB(), make_index()
+    db, vi = _db(), _vi()
     if len(vi) == 0:
         return "인덱스가 비어 있습니다(아직 대화가 색인되지 않음)."
     # 저장 벡터의 모델과 현재 설정 모델이 다르면 의미 검색이 부정확 → 경고.
@@ -81,8 +112,7 @@ def get_session(session: str, limit: int = 120) -> str:
 
     search_memory 결과의 session 값으로 호출해 그 대화의 전체 맥락(작업 흐름)을 확인하라.
     """
-    from .store import ArchiveDB
-    db = ArchiveDB()
+    db = _db()
     rows = db.conn.execute(
         "SELECT session_id, timestamp, question, answer, summary FROM turns "
         "WHERE session_id LIKE ? ORDER BY timestamp, id LIMIT ?",
@@ -102,20 +132,22 @@ def get_session(session: str, limit: int = 120) -> str:
 @mcp.tool()
 def recent_sessions(limit: int = 20) -> str:
     """최근 대화 세션 목록(대표 제목·턴 수·시각). 무슨 작업들이 있었는지 훑을 때 사용."""
-    from .store import ArchiveDB
-    db = ArchiveDB()
+    db = _db()
+    # 세션별 대표 제목(첫 턴)·턴수·마지막시각을 윈도우 함수로 단일 쿼리에서 산출(N+1 제거).
     rows = db.conn.execute(
-        "SELECT session_id, COUNT(*) n, MAX(timestamp) ended FROM turns "
-        "GROUP BY session_id ORDER BY ended DESC LIMIT ?", (max(1, min(limit, 100)),),
+        "SELECT session_id, n, ended, summary, question FROM ("
+        "  SELECT session_id, summary, question,"
+        "         COUNT(*) OVER (PARTITION BY session_id) AS n,"
+        "         MAX(timestamp) OVER (PARTITION BY session_id) AS ended,"
+        "         ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp, id) AS rn"
+        "  FROM turns"
+        ") WHERE rn = 1 ORDER BY ended DESC LIMIT ?", (max(1, min(limit, 100)),),
     ).fetchall()
     if not rows:
         return "세션이 없습니다."
     lines = []
     for r in rows:
-        head = db.conn.execute(
-            "SELECT summary, question FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
-            (r["session_id"],)).fetchone()
-        title = (head["summary"] or head["question"] or "(제목 없음)") if head else ""
+        title = r["summary"] or r["question"] or "(제목 없음)"
         lines.append(f"- {r['session_id'][:8]} · {r['n']}턴 · {_kst(r['ended'])} · {title[:70]}")
     return "\n".join(lines)
 
@@ -123,9 +155,7 @@ def recent_sessions(limit: int = 20) -> str:
 @mcp.tool()
 def stats() -> str:
     """저장된 대화 규모(세션·턴·벡터·정제 수)."""
-    from .store import ArchiveDB
-    from .vectorindex import make_index
-    db, vi = ArchiveDB(), make_index()
+    db, vi = _db(), _vi()
     t = db.conn.execute("SELECT COUNT(*) c FROM turns").fetchone()["c"]
     s = db.conn.execute("SELECT COUNT(DISTINCT session_id) c FROM turns").fetchone()["c"]
     e = db.conn.execute("SELECT COUNT(*) c FROM turns WHERE summary IS NOT NULL").fetchone()["c"]
