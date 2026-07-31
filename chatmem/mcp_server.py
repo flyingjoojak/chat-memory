@@ -9,6 +9,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+# numpy는 서버 기동 시점에 미리 로드한다(지연 import 금지). stdio 서버 루프가 돌기 시작한 뒤에
+# numpy C확장(_multiarray_umath) DLL을 처음 로드하면 Windows에서 정확히 120초 블록되어
+# 첫 툴 호출이 2분간 멈춘다(실측 3회 재현). 루프 시작 전 로드는 0.07초로 끝난다.
+import numpy  # noqa: F401
 from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("chat-memory")
