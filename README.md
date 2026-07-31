@@ -103,6 +103,8 @@ python -m chatmem enrich --backend off
 
 `chatmem-mcp` 를 MCP 서버로 등록하면 Claude Code·Desktop 등이 **과거 세션을 직접 검색·조회**한다(로컬 하이브리드 검색, 원문+요약 반환).
 
+> **가장 쉬운 방법**: 앱 **설정 → MCP 연동**에서 대상(Claude Code / Claude Desktop / Codex CLI / Gemini CLI)별 **등록/해제 버튼**. 각 설정파일을 `.bak` 백업 후 수정하며, 등록 뒤 해당 클라이언트를 재시작하면 된다. (아래는 수동 방법)
+
 ```bash
 pip install ".[mcp]"          # mcp SDK
 # Claude Code:

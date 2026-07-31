@@ -7,8 +7,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  getConfig, getEmbedModels, getStats, putConfig, reindex, verifyEnrich,
-  type Config, type EmbedModel,
+  getConfig, getEmbedModels, getMcp, getStats, mcpRegister, mcpUnregister, putConfig, reindex, verifyEnrich,
+  type Config, type EmbedModel, type McpTarget,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -37,6 +37,57 @@ function Row({ label, children }: { label: React.ReactNode; children: React.Reac
       <span className="text-sm">{label}</span>
       <div className="flex items-center gap-2 text-sm">{children}</div>
     </div>
+  )
+}
+
+// MCP 연동: chatmem-mcp를 각 클라이언트 설정에 등록/해제(파일은 .bak 백업 후 수정).
+function McpSection() {
+  const [targets, setTargets] = useState<McpTarget[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [snip, setSnip] = useState<string | null>(null)
+
+  const load = () => getMcp().then((r) => setTargets(r.targets)).catch(() => setTargets([]))
+  useEffect(() => { load() }, [])
+
+  async function toggle(t: McpTarget) {
+    setBusy(t.id); setNote(null)
+    try {
+      const r = t.registered ? await mcpUnregister(t.id) : await mcpRegister(t.id)
+      if (!r.ok) { setNote(`${t.label}: ${r.error || "실패"}`); setSnip(t.id) }
+      else if (!t.registered) setNote(`✓ ${t.label}에 등록됨 — 적용하려면 ${t.label}를 재시작하세요`)
+      else setNote(`${t.label} 등록 해제됨`)
+      await load()
+    } finally { setBusy(null) }
+  }
+
+  if (targets === null) return <Row label="불러오는 중…"><Loader2 className="size-4 animate-spin text-muted-foreground" /></Row>
+  const active = targets.find((t) => t.id === snip)
+  return (
+    <>
+      {targets.map((t) => (
+        <Row key={t.id} label={
+          <span className="flex items-center gap-2">
+            {t.label}
+            {t.registered
+              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">등록됨</span>
+              : !t.installed && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">미설치</span>}
+          </span>
+        }>
+          <Button variant="ghost" size="sm" onClick={() => setSnip(snip === t.id ? null : t.id)}>명령</Button>
+          <Button variant={t.registered ? "outline" : "default"} size="sm" disabled={busy === t.id} onClick={() => toggle(t)}>
+            {busy === t.id ? <Loader2 className="size-4 animate-spin" /> : t.registered ? "해제" : "등록"}
+          </Button>
+        </Row>
+      ))}
+      {active && (
+        <div className="border-b py-3 last:border-0">
+          <div className="mb-1 text-[11px] text-muted-foreground">수동 등록용 · {active.path}</div>
+          <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-[11px]">{active.snippet}</pre>
+        </div>
+      )}
+      {note && <div className="py-3 text-xs text-muted-foreground">{note}</div>}
+    </>
   )
 }
 
@@ -295,6 +346,10 @@ export function SettingsView() {
             Claude Code 로그가 다른 위치에 있으면 여기서 지정하세요.
           </p>
         </div>
+      </Section>
+
+      <Section title="MCP 연동 (다른 AI가 과거 대화 검색)">
+        <McpSection />
       </Section>
 
       <Section title="저장소 현황">

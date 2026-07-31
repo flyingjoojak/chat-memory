@@ -90,6 +90,33 @@ export interface ReindexState { running: boolean; done: number; msg: string }
 export const getEmbedModels = () =>
   getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)
 
+// MCP 클라이언트 등록
+export interface McpTarget {
+  id: string
+  label: string
+  method: string
+  installed: boolean
+  registered: boolean
+  path: string
+  snippet: string
+}
+
+export const getMcp = () => getJSON<{ targets: McpTarget[]; command: string }>(`/api/mcp`)
+
+export async function mcpRegister(target: string): Promise<{ ok: boolean; restart?: boolean; error?: string }> {
+  const r = await fetch(`/api/mcp/register`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target }),
+  })
+  return r.json()
+}
+
+export async function mcpUnregister(target: string): Promise<{ ok: boolean; error?: string }> {
+  const r = await fetch(`/api/mcp/unregister`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target }),
+  })
+  return r.json()
+}
+
 export async function reindex(model: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
   const r = await fetch(`/api/reindex`, {
     method: "POST", headers: { "Content-Type": "application/json" },
