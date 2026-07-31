@@ -58,12 +58,26 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
   const [searching, setSearching] = useState(false)
   const [searchErr, setSearchErr] = useState<string | null>(null)   // 검색 실패를 '결과 없음'과 구분
   const timer = useRef<number | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     getSession(id).then(setData).catch((e) => setErr(String(e)))
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose()
-    window.addEventListener("keydown", esc)
-    return () => window.removeEventListener("keydown", esc)
+    // 모달 접근성: 열 때 포커스를 오버레이 안으로, 닫을 때 원래 요소로 복귀, Tab은 안에서 순환(트랩).
+    const opener = document.activeElement as HTMLElement | null
+    containerRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose(); return }
+      if (e.key === "Tab" && containerRef.current) {
+        const f = containerRef.current.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input,textarea,select,[tabindex]:not([tabindex="-1"])')
+        if (f.length === 0) return
+        const first = f[0], last = f[f.length - 1], active = document.activeElement
+        if (e.shiftKey && (active === first || active === containerRef.current)) { e.preventDefault(); last.focus() }
+        else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus() }
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => { window.removeEventListener("keydown", onKey); opener?.focus?.() }
   }, [id, onClose])
 
   // 메인 검색과 동일한 하이브리드(의미+키워드)를 이 세션으로 스코프. 300ms 디바운스.
@@ -85,7 +99,9 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
   }
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-background">
+    <div ref={containerRef} tabIndex={-1} role="dialog" aria-modal="true"
+      aria-label={`세션 ${id.slice(0, 8)} 상세`}
+      className="fixed inset-0 z-50 overflow-y-auto bg-background outline-none">
       <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-background/85 px-6 py-3.5 backdrop-blur">
         <button onClick={onClose} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-75">
           <ArrowLeft className="size-4" />검색으로

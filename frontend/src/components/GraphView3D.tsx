@@ -59,6 +59,12 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.setSize(w, h)
     renderer.domElement.style.borderRadius = "12px"
+    // 접근성: 캔버스가 무엇인지 스크린리더에 알림(상세는 우측 '주제 군집' 패널이 텍스트로 제공).
+    renderer.domElement.setAttribute("role", "img")
+    renderer.domElement.setAttribute(
+      "aria-label",
+      `의미 지도 3D 시각화 — 임베딩 ${data.points.length.toLocaleString()}개, 주제 군집 ${data.clusters.length}개. 상세 목록은 우측 '주제 군집' 패널 참고.`,
+    )
     wrap.appendChild(renderer.domElement)
 
     // 같은 세션 점을 시간순으로 잇는 선(성좌) — 세션마다 다른 색, 흐리게. 점은 그대로(끌어당김 없음).
@@ -203,20 +209,21 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const cluVecs = data.clusters.map((c) => ({ c, v: at({ x: c.x, y: c.y, z: c.z } as GraphPoint3D) }))
     const proj = new THREE.Vector3()
     const _pp = new THREE.Vector3()
-    const PICK_PX = 5   // 화면상 이 반경(px) 안에서만 점 인식 → 3D 깊이와 무관하게 '보이는 대로'
+    const PICK_PX = 3   // 커서와 이 반경(px) 이내일 때만 점으로 인식(정밀 선택)
 
-    // 스크린 좌표 최근접 점 판정(원근 왜곡 없음). world-space 레이캐스터보다 직관적.
+    // 화면 투영 후 커서 반경 안의 점들 중 '가장 앞(카메라에 가까운)' 점을 선택 →
+    // 겹친 3D에서 뒤쪽이 아니라 실제로 위에 보이는 점을 집는다.
     function hitIndex(clientX: number, clientY: number): number {
       const r = renderer.domElement.getBoundingClientRect()
       const mx = clientX - r.left, my = clientY - r.top
-      let best = -1, bestD = PICK_PX * PICK_PX
+      const maxD = PICK_PX * PICK_PX
+      let best = -1, bestZ = Infinity
       for (let i = 0; i < pts.length; i++) {
         _pp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).project(camera)
         if (_pp.z > 1) continue   // 뒤/클립된 점 제외
         const sx = (_pp.x * 0.5 + 0.5) * w, sy = (-_pp.y * 0.5 + 0.5) * h
         const dx = sx - mx, dy = sy - my
-        const d = dx * dx + dy * dy
-        if (d < bestD) { bestD = d; best = i }
+        if (dx * dx + dy * dy <= maxD && _pp.z < bestZ) { bestZ = _pp.z; best = i }
       }
       return best
     }
@@ -375,7 +382,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
                   ))}
                 </div>
                 {tip && (
-                  <div className="pointer-events-none fixed z-50 max-w-xs rounded-lg border bg-popover px-3 py-2 text-xs shadow-md"
+                  <div role="status" aria-live="polite"
+                    className="pointer-events-none fixed z-50 max-w-xs rounded-lg border bg-popover px-3 py-2 text-xs shadow-md"
                     style={{ left: tip.sx + 14, top: tip.sy + 14 }}>
                     <div className="font-medium text-foreground line-clamp-2">{tip.p.h || "(제목 없음)"}</div>
                     <div className="mt-1 tabular-nums text-muted-foreground">세션 {tip.p.s.slice(0, 8)}</div>
