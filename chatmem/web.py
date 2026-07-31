@@ -237,6 +237,37 @@ def api_verify_enrich(payload: dict):
     return {"ok": ok, "message": msg}
 
 
+@app.get("/api/mcp")
+def api_mcp():
+    """MCP 클라이언트별 등록 상태 + 실행 커맨드."""
+    from . import mcp_register as R
+    cmd, args = R.mcp_command()
+    return {"targets": R.targets(), "command": (cmd + (" " + " ".join(args) if args else ""))}
+
+
+@app.post("/api/mcp/register")
+def api_mcp_register(payload: dict):
+    """대상 클라이언트 설정에 chat-memory MCP 서버 등록(파일은 .bak 백업 후 수정)."""
+    from . import mcp_register as R
+    tid = str((payload or {}).get("target", "")).strip()
+    try:
+        R.register(tid)
+        return {"ok": True, "restart": True}
+    except Exception as e:  # noqa: BLE001 — 사용자에게 원인 메시지 노출
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/mcp/unregister")
+def api_mcp_unregister(payload: dict):
+    from . import mcp_register as R
+    tid = str((payload or {}).get("target", "")).strip()
+    try:
+        R.unregister(tid)
+        return {"ok": True}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/embed-models")
 def api_embed_models():
     from fastembed import TextEmbedding
