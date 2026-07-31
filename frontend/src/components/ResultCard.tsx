@@ -11,6 +11,7 @@ function Fold({ label, count, children }: { label: string; count?: number; child
     <div className="mt-2.5">
       <button
         onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
         <ChevronRight className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} />

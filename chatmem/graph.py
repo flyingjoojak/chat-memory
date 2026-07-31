@@ -43,7 +43,7 @@ def _cluster(coords: np.ndarray) -> np.ndarray:
 def build_graph(vi, db, dims: int = 2) -> dict:
     keys, mat = vi.all_vectors()
     if len(keys) == 0:
-        return {"points": [], "clusters": [], "method": None, "dims": dims}
+        return {"points": [], "clusters": [], "paths": [], "method": None, "dims": dims}
 
     coords, method = _project(mat, dims)    # 청크 단위 그대로 → 밀도
     labels = _cluster(coords)

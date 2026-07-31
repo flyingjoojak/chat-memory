@@ -23,7 +23,7 @@ function TurnRow({ t, i, defaultOpen = false, highlight = false }: {
         {highlight && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">방금 선택</span>}
       </div>
       <p className="text-sm font-semibold leading-snug text-balance">{head}</p>
-      <button onClick={() => setOpen((v) => !v)}
+      <button onClick={() => setOpen((v) => !v)} aria-expanded={open}
         className="mt-2.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
         <ChevronRight className={`size-3.5 transition-transform ${open ? "rotate-90" : ""}`} />원문 Q&A
       </button>
@@ -56,6 +56,7 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
   const [q, setQ] = useState("")
   const [hits, setHits] = useState<Hit[] | null>(null)   // null = 검색 안 함(전체 턴 표시)
   const [searching, setSearching] = useState(false)
+  const [searchErr, setSearchErr] = useState<string | null>(null)   // 검색 실패를 '결과 없음'과 구분
   const timer = useRef<number | null>(null)
 
   useEffect(() => {
@@ -70,13 +71,16 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
     setQ(v)
     if (timer.current) window.clearTimeout(timer.current)
     const term = v.trim()
-    if (!term) { setHits(null); setSearching(false); return }
-    setSearching(true)
+    if (!term) { setHits(null); setSearching(false); setSearchErr(null); return }
+    setSearching(true); setSearchErr(null)
     timer.current = window.setTimeout(async () => {
       try {
         const r = await search({ q: term, k: 20, session: id })
         setHits(r.hits || [])
-      } catch { setHits([]) } finally { setSearching(false) }
+      } catch (e) {
+        console.error("[session search] failed", e)
+        setHits([]); setSearchErr(String(e))
+      } finally { setSearching(false) }
     }, 300)
   }
 
@@ -96,7 +100,7 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
         {data && (
           <div className="relative mb-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => onQuery(e.target.value)}
+            <Input value={q} onChange={(e) => onQuery(e.target.value)} aria-label="이 세션 안에서 검색"
               placeholder="이 세션 안에서 의미 검색…" className="h-9 pl-9" />
             {searching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
             {!searching && hits && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground tabular-nums">{hits.length}개</span>}
@@ -107,7 +111,8 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
         {hits !== null ? (
           <>
             {hits.map((h) => <ResultCard key={h.id} hit={h} rawFirst={false} onOpenSession={() => {}} hideSessionLink />)}
-            {!searching && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">이 세션에서 결과 없음</div>}
+            {!searching && searchErr && <div className="py-6 text-center text-destructive">검색 오류: {searchErr}</div>}
+            {!searching && !searchErr && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">이 세션에서 결과 없음</div>}
           </>
         ) : (
           data?.turns.map((t, i) => (

@@ -20,6 +20,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(true)
+  const [err, setErr] = useState<string | null>(null)   // 로드 실패를 '데이터 없음'과 구분
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
   const openRef = useRef(onOpenSession)
@@ -28,7 +29,12 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
   const showLinesRef = useRef(showLines)
   showLinesRef.current = showLines
 
-  useEffect(() => { getGraph3D().then(setData).catch(() => setData({ points: [], clusters: [], method: null })) }, [])
+  useEffect(() => {
+    getGraph3D().then(setData).catch((e) => {
+      console.error("[graph3d] load failed", e)
+      setErr(String(e)); setData({ points: [], clusters: [], method: null })
+    })
+  }, [])
 
   useEffect(() => {
     const wrap = wrapRef.current
@@ -342,6 +348,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
 
       <div className="relative flex-1 px-4 pb-4 pt-3">
         {!data ? <div className="grid h-full place-items-center text-muted-foreground">불러오는 중… (첫 계산은 수십 초 걸릴 수 있어요)</div>
+          : err ? <div className="grid h-full place-items-center px-6 text-center text-destructive">지도를 불러오지 못했습니다: {err}</div>
           : !hasData ? <div className="grid h-full place-items-center text-muted-foreground">아직 벡터가 없습니다. 먼저 인덱싱을 진행하세요.</div>
             : (
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
