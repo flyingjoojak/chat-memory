@@ -120,9 +120,17 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3))
     geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
     const colBase = col.slice()   // 원본 군집색(hover 복원용)
+    // 원형 점 스프라이트(PointsMaterial 기본은 사각형) — 흰 원 텍스처 + alphaTest로 모서리 제거.
+    const dotTex = (() => {
+      const s = 64, cv = document.createElement("canvas"); cv.width = cv.height = s
+      const g = cv.getContext("2d")!
+      g.beginPath(); g.arc(s / 2, s / 2, s / 2 - 2, 0, Math.PI * 2); g.fillStyle = "#fff"; g.fill()
+      return new THREE.CanvasTexture(cv)
+    })()
     const material = new THREE.PointsMaterial({
       // 화면 고정 픽셀 크기(거리로 안 커지고 안 작아짐) → 확대하면 3D 간격만 벌어져 밀집부가 갈라짐.
       size: 5.5, sizeAttenuation: false, vertexColors: true, transparent: true,
+      map: dotTex, alphaTest: 0.5,   // 원형
       opacity: dark ? 0.85 : 0.9, depthWrite: false,
       blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
     })
@@ -321,7 +329,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       renderer.domElement.removeEventListener("contextmenu", onCtx)
       const ln = linesRef.current
       if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
-      geo.dispose(); material.dispose(); renderer.dispose()
+      dotTex.dispose(); geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
   }, [data])
