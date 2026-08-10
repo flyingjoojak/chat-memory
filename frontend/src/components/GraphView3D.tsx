@@ -16,7 +16,7 @@ function hueOf(s: string): number {
   return h % 360
 }
 
-export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => void }) {
+export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, turnId?: string) => void }) {
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(true)
@@ -334,7 +334,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       const wasRotate = drag === "rotate"
       drag = null
       try { renderer.domElement.releasePointerCapture(e.pointerId) } catch (_) { /* noop */ }
-      if (click && wasRotate) { const i = hitIndex(e.clientX, e.clientY); if (i >= 0) openRef.current(pts[i].s) }
+      if (click && wasRotate) { const i = hitIndex(e.clientX, e.clientY); if (i >= 0) openRef.current(pts[i].s, pts[i].t) }
     }
     const onCtx = (e: Event) => e.preventDefault()
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false })

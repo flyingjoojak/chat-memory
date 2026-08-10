@@ -10,14 +10,15 @@ function TurnRow({ t, i, defaultOpen = false, highlight = false }: {
   t: SessionTurn; i: number; defaultOpen?: boolean; highlight?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  const [openBash, setOpenBash] = useState(false)   // bash 행동은 별도로 열어봐야(자동 노출 X)
   const ref = useRef<HTMLDivElement | null>(null)
-  // 방금 클릭한 턴이면 화면 중앙으로 스크롤(로드 직후 1회).
-  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" }) }, [highlight])
+  // 방금 클릭한 턴이면 그 턴의 '상단'이 화면 위에 오게 스크롤(로드 직후 1회). scroll-mt로 헤더만큼 여백.
+  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }, [highlight])
   const head = t.summary
     ? <><FileText className="inline size-3.5 mr-1.5 -mt-0.5 text-primary/70" />{t.summary}</>
     : (t.question || <span className="text-muted-foreground">(요약 없음)</span>)
   return (
-    <div ref={ref} className={`rounded-xl border bg-card p-4 shadow-sm ${highlight ? "ring-2 ring-primary/60" : ""}`}>
+    <div ref={ref} className={`scroll-mt-20 rounded-xl border bg-card p-4 shadow-sm ${highlight ? "ring-2 ring-primary/60" : ""}`}>
       <div className="mb-1.5 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
         <span>#{i + 1} · {fmtTime(t.timestamp)}</span>
         {highlight && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">방금 선택</span>}
@@ -43,7 +44,15 @@ function TurnRow({ t, i, defaultOpen = false, highlight = false }: {
               <div className="cm-md text-foreground" dangerouslySetInnerHTML={{ __html: mdToHtml(t.answer) || "—" }} />
             </div>
           </div>
-          {t.actions.length > 0 && <pre className="cm-code cm-md">{t.actions.join("\n")}</pre>}
+          {t.actions.length > 0 && (
+            <div>
+              <button onClick={() => setOpenBash((v) => !v)} aria-expanded={openBash}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                <ChevronRight className={`size-3.5 transition-transform ${openBash ? "rotate-90" : ""}`} />행동(bash 등) {t.actions.length}
+              </button>
+              {openBash && <pre className="cm-code cm-md mt-2">{t.actions.join("\n")}</pre>}
+            </div>
+          )}
         </div>
       )}
     </div>

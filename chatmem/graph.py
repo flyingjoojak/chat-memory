@@ -72,14 +72,15 @@ def _cluster(mat: np.ndarray) -> np.ndarray:
         return np.zeros(n, dtype=int)
 
 
-def _keyword_label(tag_counts: Counter, cluster_df: Counter, cluster_count: int, cluster_size: int) -> str:
-    """군집 이름 = tf·log(K/df). df=그 태그가 나온 '군집 수'.
+def _keyword_ranked(tag_counts: Counter, cluster_df: Counter, cluster_count: int, cluster_size: int) -> list[str]:
+    """군집의 구별 태그를 점수순으로(상위 4개). 점수 = tf·log(K/df), df=그 태그가 나온 '군집 수'.
 
-    최빈 태그를 그냥 쓰면 Zipf 분포라 모든 군집이 같은 1등이 됨(전에 라벨 겹치던 원인).
+    최빈 태그를 그냥 쓰면 Zipf 분포라 모든 군집이 같은 1등이 됨(라벨 겹치던 원인).
     log(K/df)는 '모든 군집에 있는 말'을 0으로 죽이고, 한 군집에만 몰린 말을 올린다.
+    라벨은 보통 1개만 쓰되, 이름이 겹치는 군집에서만 다음 태그를 붙여 구별한다.
     """
     if not tag_counts or cluster_count <= 0:
-        return ""
+        return []
     min_tf = 2 if cluster_size >= 10 else 1   # 큰 군집에서 1번 나온 말은 주제가 아님
     scored: list[tuple[float, int, str]] = []
     for tag, tf in tag_counts.items():
@@ -90,10 +91,8 @@ def _keyword_label(tag_counts: Counter, cluster_df: Counter, cluster_count: int,
         if w <= 0:                              # 모든 군집에 있는 말 → 제외
             continue
         scored.append((tf * w, tf, tag))
-    if not scored:
-        return ""
     scored.sort(key=lambda s: (-s[0], -s[1], s[2]))
-    return scored[0][2]   # 가장 구별되는 핵심어 1개(군집당 단일 주제어)
+    return [t for _, _, t in scored[:4]]
 
 
 def _succeed_cluster_ids(new_keys: dict[int, set], prev_members: list | None) -> dict[int, int]:
@@ -159,7 +158,7 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
         sess, head, ts = m
         c = int(labels[i])
         pt = {"x": round(float(coords[i, 0]), 2), "y": round(float(coords[i, 1]), 2),
-              "c": c, "s": sess, "h": head[:80]}
+              "c": c, "s": sess, "h": head[:80], "t": tid}   # t=turn id(점 클릭→그 턴 열기)
         if dims == 3:
             pt["z"] = round(float(coords[i, 2]), 2)
         ptidx = len(pts)
@@ -192,19 +191,43 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
             cluster_df[tag] += 1
     K = len(clu_pos)
 
-    clusters, members = [], []
+    # 1차: 군집별 중심·크기·랭킹 태그·폴백(메도이드).
+    info: dict[int, dict] = {}
     for c, pos in clu_pos.items():
         cen = np.mean(pos, axis=0)
         size = len(pos)
-        label = _keyword_label(clu_tag[c], cluster_df, K, size)
-        if not label:                           # 폴백: 중심 최근접 점(메도이드) 헤드라인
+        ranked = _keyword_ranked(clu_tag[c], cluster_df, K, size)
+        if ranked:
+            med = ""
+        else:                                   # 태그 없으면 중심 최근접 점(메도이드) 헤드라인
             j = min(range(size), key=lambda j: float(np.sum((pos[j] - cen) ** 2)))
-            label = (pts[clu_ptidx[c][j]].get("h") or "").strip()[:40]
+            med = (pts[clu_ptidx[c][j]].get("h") or "").strip()[:40]
+        info[c] = {"cen": cen, "size": size, "ranked": ranked, "med": med}
+
+    # 2차: 라벨 배정 — 큰 군집이 단어 1개를 우선 차지, 이름이 겹치면 다음 태그를 붙여 구별.
+    used: set[str] = set()
+    label_of: dict[int, str] = {}
+    for c in sorted(info, key=lambda c: -info[c]["size"]):
         aid = remap[c]
-        if not label:
-            label = f"군집 {aid + 1}"
-        cl = {"id": aid, "label": label,
-              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": size}
+        ranked = info[c]["ranked"]
+        if ranked:
+            label = ranked[0]
+            j = 1
+            while label in used and j < len(ranked):
+                label = f"{ranked[0]} · {ranked[j]}"; j += 1
+        else:
+            label = info[c]["med"] or f"군집 {aid + 1}"
+        if label in used:                       # 그래도 겹치면 번호로 확정
+            label = f"{label} ({aid})"
+        used.add(label)
+        label_of[c] = label
+
+    clusters, members = [], []
+    for c in info:
+        aid = remap[c]
+        cen = info[c]["cen"]
+        cl = {"id": aid, "label": label_of[c],
+              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": info[c]["size"]}
         if dims == 3:
             cl["z"] = round(float(cen[2]), 2)
         clusters.append(cl)

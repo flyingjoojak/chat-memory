@@ -333,7 +333,7 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
-_GRAPH3D_VER = 6   # 노이즈를 최근접 군집에 흡수 → 구캐시 폐기·재계산
+_GRAPH3D_VER = 7   # 점에 turn id(t) + 라벨 중복 구별 → 구캐시 폐기·재계산
 _graph3d_recomputing = {"on": False}
 _GRAPH3D_DELTA_RATIO = 0.05   # 벡터 수 변화가 이 비율(또는 최소 개수) 미만이면 재계산 안 함(지도 흔들림 방지)
 _GRAPH3D_MIN_DELTA = 50
