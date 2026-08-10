@@ -21,7 +21,7 @@ export function SessionsView({ onOpenSession }: { onOpenSession: (id: string) =>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{s.headline || "(제목 없음)"}</div>
               <div className="mt-0.5 text-[11.5px] text-muted-foreground tabular-nums">
-                {s.session.slice(0, 8)} · {s.count}턴 · {fmtTime(s.ended)}
+                {s.session.slice(0, 8)} · {s.count}턴 · 열림 {fmtTime(s.started)} → 최근 {fmtTime(s.ended)}
               </div>
             </div>
             <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
