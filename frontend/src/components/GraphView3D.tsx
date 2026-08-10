@@ -167,15 +167,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       glowMat.color.copy(_gc); glow.visible = true
     }
 
-    // ── 확대 시 점별 제목(옵시디언식) — 카메라에 가까운 점 위주로 풀 재사용 ──
-    const LBL_N = 40
-    const lblPool: HTMLDivElement[] = []
-    for (let i = 0; i < LBL_N; i++) {
-      const d = document.createElement("div")
-      d.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;white-space:nowrap;font-size:10px;display:none;z-index:8;transform:translate(-50%,-150%);color:var(--muted-foreground);text-shadow:0 0 3px var(--card),0 0 3px var(--card),0 0 5px var(--card);"
-      wrap.appendChild(d); lblPool.push(d)
-    }
-
     // ── hover: 호버 세션만 밝게, 나머지는 렌더 루프에서 부드럽게(페이드) 흐려짐 ──
     // 비강조는 '실제 배경색'으로 수렴시켜 거의 사라지게(색만 빼면 흰 점이 남아 애매하던 문제).
     // 라이트(Normal 블렌딩)=카드 배경색과 동일 → 안 보임 / 다크(Additive)=검정 → 더해도 0이라 소멸.
@@ -238,7 +229,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const cursorPt = new THREE.Vector3()
     const _fly = new THREE.Vector3()
     let flyGoal: THREE.Vector3 | null = null   // 군집 중앙 이동 목표(target 위치)
-    let frameN = 0, lblShown = false
 
     function basis() {
       _dir.copy(target).sub(camera.position).normalize()
@@ -378,32 +368,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         el.style.display = "block"
         el.style.left = (proj.x * 0.5 + 0.5) * w + "px"; el.style.top = (-proj.y * 0.5 + 0.5) * h + "px"
       }
-      // 많이 확대하면 화면 안 점들의 제목을 옅게(카메라에 가까운 40개, 4프레임마다).
-      frameN++
-      if (dist < EXTENT * 1.15) {
-        if (frameN % 4 === 0) {
-          const op = Math.min(Math.max((EXTENT * 1.15 - dist) / (EXTENT * 0.7), 0), 1) * 0.7
-          const cand: [number, number, number, number][] = []
-          for (let i = 0; i < pts.length; i++) {
-            _pp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).project(camera)
-            if (_pp.z > 1 || _pp.x < -1 || _pp.x > 1 || _pp.y < -1 || _pp.y > 1) continue
-            cand.push([_pp.z, i, (_pp.x * 0.5 + 0.5) * w, (-_pp.y * 0.5 + 0.5) * h])
-          }
-          cand.sort((a, b) => a[0] - b[0])
-          for (let k = 0; k < LBL_N; k++) {
-            const el = lblPool[k]
-            if (k < cand.length) {
-              el.textContent = pts[cand[k][1]].h || ""
-              el.style.left = cand[k][2] + "px"; el.style.top = cand[k][3] + "px"
-              el.style.opacity = String(op); el.style.display = "block"
-            } else if (el.style.display !== "none") el.style.display = "none"
-          }
-        }
-        lblShown = true
-      } else if (lblShown) {
-        for (const el of lblPool) el.style.display = "none"
-        lblShown = false
-      }
     }
     loop()
 
@@ -424,7 +388,6 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       const ln = linesRef.current
       if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
       flyToRef.current = null
-      for (const el of lblPool) { if (el.parentNode === wrap) wrap.removeChild(el) }
       glowTex.dispose(); glowMat.dispose()
       dotTex.dispose(); geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
