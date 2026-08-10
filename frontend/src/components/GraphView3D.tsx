@@ -227,8 +227,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const _right = new THREE.Vector3(), _up = new THREE.Vector3()
     const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion()
     const cursorPt = new THREE.Vector3()
-    const _fly = new THREE.Vector3()
-    let flyGoal: THREE.Vector3 | null = null   // 군집 중앙 이동 목표(target 위치)
+    const _v1 = new THREE.Vector3()
+    let flyGoal: { center: THREE.Vector3; camTo: THREE.Vector3 } | null = null   // 군집 이동+확대 목표
 
     function basis() {
       _dir.copy(target).sub(camera.position).normalize()
@@ -251,10 +251,24 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     }
 
     const cluVecs = data.clusters.map((c) => ({ c, v: at({ x: c.x, y: c.y, z: c.z } as GraphPoint3D) }))
-    // 범례에서 군집 클릭 → 그 중심을 화면 중앙으로 부드럽게 이동(루프에서 애니메이션).
+    // 군집별 {중심, 반경(구성원 최대거리)} — fly-to 확대 거리 계산용.
+    const cluInfo = new Map<number, { center: THREE.Vector3; radius: number }>()
+    for (const { c, v } of cluVecs) cluInfo.set(c.id, { center: v.clone(), radius: 0 })
+    { const _r = new THREE.Vector3()
+      for (let i = 0; i < pts.length; i++) {
+        const info = cluInfo.get(pts[i].c); if (!info) continue
+        const d = _r.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).distanceTo(info.center)
+        if (d > info.radius) info.radius = d
+      } }
+    // 군집 클릭 → 그 중심으로 이동 + 화면에 꽉 차게 확대(FOV 기반 거리).
     flyToRef.current = (id: number) => {
-      const cv = cluVecs.find((x) => x.c.id === id)
-      if (cv) { flyGoal = cv.v.clone(); av.x = 0; av.y = 0 }
+      const info = cluInfo.get(id); if (!info) return
+      const dir = _v1.copy(target).sub(camera.position).normalize()   // 카메라→타깃 방향
+      const fov = THREE.MathUtils.degToRad(camera.fov / 2)
+      const radius = Math.max(info.radius, EXTENT * 0.05)
+      const dist = Math.min(Math.max((radius / Math.tan(fov)) * 1.35, EXTENT * 0.4), EXTENT * 9)
+      flyGoal = { center: info.center.clone(), camTo: info.center.clone().addScaledVector(dir, -dist) }
+      av.x = 0; av.y = 0
     }
     const proj = new THREE.Vector3()
     const _pp = new THREE.Vector3()
@@ -338,11 +352,12 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
         rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
       }
-      // 군집 fly-to: 목표(군집 중심)를 화면 중앙으로 부드럽게 팬(방향·거리 유지).
+      // 군집 fly-to: 중심으로 이동 + 확대(target·camera 동시 보간).
       if (flyGoal) {
-        _fly.copy(flyGoal).sub(target)
-        if (_fly.lengthSq() < 0.02) flyGoal = null
-        else { _fly.multiplyScalar(0.15); target.add(_fly); camera.position.add(_fly); camera.lookAt(target) }
+        target.lerp(flyGoal.center, 0.12)
+        camera.position.lerp(flyGoal.camTo, 0.12)
+        camera.lookAt(target)
+        if (target.distanceTo(flyGoal.center) < 0.5 && camera.position.distanceTo(flyGoal.camTo) < 0.5) flyGoal = null
       }
       // hover 강조 부드럽게 페이드(대상 있으면 t→1, 없으면 t→0).
       const ftarget = focusSess ? 1 : 0
@@ -430,7 +445,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
                 {/* 떠다니는 라벨은 큰 군집 상위 18개만(과밀 방지) — 전체 목록은 우측 범례에 */}
                 {clusters.slice(0, 18).map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
-                    className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
+                    onClick={() => flyToRef.current?.(c.id)} title={`${c.label}로 이동`}
+                    className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
                     style={{
                       display: "none", color: colorOf(c.id),
                       // 채운 박스 대신 배경색 후광(halo) — 점을 안 가리고 글자만 또렷.

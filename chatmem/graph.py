@@ -53,7 +53,14 @@ def _cluster(mat: np.ndarray) -> np.ndarray:
         # leaf: 큰 안정 군집(eom 기본)을 하위 주제로 잘게 쪼갬 → '한 군집=한 주제'에 근접.
         labels = HDBSCAN(min_cluster_size=mcs, min_samples=3,
                          cluster_selection_method="leaf").fit_predict(feat)
-        if len({int(x) for x in labels if x >= 0}) >= 2:
+        cids = sorted({int(x) for x in labels if x >= 0})
+        if len(cids) >= 2:
+            # 노이즈(-1)를 가장 가까운 군집 중심에 흡수(회색 점 최소화). 순도는 조금 양보.
+            noise = np.where(labels < 0)[0]
+            if len(noise):
+                cents = np.stack([feat[labels == c].mean(axis=0) for c in cids])
+                for idx in noise:
+                    labels[idx] = cids[int(np.argmin(np.sum((cents - feat[idx]) ** 2, axis=1)))]
             return labels.astype(int)
     except Exception:
         pass
