@@ -115,7 +115,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     pts.forEach((p, i) => {
       const v = at(p)
       pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z
-      tmp.set(colorOf(p.c)); col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b
+      // 노이즈(군집 미배정, c<0)는 팔레트색 대신 중립 회색.
+      tmp.set(p.c < 0 ? (dark ? "#3b3f47" : "#c9ccd2") : colorOf(p.c))
+      col[i * 3] = tmp.r; col[i * 3 + 1] = tmp.g; col[i * 3 + 2] = tmp.b
     })
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3))
     geo.setAttribute("color", new THREE.BufferAttribute(col, 3))
@@ -371,7 +373,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
           : !hasData ? <div className="grid h-full place-items-center text-muted-foreground">아직 벡터가 없습니다. 먼저 인덱싱을 진행하세요.</div>
             : (
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
-                {clusters.map((c) => (
+                {/* 떠다니는 라벨은 큰 군집 상위 18개만(과밀 방지) — 전체 목록은 우측 범례에 */}
+                {clusters.slice(0, 18).map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
                     className="pointer-events-none absolute z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
                     style={{

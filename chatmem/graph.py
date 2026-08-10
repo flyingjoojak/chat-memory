@@ -29,16 +29,40 @@ def _project(mat: np.ndarray, dims: int = 2) -> tuple[np.ndarray, str]:
     return (xc @ comp).astype(np.float32), "pca"
 
 
-def _cluster(coords: np.ndarray) -> np.ndarray:
-    t = coords.shape[0]
-    k = max(3, min(16, t // 300))
-    if t < k:
-        return np.zeros(t, dtype=int)
+def _cluster(mat: np.ndarray) -> np.ndarray:
+    """주제 군집화. 표시용 3D가 아니라 '고차원 임베딩'에서 묶어 주제 분리를 살린다.
+
+    UMAP(cosine)로 군집용 저차원(≈10D)으로 줄인 뒤 HDBSCAN(밀도 기반) → 실제로 뭉친
+    덩어리만 군집, 애매한 점은 -1(노이즈)로 남긴다(억지 배정 안 함). HDBSCAN이 안 되거나
+    군집이 2개 미만이면 KMeans 폴백. UMAP 없으면 정규화 임베딩 그대로(유클리드≈코사인).
+    """
+    n = mat.shape[0]
+    if n < 6:
+        return np.zeros(n, dtype=int)
+    feat = mat
+    try:
+        import umap
+        d = min(10, mat.shape[1])
+        feat = umap.UMAP(n_components=d, random_state=42, metric="cosine",
+                         n_neighbors=min(15, n - 1), min_dist=0.0).fit_transform(mat)
+    except Exception:
+        feat = mat
+    try:
+        from sklearn.cluster import HDBSCAN
+        mcs = max(15, n // 150)   # 최소 군집 크기 — 이보다 작은 덩어리는 노이즈
+        # leaf: 큰 안정 군집(eom 기본)을 하위 주제로 잘게 쪼갬 → '한 군집=한 주제'에 근접.
+        labels = HDBSCAN(min_cluster_size=mcs, min_samples=3,
+                         cluster_selection_method="leaf").fit_predict(feat)
+        if len({int(x) for x in labels if x >= 0}) >= 2:
+            return labels.astype(int)
+    except Exception:
+        pass
     try:
         from sklearn.cluster import KMeans
-        return KMeans(n_clusters=k, n_init=4, random_state=42).fit_predict(coords).astype(int)
+        k = max(3, min(16, n // 300))
+        return KMeans(n_clusters=k, n_init=4, random_state=42).fit_predict(feat).astype(int)
     except Exception:
-        return np.zeros(t, dtype=int)
+        return np.zeros(n, dtype=int)
 
 
 def _keyword_label(tag_counts: Counter, cluster_df: Counter, cluster_count: int, cluster_size: int) -> str:
@@ -104,8 +128,8 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
     if len(keys) == 0:
         return {"points": [], "clusters": [], "paths": [], "method": None, "dims": dims, "_members": []}
 
-    coords, method = _project(mat, dims)    # 청크 단위 그대로 → 밀도
-    labels = _cluster(coords)
+    coords, method = _project(mat, dims)    # 표시용 3D 투영
+    labels = _cluster(mat)                  # 군집화는 고차원 임베딩에서(표시와 분리)
 
     meta, tags = {}, {}
     for r in db.conn.execute("SELECT id, session_id, summary, question, tags, timestamp FROM turns").fetchall():
@@ -134,11 +158,12 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
         ptidx = len(pts)
         pts.append(pt)
         sess_pts[sess].append((ptidx, ts, cidx))
-        for t in tags.get(tid, []):
-            clu_tag[c][t] += 1
-        clu_pos[c].append(coords[i])
-        clu_ptidx[c].append(ptidx)
-        clu_keys[c].add(k)
+        if c >= 0:   # -1(노이즈)은 점으로는 그리되 라벨 군집엔 넣지 않음
+            for t in tags.get(tid, []):
+                clu_tag[c][t] += 1
+            clu_pos[c].append(coords[i])
+            clu_ptidx[c].append(ptidx)
+            clu_keys[c].add(k)
 
     # 같은 세션 점을 시간순으로 잇는 경로(성좌) — 2개 이상인 세션만.
     paths = []
@@ -151,7 +176,7 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
     # 군집 id 승계(재계산해도 색 유지) + 점 c 재매핑.
     remap = _succeed_cluster_ids(clu_keys, prev_members)
     for pt in pts:
-        pt["c"] = remap[pt["c"]]
+        pt["c"] = remap.get(pt["c"], pt["c"])   # 노이즈(-1)는 그대로 -1
 
     # cluster_df: 태그가 등장한 '군집 수'(전체 빈도 아님).
     cluster_df: Counter = Counter()
