@@ -191,32 +191,39 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
             cluster_df[tag] += 1
     K = len(clu_pos)
 
-    # 1차: 군집별 중심·크기·랭킹 태그·폴백(메도이드).
+    # 1차: 군집별 중심·크기·태그 랭킹(구별=idf / 대표=최빈)·폴백(메도이드).
     info: dict[int, dict] = {}
     for c, pos in clu_pos.items():
         cen = np.mean(pos, axis=0)
         size = len(pos)
-        ranked = _keyword_ranked(clu_tag[c], cluster_df, K, size)
-        if ranked:
+        min_tf = 2 if size >= 10 else 1
+        ranked = _keyword_ranked(clu_tag[c], cluster_df, K, size)          # 구별력(idf)
+        common = [t for t, tf in clu_tag[c].most_common(6) if tf >= min_tf][:4]  # 대표(최빈)
+        if ranked or common:
             med = ""
         else:                                   # 태그 없으면 중심 최근접 점(메도이드) 헤드라인
             j = min(range(size), key=lambda j: float(np.sum((pos[j] - cen) ** 2)))
             med = (pts[clu_ptidx[c][j]].get("h") or "").strip()[:40]
-        info[c] = {"cen": cen, "size": size, "ranked": ranked, "med": med}
+        info[c] = {"cen": cen, "size": size, "ranked": ranked, "common": common, "med": med}
+
+    # 큰 군집은 니치 태그(idf)가 튀어 오히려 오해를 부름 → '대표(최빈) 태그'로. 작은 군집은 idf 유지.
+    sizes = sorted(info[c]["size"] for c in info)
+    large_thresh = max(80, int((sizes[len(sizes) // 2] if sizes else 0) * 1.8))
 
     # 2차: 라벨 배정 — 큰 군집이 단어 1개를 우선 차지, 이름이 겹치면 다음 태그를 붙여 구별.
     used: set[str] = set()
     label_of: dict[int, str] = {}
     for c in sorted(info, key=lambda c: -info[c]["size"]):
         aid = remap[c]
-        ranked = info[c]["ranked"]
-        if ranked:
-            label = ranked[0]
+        d = info[c]
+        primary = (d["common"] if d["size"] >= large_thresh and d["common"] else d["ranked"]) or d["common"]
+        if primary:
+            label = primary[0]
             j = 1
-            while label in used and j < len(ranked):
-                label = f"{ranked[0]} · {ranked[j]}"; j += 1
+            while label in used and j < len(primary):
+                label = f"{primary[0]} · {primary[j]}"; j += 1
         else:
-            label = info[c]["med"] or f"군집 {aid + 1}"
+            label = d["med"] or f"군집 {aid + 1}"
         if label in used:                       # 그래도 겹치면 번호로 확정
             label = f"{label} ({aid})"
         used.add(label)
