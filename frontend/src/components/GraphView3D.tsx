@@ -28,6 +28,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
   const linesRef = useRef<THREE.LineSegments | null>(null)
   const showLinesRef = useRef(showLines)
   showLinesRef.current = showLines
+  const flyToRef = useRef<((id: number) => void) | null>(null)   // 범례 군집 클릭 → 중앙 이동
 
   useEffect(() => {
     getGraph3D().then(setData).catch((e) => {
@@ -139,6 +140,42 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const points = new THREE.Points(geo, material)
     scene.add(points)
 
+    // ── hover 광원: 커서 아래 점을 부드러운 원형 글로우로 강조(무엇에 올렸는지 한눈에) ──
+    const glowTex = (() => {
+      const s = 128, cv = document.createElement("canvas"); cv.width = cv.height = s
+      const g = cv.getContext("2d")!
+      const grd = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2)
+      grd.addColorStop(0, "rgba(255,255,255,1)")
+      grd.addColorStop(0.28, "rgba(255,255,255,0.55)")
+      grd.addColorStop(1, "rgba(255,255,255,0)")
+      g.fillStyle = grd; g.fillRect(0, 0, s, s)
+      return new THREE.CanvasTexture(cv)
+    })()
+    const glowMat = new THREE.SpriteMaterial({
+      map: glowTex, transparent: true, depthWrite: false, depthTest: false,
+      blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending, opacity: dark ? 0.95 : 0.85,
+    })
+    const glow = new THREE.Sprite(glowMat); glow.visible = false; glow.renderOrder = 5
+    scene.add(glow)
+    let glowIdx = -1
+    const _gc = new THREE.Color()
+    function setGlow(i: number) {
+      if (i < 0) { glow.visible = false; glowIdx = -1; return }
+      glowIdx = i
+      glow.position.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
+      _gc.set(pts[i].c < 0 ? (dark ? "#8a8f98" : "#9aa0a8") : colorOf(pts[i].c))
+      glowMat.color.copy(_gc); glow.visible = true
+    }
+
+    // ── 확대 시 점별 제목(옵시디언식) — 카메라에 가까운 점 위주로 풀 재사용 ──
+    const LBL_N = 40
+    const lblPool: HTMLDivElement[] = []
+    for (let i = 0; i < LBL_N; i++) {
+      const d = document.createElement("div")
+      d.style.cssText = "position:absolute;left:0;top:0;pointer-events:none;white-space:nowrap;font-size:10px;display:none;z-index:8;transform:translate(-50%,-150%);color:var(--muted-foreground);text-shadow:0 0 3px var(--card),0 0 3px var(--card),0 0 5px var(--card);"
+      wrap.appendChild(d); lblPool.push(d)
+    }
+
     // ── hover: 호버 세션만 밝게, 나머지는 렌더 루프에서 부드럽게(페이드) 흐려짐 ──
     // 비강조는 '실제 배경색'으로 수렴시켜 거의 사라지게(색만 빼면 흰 점이 남아 애매하던 문제).
     // 라이트(Normal 블렌딩)=카드 배경색과 동일 → 안 보임 / 다크(Additive)=검정 → 더해도 0이라 소멸.
@@ -183,7 +220,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         }
         ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
         if (lmat0) lmat0.opacity = lineOpBase + (lineOpHi - lineOpBase) * t
-        linesObj.visible = showLinesRef.current || activeSess != null
+        linesObj.visible = showLinesRef.current   // 선 토글 OFF면 hover해도 선 없음
       }
     }
 
@@ -199,6 +236,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     const _right = new THREE.Vector3(), _up = new THREE.Vector3()
     const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion()
     const cursorPt = new THREE.Vector3()
+    const _fly = new THREE.Vector3()
+    let flyGoal: THREE.Vector3 | null = null   // 군집 중앙 이동 목표(target 위치)
+    let frameN = 0, lblShown = false
 
     function basis() {
       _dir.copy(target).sub(camera.position).normalize()
@@ -221,6 +261,11 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     }
 
     const cluVecs = data.clusters.map((c) => ({ c, v: at({ x: c.x, y: c.y, z: c.z } as GraphPoint3D) }))
+    // 범례에서 군집 클릭 → 그 중심을 화면 중앙으로 부드럽게 이동(루프에서 애니메이션).
+    flyToRef.current = (id: number) => {
+      const cv = cluVecs.find((x) => x.c.id === id)
+      if (cv) { flyGoal = cv.v.clone(); av.x = 0; av.y = 0 }
+    }
     const proj = new THREE.Vector3()
     const _pp = new THREE.Vector3()
     const PICK_PX = 3   // 커서와 이 반경(px) 이내일 때만 점으로 인식(정밀 선택)
@@ -263,6 +308,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     function onDown(e: PointerEvent) {
       downX = lastX = e.clientX; downY = lastY = e.clientY
       drag = e.button === 0 ? "rotate" : "pan"   // 좌=회전, 휠클릭/우클릭=이동
+      setGlow(-1)
       av.x = 0; av.y = 0
       if (e.button !== 0) e.preventDefault()
       try { renderer.domElement.setPointerCapture(e.pointerId) } catch (_) { /* noop */ }
@@ -276,6 +322,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         const i = hitIndex(e.clientX, e.clientY)
         setTip(i >= 0 ? { sx: e.clientX, sy: e.clientY, p: pts[i] } : null)
         setHover(i >= 0 ? pts[i].s : null)   // 강조는 렌더 루프에서 부드럽게 페이드
+        setGlow(i)                            // 커서 아래 점에 광원
       }
     }
     function onUp(e: PointerEvent) {
@@ -291,7 +338,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     renderer.domElement.addEventListener("pointermove", onMove)
     renderer.domElement.addEventListener("pointerup", onUp)
     renderer.domElement.addEventListener("pointercancel", onUp)
-    renderer.domElement.addEventListener("pointerleave", () => { setTip(null); setHover(null) })
+    renderer.domElement.addEventListener("pointerleave", () => { setTip(null); setHover(null); setGlow(-1) })
     renderer.domElement.addEventListener("contextmenu", onCtx)
 
     let raf = 0
@@ -301,12 +348,27 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       if (!drag && (Math.abs(av.x) > 0.05 || Math.abs(av.y) > 0.05)) {
         rotate(av.x, av.y); av.x *= 0.95; av.y *= 0.95   // 회전 관성만(줌/이동은 즉시 반영, 루프가 안 건드림)
       }
+      // 군집 fly-to: 목표(군집 중심)를 화면 중앙으로 부드럽게 팬(방향·거리 유지).
+      if (flyGoal) {
+        _fly.copy(flyGoal).sub(target)
+        if (_fly.lengthSq() < 0.02) flyGoal = null
+        else { _fly.multiplyScalar(0.15); target.add(_fly); camera.position.add(_fly); camera.lookAt(target) }
+      }
       // hover 강조 부드럽게 페이드(대상 있으면 t→1, 없으면 t→0).
       const ftarget = focusSess ? 1 : 0
       if (focusDirty || Math.abs(focusT - ftarget) > 0.002) {
         focusT += (ftarget - focusT) * 0.2
         if (Math.abs(focusT - ftarget) < 0.004) { focusT = ftarget; focusDirty = false; if (ftarget === 0) activeSess = null }
         applyFocus(focusT, activeSess)
+      }
+      // 확대할수록 점 조금 커짐(가까울수록 큼).
+      const dist = camera.position.distanceTo(target)
+      const zt = Math.min(Math.max((dist - EXTENT * 0.3) / (EXTENT * 5), 0), 1)
+      material.size = 5.5 * (1 + (1 - zt) * 0.6)
+      // hover 광원: 화면상 크기 대략 일정하게.
+      if (glow.visible && glowIdx >= 0) {
+        const gs = camera.position.distanceTo(glow.position) * 0.05
+        glow.scale.set(gs, gs, 1)
       }
       renderer.render(scene, camera)
       for (const { c, v } of cluVecs) {
@@ -315,6 +377,32 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
         if (proj.z > 1) { el.style.display = "none"; continue }
         el.style.display = "block"
         el.style.left = (proj.x * 0.5 + 0.5) * w + "px"; el.style.top = (-proj.y * 0.5 + 0.5) * h + "px"
+      }
+      // 많이 확대하면 화면 안 점들의 제목을 옅게(카메라에 가까운 40개, 4프레임마다).
+      frameN++
+      if (dist < EXTENT * 1.15) {
+        if (frameN % 4 === 0) {
+          const op = Math.min(Math.max((EXTENT * 1.15 - dist) / (EXTENT * 0.7), 0), 1) * 0.7
+          const cand: [number, number, number, number][] = []
+          for (let i = 0; i < pts.length; i++) {
+            _pp.set(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]).project(camera)
+            if (_pp.z > 1 || _pp.x < -1 || _pp.x > 1 || _pp.y < -1 || _pp.y > 1) continue
+            cand.push([_pp.z, i, (_pp.x * 0.5 + 0.5) * w, (-_pp.y * 0.5 + 0.5) * h])
+          }
+          cand.sort((a, b) => a[0] - b[0])
+          for (let k = 0; k < LBL_N; k++) {
+            const el = lblPool[k]
+            if (k < cand.length) {
+              el.textContent = pts[cand[k][1]].h || ""
+              el.style.left = cand[k][2] + "px"; el.style.top = cand[k][3] + "px"
+              el.style.opacity = String(op); el.style.display = "block"
+            } else if (el.style.display !== "none") el.style.display = "none"
+          }
+        }
+        lblShown = true
+      } else if (lblShown) {
+        for (const el of lblPool) el.style.display = "none"
+        lblShown = false
       }
     }
     loop()
@@ -335,6 +423,9 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
       renderer.domElement.removeEventListener("contextmenu", onCtx)
       const ln = linesRef.current
       if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
+      flyToRef.current = null
+      for (const el of lblPool) { if (el.parentNode === wrap) wrap.removeChild(el) }
+      glowTex.dispose(); glowMat.dispose()
       dotTex.dispose(); geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
@@ -362,7 +453,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
           </button>
           <span className="text-xs text-muted-foreground">
             {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
-            좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션
+            좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션 / 군집 클릭→중앙
           </span>
         </div>
       </div>
@@ -387,13 +478,14 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
                   </div>
                 ))}
                 <div className="absolute right-6 top-4 z-20 max-h-[72%] w-56 overflow-y-auto rounded-xl border bg-card/90 p-2 text-xs shadow-md backdrop-blur">
-                  <div className="mb-1 px-1 font-medium text-muted-foreground">주제 군집</div>
+                  <div className="mb-1 px-1 font-medium text-muted-foreground">주제 군집 · 클릭하면 중앙 이동</div>
                   {clusters.map((c) => (
-                    <div key={c.id} className="flex items-center gap-2 rounded-md px-1.5 py-1">
+                    <button key={c.id} type="button" onClick={() => flyToRef.current?.(c.id)}
+                      className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
                       <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
                       <span className="min-w-0 flex-1 truncate">{c.label}</span>
                       <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
                 {tip && (
