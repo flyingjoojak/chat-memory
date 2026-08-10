@@ -86,7 +86,7 @@ def _keyword_label(tag_counts: Counter, cluster_df: Counter, cluster_count: int,
     if not scored:
         return ""
     scored.sort(key=lambda s: (-s[0], -s[1], s[2]))
-    return " · ".join(t for _, _, t in scored[:2])
+    return scored[0][2]   # 가장 구별되는 핵심어 1개(군집당 단일 주제어)
 
 
 def _succeed_cluster_ids(new_keys: dict[int, set], prev_members: list | None) -> dict[int, int]:
