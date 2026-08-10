@@ -7,6 +7,7 @@ KMeans 군집 + 정제 태그 최빈값으로 라벨링. UMAP/sklearn 없으면 
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter, defaultdict
 
 import numpy as np
@@ -40,10 +41,68 @@ def _cluster(coords: np.ndarray) -> np.ndarray:
         return np.zeros(t, dtype=int)
 
 
-def build_graph(vi, db, dims: int = 2) -> dict:
+def _keyword_label(tag_counts: Counter, cluster_df: Counter, cluster_count: int, cluster_size: int) -> str:
+    """군집 이름 = tf·log(K/df). df=그 태그가 나온 '군집 수'.
+
+    최빈 태그를 그냥 쓰면 Zipf 분포라 모든 군집이 같은 1등이 됨(전에 라벨 겹치던 원인).
+    log(K/df)는 '모든 군집에 있는 말'을 0으로 죽이고, 한 군집에만 몰린 말을 올린다.
+    """
+    if not tag_counts or cluster_count <= 0:
+        return ""
+    min_tf = 2 if cluster_size >= 10 else 1   # 큰 군집에서 1번 나온 말은 주제가 아님
+    scored: list[tuple[float, int, str]] = []
+    for tag, tf in tag_counts.items():
+        if tf < min_tf:
+            continue
+        df = cluster_df.get(tag, 1)
+        w = math.log(cluster_count / df) if cluster_count > 1 else 1.0
+        if w <= 0:                              # 모든 군집에 있는 말 → 제외
+            continue
+        scored.append((tf * w, tf, tag))
+    if not scored:
+        return ""
+    scored.sort(key=lambda s: (-s[0], -s[1], s[2]))
+    return " · ".join(t for _, _, t in scored[:2])
+
+
+def _succeed_cluster_ids(new_keys: dict[int, set], prev_members: list | None) -> dict[int, int]:
+    """재계산 시 새 군집 ↔ 이전 군집을 구성원 겹침(Jaccard≥0.2)으로 이어 같은 id/색 유지.
+
+    prev_members: [{"id": int, "keys": [청크키...]}]. 없으면 그대로(로컬 id 유지).
+    """
+    remap: dict[int, int] = {}
+    prev = [(int(m["id"]), set(m.get("keys") or [])) for m in (prev_members or [])]
+    if prev:
+        cands = []
+        for cid, ks in new_keys.items():
+            if not ks:
+                continue
+            for pid, pks in prev:
+                inter = len(ks & pks)
+                if inter and inter / len(ks | pks) >= 0.2:
+                    cands.append((inter / len(ks | pks), cid, pid))
+        cands.sort(reverse=True)
+        used = set()
+        for _, cid, pid in cands:               # 겹침 큰 쌍부터 greedy 배정
+            if cid not in remap and pid not in used:
+                remap[cid] = pid
+                used.add(pid)
+    next_id = (max((pid for pid, _ in prev), default=-1)) + 1
+    taken = set(remap.values())
+    for cid in new_keys:                        # 못 이은 군집 = 새 id
+        if cid not in remap:
+            while next_id in taken:
+                next_id += 1
+            remap[cid] = next_id
+            taken.add(next_id)
+            next_id += 1
+    return remap
+
+
+def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict:
     keys, mat = vi.all_vectors()
     if len(keys) == 0:
-        return {"points": [], "clusters": [], "paths": [], "method": None, "dims": dims}
+        return {"points": [], "clusters": [], "paths": [], "method": None, "dims": dims, "_members": []}
 
     coords, method = _project(mat, dims)    # 청크 단위 그대로 → 밀도
     labels = _cluster(coords)
@@ -56,6 +115,8 @@ def build_graph(vi, db, dims: int = 2) -> dict:
     pts = []
     clu_tag: dict[int, Counter] = defaultdict(Counter)
     clu_pos: dict[int, list[np.ndarray]] = defaultdict(list)
+    clu_ptidx: dict[int, list[int]] = defaultdict(list)   # 군집→점index(메도이드용)
+    clu_keys: dict[int, set] = defaultdict(set)           # 군집→청크키(승계용)
     sess_pts: dict[str, list[tuple[int, str, int]]] = defaultdict(list)  # 세션→[(점index, 시각, 청크idx)]
     for i, k in enumerate(keys):
         parts = k.rsplit("#", 1)
@@ -76,6 +137,8 @@ def build_graph(vi, db, dims: int = 2) -> dict:
         for t in tags.get(tid, []):
             clu_tag[c][t] += 1
         clu_pos[c].append(coords[i])
+        clu_ptidx[c].append(ptidx)
+        clu_keys[c].add(k)
 
     # 같은 세션 점을 시간순으로 잇는 경로(성좌) — 2개 이상인 세션만.
     paths = []
@@ -85,14 +148,35 @@ def build_graph(vi, db, dims: int = 2) -> dict:
         lst.sort(key=lambda x: (x[1], x[2]))
         paths.append([p[0] for p in lst])
 
-    clusters = []
+    # 군집 id 승계(재계산해도 색 유지) + 점 c 재매핑.
+    remap = _succeed_cluster_ids(clu_keys, prev_members)
+    for pt in pts:
+        pt["c"] = remap[pt["c"]]
+
+    # cluster_df: 태그가 등장한 '군집 수'(전체 빈도 아님).
+    cluster_df: Counter = Counter()
+    for cnt in clu_tag.values():
+        for tag in cnt:
+            cluster_df[tag] += 1
+    K = len(clu_pos)
+
+    clusters, members = [], []
     for c, pos in clu_pos.items():
         cen = np.mean(pos, axis=0)
-        top = [t for t, _ in clu_tag[c].most_common(2)]
-        cl = {"id": c, "label": " · ".join(top) if top else f"군집 {c + 1}",
-              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": len(pos)}
+        size = len(pos)
+        label = _keyword_label(clu_tag[c], cluster_df, K, size)
+        if not label:                           # 폴백: 중심 최근접 점(메도이드) 헤드라인
+            j = min(range(size), key=lambda j: float(np.sum((pos[j] - cen) ** 2)))
+            label = (pts[clu_ptidx[c][j]].get("h") or "").strip()[:40]
+        aid = remap[c]
+        if not label:
+            label = f"군집 {aid + 1}"
+        cl = {"id": aid, "label": label,
+              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": size}
         if dims == 3:
             cl["z"] = round(float(cen[2]), 2)
         clusters.append(cl)
+        members.append({"id": aid, "keys": list(clu_keys[c])})
     clusters.sort(key=lambda c: -c["n"])
-    return {"points": pts, "clusters": clusters, "paths": paths, "method": method, "dims": dims}
+    return {"points": pts, "clusters": clusters, "paths": paths,
+            "method": method, "dims": dims, "_members": members}
