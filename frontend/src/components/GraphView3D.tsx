@@ -138,8 +138,12 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string) => 
     scene.add(points)
 
     // ── hover: 호버 세션만 밝게, 나머지는 렌더 루프에서 부드럽게(페이드) 흐려짐 ──
-    const dimPt = dark ? new THREE.Color(0.07, 0.08, 0.10) : new THREE.Color(0.90, 0.91, 0.93)
-    const dimLn = dark ? new THREE.Color(0.05, 0.05, 0.07) : new THREE.Color(0.92, 0.93, 0.95)
+    // 비강조는 '실제 배경색'으로 수렴시켜 거의 사라지게(색만 빼면 흰 점이 남아 애매하던 문제).
+    // 라이트(Normal 블렌딩)=카드 배경색과 동일 → 안 보임 / 다크(Additive)=검정 → 더해도 0이라 소멸.
+    const _bg = new THREE.Color(0.97, 0.97, 0.98)
+    try { _bg.setStyle(getComputedStyle(wrap).backgroundColor) } catch { /* oklch 등 파싱 불가 시 폴백 유지 */ }
+    const dimPt = dark ? new THREE.Color(0, 0, 0) : _bg
+    const dimLn = dark ? new THREE.Color(0, 0, 0) : _bg.clone()
     const lmat0 = linesObj ? (linesObj.material as THREE.LineBasicMaterial) : null
     const lineOpBase = dark ? 0.22 : 0.3, lineOpHi = dark ? 0.5 : 0.65
 
