@@ -23,13 +23,13 @@ function Turn({ t, i, highlight }: { t: SessionTurn; i: number; highlight: boole
       </div>
       <div className="flex flex-col items-end">
         <span className="mb-1 mr-1 text-[10px] font-medium text-muted-foreground">질문</span>
-        <div className="max-w-[88%] rounded-2xl rounded-br-sm bg-primary/10 px-3.5 py-2 text-sm ring-1 ring-primary/15">
+        <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary/10 px-3.5 py-2 text-sm ring-1 ring-primary/15">
           <div className="cm-md text-foreground" dangerouslySetInnerHTML={{ __html: mdToHtml(t.question) || "(질문 없음)" }} />
         </div>
       </div>
       <div className="mt-2 flex flex-col items-start">
         <span className="mb-1 ml-1 text-[10px] font-medium text-muted-foreground">답변</span>
-        <div className="max-w-[88%] overflow-x-auto rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2 text-sm">
+        <div className="max-w-[80%] overflow-x-auto rounded-2xl rounded-bl-sm bg-muted px-3.5 py-2 text-sm">
           <div className="cm-md text-foreground" dangerouslySetInnerHTML={{ __html: mdToHtml(t.answer) || "—" }} />
         </div>
       </div>
@@ -60,10 +60,13 @@ export function ChatThread({ session, focusTurn }: { session: string; focusTurn?
       <div className="shrink-0 border-b px-5 py-3 text-[13px] text-muted-foreground tabular-nums">
         세션 {session.slice(0, 8)}{data ? ` · ${data.count}턴` : ""}
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <div className="flex-1 overflow-y-auto px-5 py-4">
         {err && <div className="py-10 text-center text-muted-foreground">오류: {err}</div>}
         {!data && !err && <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
-        {data?.turns.map((t, i) => <Turn key={t.id} t={t} i={i} highlight={t.id === focusTurn} />)}
+        {/* 읽기 좋은 폭으로 묶고 가운데 정렬 — 넓은 패널에서도 채팅답게 */}
+        <div className="mx-auto max-w-3xl space-y-3">
+          {data?.turns.map((t, i) => <Turn key={t.id} t={t} i={i} highlight={t.id === focusTurn} />)}
+        </div>
       </div>
     </div>
   )
