@@ -49,7 +49,7 @@ export default function App() {
       {/* 메인 패널 — 뷰 크래시가 앱 전체를 죽이지 않게 격리 */}
       <main className="overflow-y-auto">
         <ErrorBoundary key={view}>
-          {view === "search" && <SearchView onOpenSession={openSession} />}
+          {view === "search" && <SearchView />}
           {view === "sessions" && <SessionsView onOpenSession={openSession} />}
           {view === "graph3d" && (
             <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
