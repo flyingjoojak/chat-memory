@@ -13,7 +13,7 @@ function TurnRow({ t, i, defaultOpen = false, highlight = false }: {
   const [openBash, setOpenBash] = useState(false)   // bash 행동은 별도로 열어봐야(자동 노출 X)
   const ref = useRef<HTMLDivElement | null>(null)
   // 방금 클릭한 턴이면 그 턴의 '상단'이 화면 위에 오게 스크롤(로드 직후 1회). scroll-mt로 헤더만큼 여백.
-  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }, [highlight])
+  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" }) }, [highlight])
   const head = t.summary
     ? <><FileText className="inline size-3.5 mr-1.5 -mt-0.5 text-primary/70" />{t.summary}</>
     : (t.question || <span className="text-muted-foreground">(요약 없음)</span>)

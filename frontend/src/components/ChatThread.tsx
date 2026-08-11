@@ -8,8 +8,8 @@ import type { SessionDetail as Detail, SessionTurn } from "@/lib/types"
 function Turn({ t, i, highlight }: { t: SessionTurn; i: number; highlight: boolean }) {
   const [openBash, setOpenBash] = useState(false)   // bash는 자동노출 X, 눌러서만
   const ref = useRef<HTMLDivElement | null>(null)
-  // 선택한 턴이면 그 '상단'이 위에 오게 스크롤(로드 직후 1회).
-  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }) }, [highlight])
+  // 선택한 턴이면 그 '상단'으로 즉시 이동(애니메이션 없이 한 번에 — 긴 내용도 번잡하지 않게).
+  useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" }) }, [highlight])
   return (
     <div ref={ref} className={`scroll-mt-4 rounded-xl border p-3 ${highlight ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30" : "bg-card"}`}>
       <div className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
