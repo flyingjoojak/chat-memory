@@ -24,10 +24,11 @@ type Group = { id: string; label: string; sub: string; count: number; color?: st
 type Conv = { t: string; s: string; h: string }
 
 // 세션/군집 공통 3분할 브라우저. 초기=목록(가운데), 선택 후=[검색+대화목록 | 채팅 | 목록].
-export function Browse3Pane({ kind }: { kind: "sessions" | "clusters" }) {
+// initialSel: 지도에서 진입할 때 특정 그룹을 바로 선택된 상태로 연다(탭으로 들어온 것과 동일 화면).
+export function Browse3Pane({ kind, initialSel = null }: { kind: "sessions" | "clusters"; initialSel?: string | null }) {
   const [groups, setGroups] = useState<Group[] | null>(null)
   const [pointsByCluster, setPointsByCluster] = useState<Map<number, Conv[]>>(new Map())
-  const [sel, setSel] = useState<string | null>(null)
+  const [sel, setSel] = useState<string | null>(initialSel)
   const [selTurn, setSelTurn] = useState<{ session: string; turn: string } | null>(null)
   const [convs, setConvs] = useState<Conv[] | null>(null)   // 선택 그룹의 전체 대화
   const [q, setQ] = useState("")
@@ -36,6 +37,9 @@ export function Browse3Pane({ kind }: { kind: "sessions" | "clusters" }) {
   const [until, setUntil] = useState("")
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [searching, setSearching] = useState(false)
+
+  // 지도에서 다른 그룹으로 진입하면 선택 갱신.
+  useEffect(() => { if (initialSel != null) { setSel(initialSel); setSelTurn(null) } }, [initialSel])
 
   // 그룹 목록 로드
   useEffect(() => {

@@ -1,7 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
-import { ChatThread } from "./ChatThread"
 import { getGraph3D, type Graph3DData, type GraphPoint3D } from "@/lib/api"
 
 const PALETTE = [
@@ -18,7 +16,8 @@ function hueOf(s: string): number {
   return h % 360
 }
 
-export function GraphView3D() {
+// onOpenCluster/onOpenSession: 지도에서 군집/세션 클릭 → 해당 탭(3분할, 왼쪽 검색창)에 그 항목 선택 상태로 진입.
+export function GraphView3D({ onOpenCluster, onOpenSession }: { onOpenCluster: (id: string) => void; onOpenSession: (sid: string) => void }) {
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(true)
@@ -32,11 +31,7 @@ export function GraphView3D() {
   const focusClusterRef = useRef<((id: number | null) => void) | null>(null)   // 지도에서 그 군집만 밝게
   const focusSessionRef = useRef<((sid: string | null) => void) | null>(null)  // 지도에서 그 세션만 밝게
   const clearRef = useRef<() => void>(() => {})            // 빈 공간 클릭 → 격리 해제(three.js에서 호출)
-  const pointClickRef = useRef<(session: string, turn: string) => void>(() => {})   // 점 클릭 → 세션 격리+대화목록
-  const [selCluster, setSelCluster] = useState<number | null>(null)            // 군집 격리+대화목록 대상
-  const [selSession, setSelSession] = useState<string | null>(null)            // 점 클릭 → 세션 격리+대화목록
-  const [clickedTurn, setClickedTurn] = useState<string | null>(null)          // 방금 클릭한 점의 턴(목록서 강조)
-  const [selTurn, setSelTurn] = useState<{ session: string; turn: string } | null>(null)
+  const pointClickRef = useRef<(session: string, turn: string) => void>(() => {})   // 점 클릭 → 그 세션 탭 진입
 
   useEffect(() => {
     getGraph3D().then(setData).catch((e) => {
@@ -450,45 +445,11 @@ export function GraphView3D() {
   const clusters = data?.clusters ?? []
   const hasData = data && data.points.length > 0
 
-  // 선택 군집의 대화 목록(점=청크 → turn 기준 중복 제거).
-  const clusterTurns = useMemo(() => {
-    if (selCluster == null || !data) return []
-    const seen = new Set<string>(); const out: { t: string; s: string; h: string }[] = []
-    for (const p of data.points) {
-      if (p.c !== selCluster || seen.has(p.t)) continue
-      seen.add(p.t); out.push({ t: p.t, s: p.s, h: p.h })
-    }
-    return out
-  }, [selCluster, data])
-  // 선택 세션의 대화 목록(점=청크 → turn 기준 중복 제거).
-  const sessionTurns = useMemo(() => {
-    if (selSession == null || !data) return []
-    const seen = new Set<string>(); const out: { t: string; s: string; h: string }[] = []
-    for (const p of data.points) { if (p.s !== selSession || seen.has(p.t)) continue; seen.add(p.t); out.push({ t: p.t, s: p.s, h: p.h }) }
-    return out
-  }, [selSession, data])
-
-  // 군집/세션 선택 시 지도 격리.
-  useEffect(() => { focusClusterRef.current?.(selCluster) }, [selCluster])
-  useEffect(() => { focusSessionRef.current?.(selSession) }, [selSession])
-
-  // 우측 목록 스크롤 제어: 새 군집 목록은 맨 위로, 점 클릭 세션은 강조 대화로 이동.
-  const listScrollRef = useRef<HTMLDivElement | null>(null)
-  const clickedRef = useRef<HTMLButtonElement | null>(null)
-  useEffect(() => { if (selCluster != null) listScrollRef.current?.scrollTo({ top: 0 }) }, [selCluster])
-  useEffect(() => {
-    if (selSession == null) return
-    if (clickedRef.current) clickedRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
-    else listScrollRef.current?.scrollTo({ top: 0 })
-  }, [selSession, clickedTurn])
-
-  const openCluster = (id: number) => { setSelSession(null); setClickedTurn(null); setSelCluster(id); setSelTurn(null); flyToRef.current?.(id) }
-  const openPointSession = (session: string, turn: string) => { setSelCluster(null); setSelSession(session); setClickedTurn(turn); setSelTurn(null) }
-  pointClickRef.current = openPointSession
-  const clearAll = () => { setSelCluster(null); setSelSession(null); setClickedTurn(null); setSelTurn(null) }   // 격리 해제
-  clearRef.current = clearAll
-  const openTurn = (it: { s: string; t: string }) => setSelTurn({ session: it.s, turn: it.t })          // 대화 클릭 → 채팅 2-pane
-  const selClusterLabel = selCluster != null ? clusters.find((c) => c.id === selCluster)?.label ?? "" : ""
+  // 지도 클릭 = 탭에 들어간 것과 동일: 군집/세션 클릭 → 그 탭(3분할, 왼쪽 검색창)에 선택된 채 진입.
+  const openCluster = (id: number) => onOpenCluster(String(id))
+  pointClickRef.current = (session: string) => onOpenSession(session)   // 점 클릭 → 그 세션 탭
+  clearRef.current = () => {}                                           // 빈 공간 클릭 → 아무 동작 없음
+  // 지도 격리/fly-to는 진입 즉시 탭으로 전환되므로 사용하지 않음(refs는 three.js에서 할당만 됨).
 
   return (
     <div className="flex h-full flex-col">
@@ -506,7 +467,7 @@ export function GraphView3D() {
           </button>
           <span className="text-xs text-muted-foreground">
             {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
-            좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→대화 / 군집 클릭→대화목록
+            좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→세션 / 군집 클릭→군집
           </span>
         </div>
       </div>
@@ -520,7 +481,7 @@ export function GraphView3D() {
                 {/* 떠다니는 라벨은 큰 군집 상위 18개만(과밀 방지) — 전체 목록은 우측 범례에 */}
                 {clusters.slice(0, 18).map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
-                    onClick={() => openCluster(c.id)} title={`${c.label}로 이동`}
+                    onClick={() => openCluster(c.id)} title={`${c.label} 열기`}
                     className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
                     style={{
                       display: "none", color: colorOf(c.id),
@@ -531,65 +492,19 @@ export function GraphView3D() {
                     {c.label}
                   </div>
                 ))}
-                <div className="absolute right-6 top-4 z-20 flex max-h-[86%] w-80 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
-                  {selCluster != null ? (
-                    // ── 군집 대화 목록 ──
-                    <>
-                      <div className="flex items-center gap-1.5 border-b px-2 py-2">
-                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="격리 해제">
-                          <ArrowLeft className="size-3.5" />
-                        </button>
-                        <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(selCluster) }} />
-                        <span className="min-w-0 flex-1 truncate font-medium">{selClusterLabel}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">{clusterTurns.length}</span>
-                      </div>
-                      <div ref={listScrollRef} className="overflow-y-auto p-1.5">
-                        {clusterTurns.map((it) => (
-                          <button key={it.t} type="button" onClick={() => openTurn(it)}
-                            className="w-full rounded-md px-1.5 py-1.5 text-left hover:bg-muted">
-                            <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
-                            <span className="block truncate text-[10px] text-muted-foreground">세션 {it.s.slice(0, 8)}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : selSession != null ? (
-                    // ── 세션 대화 목록(점 클릭) — 클릭한 턴 강조 ──
-                    <>
-                      <div className="flex items-center gap-1.5 border-b px-2 py-2">
-                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="격리 해제">
-                          <ArrowLeft className="size-3.5" />
-                        </button>
-                        <span className="min-w-0 flex-1 truncate font-medium">세션 {selSession.slice(0, 8)}</span>
-                        <span className="shrink-0 tabular-nums text-muted-foreground">{sessionTurns.length}</span>
-                      </div>
-                      <div ref={listScrollRef} className="overflow-y-auto p-1.5">
-                        {sessionTurns.map((it) => (
-                          <button key={it.t} type="button" onClick={() => openTurn(it)}
-                            ref={clickedTurn === it.t ? clickedRef : undefined}
-                            className={`w-full rounded-md px-1.5 py-1.5 text-left ${clickedTurn === it.t ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
-                            <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
-                            {clickedTurn === it.t && <span className="text-[9.5px] font-medium text-primary">방금 클릭</span>}
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    // ── 범례(주제 군집) ──
-                    <>
-                      <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 확대+대화</div>
-                      <div className="overflow-y-auto p-1.5">
-                        {clusters.map((c) => (
-                          <button key={c.id} type="button" onClick={() => openCluster(c.id)}
-                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
-                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
-                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
-                            <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                {/* 우측 범례: 주제 군집 목록 — 클릭하면 그 군집 탭으로 진입 */}
+                <div className="absolute right-6 top-4 z-20 flex max-h-[86%] w-72 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
+                  <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 열기</div>
+                  <div className="overflow-y-auto p-1.5">
+                    {clusters.map((c) => (
+                      <button key={c.id} type="button" onClick={() => openCluster(c.id)}
+                        className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
+                        <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 {tip && (
                   <div role="status" aria-live="polite"
@@ -602,40 +517,6 @@ export function GraphView3D() {
               </div>
             )}
       </div>
-
-      {/* 대화 클릭 시에만 열리는 2-pane 채팅(왼쪽 그 군집 대화목록 + 오른쪽 채팅, 뒤로가기 없이 전환) */}
-      {selTurn != null && (
-        <div className="fixed inset-y-0 right-0 left-[60px] z-40 grid grid-cols-[minmax(320px,380px)_1fr] bg-background">
-          <div className="flex min-h-0 flex-col border-r">
-            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-              <button onClick={() => setSelTurn(null)} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-75">
-                <ArrowLeft className="size-4" />지도로
-              </button>
-              <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                <span className="mr-1.5 inline-block size-2.5 rounded-full align-middle" style={{ background: selCluster != null ? colorOf(selCluster) : "var(--muted-foreground)" }} />
-                {selClusterLabel} · {clusterTurns.length}개 대화
-              </span>
-            </div>
-            <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
-              {clusterTurns.map((it) => {
-                const active = selTurn?.turn === it.t
-                return (
-                  <button key={it.t} onClick={() => setSelTurn({ session: it.s, turn: it.t })}
-                    className={`w-full rounded-lg border p-2.5 text-left transition-colors ${active ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
-                    <div className="line-clamp-2 text-[13px] font-medium leading-snug">{it.h || "(제목 없음)"}</div>
-                    <div className="mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">세션 {it.s.slice(0, 8)}</div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div className="min-h-0 overflow-hidden">
-            {selTurn
-              ? <ChatThread key={`${selTurn.session}:${selTurn.turn}`} session={selTurn.session} focusTurn={selTurn.turn} />
-              : <div className="grid h-full place-items-center text-sm text-muted-foreground">왼쪽 대화를 선택하세요.</div>}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

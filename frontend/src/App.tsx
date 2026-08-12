@@ -21,6 +21,9 @@ const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
 
 export default function App() {
   const [view, setView] = useState<View>("search")
+  // 지도에서 군집/세션 클릭 시 그 항목을 선택된 채로 해당 탭에 진입(진입 경로만 다르고 화면은 동일).
+  const [jump, setJump] = useState<{ kind: "sessions" | "clusters"; id: string } | null>(null)
+  const openTab = (kind: "sessions" | "clusters", id: string) => { setJump({ kind, id }); setView(kind) }
   useEffect(() => { applyTheme() }, [])
 
   return (
@@ -31,7 +34,7 @@ export default function App() {
         {NAV.map((n) => (
           <button
             key={n.v}
-            onClick={() => setView(n.v)}
+            onClick={() => { setView(n.v); setJump(null) }}
             title={n.label}
             aria-label={n.label}
             className={`grid size-10 place-items-center rounded-lg transition-colors ${
@@ -47,11 +50,11 @@ export default function App() {
       <main className="overflow-y-auto">
         <ErrorBoundary key={view}>
           {view === "search" && <SearchView />}
-          {view === "sessions" && <Browse3Pane kind="sessions" />}
-          {view === "clusters" && <Browse3Pane kind="clusters" />}
+          {view === "sessions" && <Browse3Pane kind="sessions" initialSel={jump?.kind === "sessions" ? jump.id : null} />}
+          {view === "clusters" && <Browse3Pane kind="clusters" initialSel={jump?.kind === "clusters" ? jump.id : null} />}
           {view === "graph3d" && (
             <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
-              <GraphView3D />
+              <GraphView3D onOpenCluster={(id) => openTab("clusters", id)} onOpenSession={(sid) => openTab("sessions", sid)} />
             </Suspense>
           )}
           {view === "settings" && <SettingsView />}
