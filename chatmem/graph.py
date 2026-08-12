@@ -147,6 +147,7 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
     clu_pos: dict[int, list[np.ndarray]] = defaultdict(list)
     clu_ptidx: dict[int, list[int]] = defaultdict(list)   # 군집→점index(메도이드용)
     clu_keys: dict[int, set] = defaultdict(set)           # 군집→청크키(승계용)
+    clu_turns: dict[int, set] = defaultdict(set)          # 군집→고유 turn id(표시 개수용, 청크 아님)
     sess_pts: dict[str, list[tuple[int, str, int]]] = defaultdict(list)  # 세션→[(점index, 시각, 청크idx)]
     for i, k in enumerate(keys):
         parts = k.rsplit("#", 1)
@@ -170,6 +171,7 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
             clu_pos[c].append(coords[i])
             clu_ptidx[c].append(ptidx)
             clu_keys[c].add(k)
+            clu_turns[c].add(tid)
 
     # 같은 세션 점을 시간순으로 잇는 경로(성좌) — 2개 이상인 세션만.
     paths = []
@@ -234,7 +236,7 @@ def build_graph(vi, db, dims: int = 2, prev_members: list | None = None) -> dict
         aid = remap[c]
         cen = info[c]["cen"]
         cl = {"id": aid, "label": label_of[c],
-              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": info[c]["size"]}
+              "x": round(float(cen[0]), 2), "y": round(float(cen[1]), 2), "n": len(clu_turns[c])}
         if dims == 3:
             cl["z"] = round(float(cen[2]), 2)
         clusters.append(cl)
