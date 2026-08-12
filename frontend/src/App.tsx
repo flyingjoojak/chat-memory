@@ -21,9 +21,11 @@ const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
 
 export default function App() {
   const [view, setView] = useState<View>("search")
-  // 지도에서 군집/세션 클릭 시 그 항목을 선택된 채로 해당 탭에 진입(진입 경로만 다르고 화면은 동일).
-  const [jump, setJump] = useState<{ kind: "sessions" | "clusters"; id: string } | null>(null)
-  const openTab = (kind: "sessions" | "clusters", id: string) => { setJump({ kind, id }); setView(kind) }
+  // 지도에서 대화(턴)를 클릭하면 그 탭(3분할·왼쪽 검색창)으로 이동해 그 대화를 연다(진입 경로만 다르고 화면 동일).
+  const [jump, setJump] = useState<{ kind: "sessions" | "clusters"; id: string; turn: string; session: string } | null>(null)
+  const openTurn = (kind: "sessions" | "clusters", id: string, turn: string, session: string) => {
+    setJump({ kind, id, turn, session }); setView(kind)
+  }
   useEffect(() => { applyTheme() }, [])
 
   return (
@@ -50,11 +52,17 @@ export default function App() {
       <main className="overflow-y-auto">
         <ErrorBoundary key={view}>
           {view === "search" && <SearchView />}
-          {view === "sessions" && <Browse3Pane kind="sessions" initialSel={jump?.kind === "sessions" ? jump.id : null} />}
-          {view === "clusters" && <Browse3Pane kind="clusters" initialSel={jump?.kind === "clusters" ? jump.id : null} />}
+          {view === "sessions" && (
+            <Browse3Pane kind="sessions" initialSel={jump?.kind === "sessions" ? jump.id : null}
+              initialTurn={jump?.kind === "sessions" ? { turn: jump.turn, session: jump.session } : null} />
+          )}
+          {view === "clusters" && (
+            <Browse3Pane kind="clusters" initialSel={jump?.kind === "clusters" ? jump.id : null}
+              initialTurn={jump?.kind === "clusters" ? { turn: jump.turn, session: jump.session } : null} />
+          )}
           {view === "graph3d" && (
             <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
-              <GraphView3D onOpenCluster={(id) => openTab("clusters", id)} onOpenSession={(sid) => openTab("sessions", sid)} />
+              <GraphView3D onOpenTurn={openTurn} />
             </Suspense>
           )}
           {view === "settings" && <SettingsView />}
