@@ -47,14 +47,26 @@ function Turn({ t, i, highlight }: { t: SessionTurn; i: number; highlight: boole
 }
 
 // 세션 전체를 채팅 스레드로 렌더. focusTurn이 있으면 그 턴을 강조+상단 스크롤.
+const PAD = 25   // 포커스 턴 위/아래로 이만큼만 먼저 렌더(큰 세션 로딩 지연 방지)
+
 export function ChatThread({ session, focusTurn }: { session: string; focusTurn?: string }) {
   const [data, setData] = useState<Detail | null>(null)
   const [err, setErr] = useState("")
+  const [range, setRange] = useState<{ s: number; e: number }>({ s: 0, e: PAD * 2 })
   useEffect(() => {
     setData(null); setErr("")
     getSession(session).then(setData).catch((e) => setErr(String(e)))
   }, [session])
+  // 포커스 턴 주변으로 렌더 창을 잡는다(전부 렌더하면 500+턴에서 1초+ 걸림).
+  useEffect(() => {
+    if (!data) return
+    const n = data.turns.length
+    const fi = focusTurn ? data.turns.findIndex((t) => t.id === focusTurn) : 0
+    const c = fi >= 0 ? fi : 0
+    setRange({ s: Math.max(0, c - PAD), e: Math.min(n, c + PAD + 1) })
+  }, [data, focusTurn])
 
+  const turns = data?.turns ?? []
   return (
     <div className="flex h-full flex-col">
       <div className="shrink-0 border-b px-5 py-3 text-[13px] text-muted-foreground tabular-nums">
@@ -65,7 +77,15 @@ export function ChatThread({ session, focusTurn }: { session: string; focusTurn?
         {!data && !err && <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
         {/* 읽기 좋은 폭으로 묶고 가운데 정렬 — 넓은 패널에서도 채팅답게 */}
         <div className="mx-auto max-w-3xl space-y-3">
-          {data?.turns.map((t, i) => <Turn key={t.id} t={t} i={i} highlight={t.id === focusTurn} />)}
+          {data && range.s > 0 && (
+            <button onClick={() => setRange((r) => ({ ...r, s: Math.max(0, r.s - 50) }))}
+              className="mx-auto block rounded-md border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">이전 {range.s}개 더보기</button>
+          )}
+          {turns.slice(range.s, range.e).map((t, j) => <Turn key={t.id} t={t} i={range.s + j} highlight={t.id === focusTurn} />)}
+          {data && range.e < turns.length && (
+            <button onClick={() => setRange((r) => ({ ...r, e: Math.min(turns.length, r.e + 50) }))}
+              className="mx-auto block rounded-md border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">다음 {turns.length - range.e}개 더보기</button>
+          )}
         </div>
       </div>
     </div>
