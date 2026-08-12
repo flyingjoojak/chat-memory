@@ -32,6 +32,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
   showLinesRef.current = showLines
   const flyToRef = useRef<((id: number) => void) | null>(null)   // 군집 클릭 → 중앙 이동+확대
   const focusClusterRef = useRef<((id: number | null) => void) | null>(null)   // 지도에서 그 군집만 밝게
+  const clearRef = useRef<() => void>(() => {})   // 빈 공간 클릭 → 군집 격리 해제(three.js에서 호출)
   const [selCluster, setSelCluster] = useState<number | null>(null)            // 군집 브라우저(2-pane) 대상
   const [selTurn, setSelTurn] = useState<{ session: string; turn: string } | null>(null)
 
@@ -309,6 +310,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
 
     function onWheel(e: WheelEvent) {
       e.preventDefault()
+      flyGoal = null   // 사용자가 줌하면 진행 중인 fly 애니메이션 즉시 중단(고정감 제거)
       const r = renderer.domElement.getBoundingClientRect()
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
       const rc = new THREE.Raycaster(); rc.setFromCamera(ndc, camera)
@@ -326,6 +328,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
       camera.lookAt(target)
     }
     function onDown(e: PointerEvent) {
+      flyGoal = null   // 드래그 시작하면 fly 중단(회전/이동이 즉시 먹히게)
       downX = lastX = e.clientX; downY = lastY = e.clientY
       drag = e.button === 0 ? "rotate" : "pan"   // 좌=회전, 휠클릭/우클릭=이동
       setGlow(-1)
@@ -350,7 +353,11 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
       const wasRotate = drag === "rotate"
       drag = null
       try { renderer.domElement.releasePointerCapture(e.pointerId) } catch (_) { /* noop */ }
-      if (click && wasRotate) { const i = hitIndex(e.clientX, e.clientY); if (i >= 0) openRef.current(pts[i].s, pts[i].t) }
+      if (click && wasRotate) {
+        const i = hitIndex(e.clientX, e.clientY)
+        if (i >= 0) openRef.current(pts[i].s, pts[i].t)   // 점 클릭 → 그 대화
+        else clearRef.current()                            // 빈 공간 클릭 → 군집 격리 해제
+      }
     }
     const onCtx = (e: Event) => e.preventDefault()
     renderer.domElement.addEventListener("wheel", onWheel, { passive: false })
@@ -446,6 +453,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
 
   const openCluster = (id: number) => { setSelCluster(id); setSelTurn(null); flyToRef.current?.(id) }  // 지도 확대+우측 대화목록
   const clearCluster = () => { setSelCluster(null); setSelTurn(null) }                                  // 군집 해제(지도 복귀)
+  clearRef.current = clearCluster
   const openTurn = (it: { s: string; t: string }) => setSelTurn({ session: it.s, turn: it.t })          // 대화 클릭 → 채팅 2-pane
   const selClusterLabel = selCluster != null ? clusters.find((c) => c.id === selCluster)?.label ?? "" : ""
 
@@ -541,7 +549,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
 
       {/* 대화 클릭 시에만 열리는 2-pane 채팅(왼쪽 그 군집 대화목록 + 오른쪽 채팅, 뒤로가기 없이 전환) */}
       {selTurn != null && (
-        <div className="fixed inset-0 z-40 grid grid-cols-[minmax(320px,380px)_1fr] bg-background">
+        <div className="fixed inset-y-0 right-0 left-[60px] z-40 grid grid-cols-[minmax(320px,380px)_1fr] bg-background">
           <div className="flex min-h-0 flex-col border-r">
             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
               <button onClick={() => setSelTurn(null)} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-75">

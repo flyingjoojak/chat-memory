@@ -75,7 +75,7 @@ export function SessionDetail({ id, focusTurn, onClose }: { id: string; focusTur
 
   return (
     <div ref={containerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={`세션 ${id.slice(0, 8)} 상세`}
-      className="fixed inset-0 z-50 grid grid-rows-[auto_1fr] bg-background outline-none">
+      className="fixed inset-y-0 right-0 left-[60px] z-50 grid grid-rows-[auto_1fr] bg-background outline-none">
       <div className="flex items-center gap-3 border-b bg-background/85 px-6 py-3 backdrop-blur">
         <button onClick={onClose} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-75">
           <ArrowLeft className="size-4" />뒤로

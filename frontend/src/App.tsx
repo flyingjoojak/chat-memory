@@ -34,7 +34,7 @@ export default function App() {
         {NAV.map((n) => (
           <button
             key={n.v}
-            onClick={() => setView(n.v)}
+            onClick={() => { setView(n.v); setOpen(null) }}
             title={n.label}
             aria-label={n.label}
             className={`grid size-10 place-items-center rounded-lg transition-colors ${
