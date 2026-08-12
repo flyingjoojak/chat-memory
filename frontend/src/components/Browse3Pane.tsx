@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ArrowLeft, Loader2, Search } from "lucide-react"
+import { ArrowLeft, ChevronRight, Loader2, MessagesSquare, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
@@ -96,18 +96,33 @@ export function Browse3Pane({ kind }: { kind: "sessions" | "clusters" }) {
   const selGroup = groups?.find((g) => g.id === sel)
   const title = kind === "sessions" ? "세션" : "주제 군집"
 
-  // 그룹 목록(오른쪽 패널 & 초기 가운데 공용)
+  // 그룹 아이콘: 세션=말풍선 / 군집=색점.
+  const groupIcon = (g: Group) => g.color
+    ? <span className="size-3 shrink-0 rounded-full" style={{ background: g.color }} />
+    : <MessagesSquare className="size-4 shrink-0 text-muted-foreground" />
+
+  // 그룹 목록 — 초기(가운데)는 큼직한 카드(hover 떠오름), 오른쪽 패널은 compact.
   const groupList = (compact: boolean) => (
-    <div className={compact ? "min-h-0 flex-1 space-y-1 overflow-y-auto p-3" : "mx-auto w-full max-w-2xl space-y-2 p-4"}>
+    <div className={compact ? "min-h-0 flex-1 space-y-1 overflow-y-auto p-3" : "mx-auto w-full max-w-2xl space-y-2.5 p-4"}>
       {!groups && <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
-      {groups?.map((g) => (
+      {groups?.map((g) => compact ? (
         <button key={g.id} onClick={() => pickGroup(g.id)}
           className={`flex w-full items-center gap-2.5 rounded-lg border p-3 text-left transition-colors ${sel === g.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
-          {g.color && <span className="size-3 shrink-0 rounded-full" style={{ background: g.color }} />}
+          {groupIcon(g)}
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{g.label}</span>
             <span className="block truncate text-[11px] text-muted-foreground tabular-nums">{g.sub}</span>
           </span>
+        </button>
+      ) : (
+        <button key={g.id} onClick={() => pickGroup(g.id)}
+          className="group flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md">
+          {groupIcon(g)}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium">{g.label}</div>
+            <div className="mt-0.5 truncate text-[11.5px] text-muted-foreground tabular-nums">{g.sub}</div>
+          </div>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
         </button>
       ))}
     </div>
