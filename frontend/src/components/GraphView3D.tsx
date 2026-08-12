@@ -441,13 +441,12 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
     }
     return out
   }, [selCluster, data])
-  // 군집 바뀌면 첫 대화 자동 선택.
-  useEffect(() => { setSelTurn(clusterTurns.length ? { session: clusterTurns[0].s, turn: clusterTurns[0].t } : null) }, [clusterTurns])
-  // 군집 선택되면 지도에서 그 군집만 밝게(나머지 어둡게).
+  // 군집 선택되면 지도에서 그 군집만 밝게(나머지 어둡게) + 그 중심으로 확대. (오버레이는 아직 X)
   useEffect(() => { focusClusterRef.current?.(selCluster) }, [selCluster])
 
-  const openCluster = (id: number) => { setSelCluster(id); flyToRef.current?.(id) }
-  const closeCluster = () => { setSelCluster(null); setSelTurn(null) }
+  const openCluster = (id: number) => { setSelCluster(id); setSelTurn(null); flyToRef.current?.(id) }  // 지도 확대+우측 대화목록
+  const clearCluster = () => { setSelCluster(null); setSelTurn(null) }                                  // 군집 해제(지도 복귀)
+  const openTurn = (it: { s: string; t: string }) => setSelTurn({ session: it.s, turn: it.t })          // 대화 클릭 → 채팅 2-pane
   const selClusterLabel = selCluster != null ? clusters.find((c) => c.id === selCluster)?.label ?? "" : ""
 
   return (
@@ -491,16 +490,42 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
                     {c.label}
                   </div>
                 ))}
-                <div className="absolute right-6 top-4 z-20 max-h-[72%] w-56 overflow-y-auto rounded-xl border bg-card/90 p-2 text-xs shadow-md backdrop-blur">
-                  <div className="mb-1 px-1 font-medium text-muted-foreground">주제 군집 · 클릭하면 대화 목록</div>
-                  {clusters.map((c) => (
-                    <button key={c.id} type="button" onClick={() => openCluster(c.id)}
-                      className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
-                      <span className="min-w-0 flex-1 truncate">{c.label}</span>
-                      <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
-                    </button>
-                  ))}
+                <div className="absolute right-6 top-4 z-20 flex max-h-[86%] w-64 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
+                  {selCluster == null ? (
+                    <>
+                      <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 확대+대화</div>
+                      <div className="overflow-y-auto p-1.5">
+                        {clusters.map((c) => (
+                          <button key={c.id} type="button" onClick={() => openCluster(c.id)}
+                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
+                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1.5 border-b px-2 py-2">
+                        <button type="button" onClick={clearCluster} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="전체 군집으로">
+                          <ArrowLeft className="size-3.5" />
+                        </button>
+                        <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(selCluster) }} />
+                        <span className="min-w-0 flex-1 truncate font-medium">{selClusterLabel}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{clusterTurns.length}</span>
+                      </div>
+                      <div className="overflow-y-auto p-1.5">
+                        {clusterTurns.map((it) => (
+                          <button key={it.t} type="button" onClick={() => openTurn(it)}
+                            className="w-full rounded-md px-1.5 py-1.5 text-left hover:bg-muted">
+                            <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
+                            <span className="block truncate text-[10px] text-muted-foreground">세션 {it.s.slice(0, 8)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
                 {tip && (
                   <div role="status" aria-live="polite"
@@ -514,16 +539,16 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
             )}
       </div>
 
-      {/* 군집 브라우저 2-pane: 왼쪽 그 군집 대화 목록 + 오른쪽 채팅(뒤로가기 없이 옆 대화로 전환) */}
-      {selCluster != null && (
+      {/* 대화 클릭 시에만 열리는 2-pane 채팅(왼쪽 그 군집 대화목록 + 오른쪽 채팅, 뒤로가기 없이 전환) */}
+      {selTurn != null && (
         <div className="fixed inset-0 z-40 grid grid-cols-[minmax(320px,380px)_1fr] bg-background">
           <div className="flex min-h-0 flex-col border-r">
             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-3">
-              <button onClick={closeCluster} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-75">
+              <button onClick={() => setSelTurn(null)} className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:opacity-75">
                 <ArrowLeft className="size-4" />지도로
               </button>
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
-                <span className="mr-1.5 inline-block size-2.5 rounded-full align-middle" style={{ background: colorOf(selCluster) }} />
+                <span className="mr-1.5 inline-block size-2.5 rounded-full align-middle" style={{ background: selCluster != null ? colorOf(selCluster) : "var(--muted-foreground)" }} />
                 {selClusterLabel} · {clusterTurns.length}개 대화
               </span>
             </div>
