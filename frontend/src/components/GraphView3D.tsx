@@ -472,6 +472,16 @@ export function GraphView3D() {
   useEffect(() => { focusClusterRef.current?.(selCluster) }, [selCluster])
   useEffect(() => { focusSessionRef.current?.(selSession) }, [selSession])
 
+  // 우측 목록 스크롤 제어: 새 군집 목록은 맨 위로, 점 클릭 세션은 강조 대화로 이동.
+  const listScrollRef = useRef<HTMLDivElement | null>(null)
+  const clickedRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => { if (selCluster != null) listScrollRef.current?.scrollTo({ top: 0 }) }, [selCluster])
+  useEffect(() => {
+    if (selSession == null) return
+    if (clickedRef.current) clickedRef.current.scrollIntoView({ block: "nearest" })
+    else listScrollRef.current?.scrollTo({ top: 0 })
+  }, [selSession, clickedTurn])
+
   const openCluster = (id: number) => { setSelSession(null); setClickedTurn(null); setSelCluster(id); setSelTurn(null); flyToRef.current?.(id) }
   const openPointSession = (session: string, turn: string) => { setSelCluster(null); setSelSession(session); setClickedTurn(turn); setSelTurn(null) }
   pointClickRef.current = openPointSession
@@ -521,7 +531,7 @@ export function GraphView3D() {
                     {c.label}
                   </div>
                 ))}
-                <div className="absolute right-6 top-4 z-20 flex max-h-[86%] w-64 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
+                <div className="absolute right-6 top-4 z-20 flex max-h-[86%] w-80 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
                   {selCluster != null ? (
                     // ── 군집 대화 목록 ──
                     <>
@@ -533,7 +543,7 @@ export function GraphView3D() {
                         <span className="min-w-0 flex-1 truncate font-medium">{selClusterLabel}</span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">{clusterTurns.length}</span>
                       </div>
-                      <div className="overflow-y-auto p-1.5">
+                      <div ref={listScrollRef} className="overflow-y-auto p-1.5">
                         {clusterTurns.map((it) => (
                           <button key={it.t} type="button" onClick={() => openTurn(it)}
                             className="w-full rounded-md px-1.5 py-1.5 text-left hover:bg-muted">
@@ -553,9 +563,10 @@ export function GraphView3D() {
                         <span className="min-w-0 flex-1 truncate font-medium">세션 {selSession.slice(0, 8)}</span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">{sessionTurns.length}</span>
                       </div>
-                      <div className="overflow-y-auto p-1.5">
+                      <div ref={listScrollRef} className="overflow-y-auto p-1.5">
                         {sessionTurns.map((it) => (
                           <button key={it.t} type="button" onClick={() => openTurn(it)}
+                            ref={clickedTurn === it.t ? clickedRef : undefined}
                             className={`w-full rounded-md px-1.5 py-1.5 text-left ${clickedTurn === it.t ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
                             <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
                             {clickedTurn === it.t && <span className="text-[9.5px] font-medium text-primary">방금 클릭</span>}
