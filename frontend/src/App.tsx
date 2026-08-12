@@ -1,8 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from "react"
 import { Search, MessagesSquare, Layers, Box, Settings } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
-import { SessionsView } from "@/components/SessionsView"
-import { ClustersView } from "@/components/ClustersView"
+import { Browse3Pane } from "@/components/Browse3Pane"
 import { SettingsView } from "@/components/SettingsView"
 import { SessionDetail } from "@/components/SessionDetail"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
@@ -52,8 +51,8 @@ export default function App() {
       <main className="overflow-y-auto">
         <ErrorBoundary key={view}>
           {view === "search" && <SearchView />}
-          {view === "sessions" && <SessionsView onOpenSession={openSession} />}
-          {view === "clusters" && <ClustersView />}
+          {view === "sessions" && <Browse3Pane kind="sessions" />}
+          {view === "clusters" && <Browse3Pane kind="clusters" />}
           {view === "graph3d" && (
             <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
               <GraphView3D onOpenSession={openSession} />
