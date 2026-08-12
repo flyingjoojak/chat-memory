@@ -88,16 +88,21 @@ def api_search(
     session: str | None = None,
     since: str | None = None,
     until: str | None = None,
-    semantic_only: bool = False,
+    mode: str = "hybrid",          # hybrid | semantic | keyword
+    semantic_only: bool = False,   # (구버전 호환)
 ):
+    if semantic_only:
+        mode = "semantic"
+    want_sem = mode in ("hybrid", "semantic")
+    want_kw = mode in ("hybrid", "keyword")
     embedder = _state.get("embedder")
-    if embedder is None:
+    if want_sem and embedder is None:
         return {"error": "모델 로딩 중", "hits": []}
     db = ArchiveDB()
     vi = make_index()
     hits = run_search(q, db, vi, embedder, k=k, session=session or None,
                       since=since or None, until=until or None,
-                      keyword=not semantic_only)
+                      keyword=want_kw, semantic=want_sem)
     return {"query": q, "count": len(hits), "hits": [_hit_to_dict(h) for h in hits]}
 
 

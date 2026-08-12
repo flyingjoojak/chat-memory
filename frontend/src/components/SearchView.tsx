@@ -3,34 +3,26 @@ import { Search, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
-import { search } from "@/lib/api"
+import { search, type SearchMode } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
 import type { Hit } from "@/lib/types"
 
 const EXAMPLES = ["급여 계산", "STAGE1 우회", "마이그레이션", "sqlite-vec", "정제 백엔드"]
+const MODES: { v: SearchMode; label: string }[] = [
+  { v: "hybrid", label: "🔀 하이브리드" },
+  { v: "semantic", label: "🧠 의미기반" },
+  { v: "keyword", label: "🔤 키워드기반" },
+]
 
-function Segmented({ options, value, onChange }: {
-  options: [string, string]; value: 0 | 1; onChange: (v: 0 | 1) => void
-}) {
-  return (
-    <div className="relative inline-flex rounded-full border bg-card p-0.5 text-xs select-none">
-      <span
-        className="absolute inset-y-0.5 w-1/2 rounded-full bg-primary/10 ring-1 ring-primary/25 transition-transform duration-200"
-        style={{ transform: value ? "translateX(100%)" : "translateX(0)" }}
-      />
-      {options.map((o, i) => (
-        <button key={o} onClick={() => onChange(i as 0 | 1)}
-          className={`relative z-10 min-w-[80px] rounded-full px-3 py-1.5 transition-colors ${value === i ? "text-primary font-semibold" : "text-muted-foreground"}`}>
-          {o}
-        </button>
-      ))}
-    </div>
-  )
+// 날짜 input 클릭 시 네이티브 달력을 강제로 연다(웹뷰에서 안 뜨는 문제 대응).
+function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) {
+  const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
+  try { el.showPicker?.() } catch { /* 미지원 브라우저 */ }
 }
 
 export function SearchView() {
   const [q, setQ] = useState("")
-  const [semOnly, setSemOnly] = useState<0 | 1>(0)
+  const [mode, setMode] = useState<SearchMode>("hybrid")
   const [k, setK] = useState(15)
   const [since, setSince] = useState("")
   const [until, setUntil] = useState("")
@@ -39,12 +31,12 @@ export function SearchView() {
   // 선택한 결과 → 오른쪽 채팅 스레드로 표시(열고닫기 없이 클릭 전환).
   const [sel, setSel] = useState<{ session: string; turn: string } | null>(null)
 
-  async function run(query = q) {
+  async function run(query = q, m: SearchMode = mode) {
     const term = query.trim()
     if (!term) { setState("idle"); setHits([]); setSel(null); return }
     setState("loading")
     try {
-      const r = await search({ q: term, k, semanticOnly: !!semOnly, since: since || undefined, until: until || undefined })
+      const r = await search({ q: term, k, mode: m, since: since || undefined, until: until || undefined })
       const list = r.hits || []
       setHits(list); setState("done")
       setSel(list.length ? { session: list[0].session_full, turn: list[0].id } : null)   // 첫 결과 자동 선택
@@ -66,7 +58,14 @@ export function SearchView() {
             />
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <Segmented options={["🔀 하이브리드", "🧠 의미만"]} value={semOnly} onChange={(v) => { setSemOnly(v); run() }} />
+            <div className="inline-flex rounded-full border bg-card p-0.5">
+              {MODES.map((m) => (
+                <button key={m.v} type="button" onClick={() => { setMode(m.v); run(q, m.v) }}
+                  className={`rounded-full px-2.5 py-1.5 transition-colors ${mode === m.v ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                  {m.label}
+                </button>
+              ))}
+            </div>
             <label className="inline-flex items-center gap-1">표시
               <select value={k} onChange={(e) => { setK(+e.target.value); run() }}
                 className="rounded-md border bg-card px-1.5 py-1 outline-none shadow-sm">
@@ -76,11 +75,11 @@ export function SearchView() {
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <label className="inline-flex items-center gap-1">이후
-              <input type="date" value={since} onChange={(e) => { setSince(e.target.value); run() }}
-                className="rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
+              <input type="date" value={since} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setSince(e.target.value); run() }}
+                className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
             <label className="inline-flex items-center gap-1">이전
-              <input type="date" value={until} onChange={(e) => { setUntil(e.target.value); run() }}
-                className="rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
+              <input type="date" value={until} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setUntil(e.target.value); run() }}
+                className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
             {(since || until) && (
               <button onClick={() => { setSince(""); setUntil(""); run() }}
                 className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 hover:text-foreground">

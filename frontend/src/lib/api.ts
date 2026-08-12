@@ -6,10 +6,11 @@ async function getJSON<T>(url: string): Promise<T> {
   return r.json() as Promise<T>
 }
 
+export type SearchMode = "hybrid" | "semantic" | "keyword"
 export interface SearchParams {
   q: string
   k?: number
-  semanticOnly?: boolean
+  mode?: SearchMode
   since?: string
   until?: string
   session?: string
@@ -17,7 +18,7 @@ export interface SearchParams {
 
 export function search(p: SearchParams): Promise<SearchResult> {
   const usp = new URLSearchParams({ q: p.q, k: String(p.k ?? 8) })
-  if (p.semanticOnly) usp.set("semantic_only", "true")
+  if (p.mode && p.mode !== "hybrid") usp.set("mode", p.mode)
   if (p.since) usp.set("since", p.since)
   if (p.until) usp.set("until", p.until)
   if (p.session) usp.set("session", p.session)
