@@ -88,16 +88,21 @@ def api_search(
     session: str | None = None,
     since: str | None = None,
     until: str | None = None,
-    semantic_only: bool = False,
+    mode: str = "hybrid",          # hybrid | semantic | keyword
+    semantic_only: bool = False,   # (구버전 호환)
 ):
+    if semantic_only:
+        mode = "semantic"
+    want_sem = mode in ("hybrid", "semantic")
+    want_kw = mode in ("hybrid", "keyword")
     embedder = _state.get("embedder")
-    if embedder is None:
+    if want_sem and embedder is None:
         return {"error": "모델 로딩 중", "hits": []}
     db = ArchiveDB()
     vi = make_index()
     hits = run_search(q, db, vi, embedder, k=k, session=session or None,
                       since=since or None, until=until or None,
-                      keyword=not semantic_only)
+                      keyword=want_kw, semantic=want_sem)
     return {"query": q, "count": len(hits), "hits": [_hit_to_dict(h) for h in hits]}
 
 
@@ -333,17 +338,30 @@ def api_reindex(payload: dict):
     return {"ok": True, "started": True}
 
 
-_GRAPH3D_VER = 2
+_GRAPH3D_VER = 9   # 군집 n=고유 turn 수(청크 아님) → 구캐시 폐기·재계산
 _graph3d_recomputing = {"on": False}
+_GRAPH3D_DELTA_RATIO = 0.05   # 벡터 수 변화가 이 비율(또는 최소 개수) 미만이면 재계산 안 함(지도 흔들림 방지)
+_GRAPH3D_MIN_DELTA = 50
 
 
 def _graph3d_compute_and_cache(n: int) -> dict:
     from . import config as C
     from .graph import build_graph
-    data = build_graph(make_index(), ArchiveDB(), dims=3)
+    cache_path = C.DATA_DIR / "graph3d_cache.json"
+    prev_members = None                          # 이전 군집 구성원 → id 승계 기준
     try:
-        (C.DATA_DIR / "graph3d_cache.json").write_text(
-            json.dumps({"n": n, "v": _GRAPH3D_VER, "data": data}, ensure_ascii=False), encoding="utf-8")
+        if cache_path.exists():
+            old = json.loads(cache_path.read_text(encoding="utf-8"))
+            if old.get("v") == _GRAPH3D_VER:
+                prev_members = old.get("members")
+    except Exception:
+        prev_members = None
+    data = build_graph(make_index(), ArchiveDB(), dims=3, prev_members=prev_members)
+    members = data.pop("_members", [])           # 프론트로는 안 보냄(캐시에만)
+    try:
+        cache_path.write_text(
+            json.dumps({"n": n, "v": _GRAPH3D_VER, "data": data, "members": members}, ensure_ascii=False),
+            encoding="utf-8")
     except Exception:
         pass
     return data
@@ -380,9 +398,11 @@ def _graph3d_data(refresh: bool = False) -> dict:
     if not refresh and cache_path.exists():
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
-            if cached.get("v") == _GRAPH3D_VER:
-                if cached.get("n") != n:
-                    _graph3d_recompute_bg(n)     # 오래된 캐시 → 즉시 반환 + 뒤에서 갱신
+            if cached.get("v") == _GRAPH3D_VER and cached.get("data"):
+                cached_n = int(cached.get("n") or 0)
+                # 임계값 이상 변했을 때만 재계산(작은 변화엔 지도 안 흔들리게) — stale-while-revalidate.
+                if cached_n > 0 and abs(n - cached_n) >= max(_GRAPH3D_MIN_DELTA, int(cached_n * _GRAPH3D_DELTA_RATIO)):
+                    _graph3d_recompute_bg(n)
                 return cached["data"]
         except Exception:
             pass

@@ -6,10 +6,11 @@ async function getJSON<T>(url: string): Promise<T> {
   return r.json() as Promise<T>
 }
 
+export type SearchMode = "hybrid" | "semantic" | "keyword"
 export interface SearchParams {
   q: string
   k?: number
-  semanticOnly?: boolean
+  mode?: SearchMode
   since?: string
   until?: string
   session?: string
@@ -17,7 +18,7 @@ export interface SearchParams {
 
 export function search(p: SearchParams): Promise<SearchResult> {
   const usp = new URLSearchParams({ q: p.q, k: String(p.k ?? 8) })
-  if (p.semanticOnly) usp.set("semantic_only", "true")
+  if (p.mode && p.mode !== "hybrid") usp.set("mode", p.mode)
   if (p.since) usp.set("since", p.since)
   if (p.until) usp.set("until", p.until)
   if (p.session) usp.set("session", p.session)
@@ -33,7 +34,7 @@ export const listSessions = () =>
 export const getStats = () => getJSON<Stats>(`/api/stats`)
 
 // 의미 지도(3D). 점=임베딩 청크, 군집=주제.
-export interface GraphPoint3D { x: number; y: number; z: number; c: number; s: string; h: string }
+export interface GraphPoint3D { x: number; y: number; z: number; c: number; s: string; h: string; t: string }
 export interface GraphCluster3D { id: number; label: string; x: number; y: number; z: number; n: number }
 // paths: 같은 세션 점들을 시간순으로 잇는 인덱스 경로(성좌 선)
 export interface Graph3DData { points: GraphPoint3D[]; clusters: GraphCluster3D[]; paths?: number[][]; method: string | null }

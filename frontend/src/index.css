@@ -145,6 +145,17 @@
 }
 .cm-md .cm-h { display: block; font-weight: 650; margin: 9px 0 2px; }
 .cm-md strong { font-weight: 650; }
+.cm-md em { font-style: italic; }
+.cm-md .cm-del { text-decoration: line-through; opacity: .7; }
+.cm-md .cm-a { color: var(--primary); text-decoration: underline; text-underline-offset: 2px; }
+.cm-md .cm-ul { margin: 5px 0; padding-left: 18px; list-style: disc; }
+.cm-md .cm-ul li { margin: 2px 0; }
+/* 표를 진짜 표로 */
+.cm-md .cm-tblwrap { overflow-x: auto; margin: 8px 0; }
+.cm-md .cm-tbl { border-collapse: collapse; font-size: 12.5px; width: max-content; max-width: 100%; }
+.cm-md .cm-tbl th, .cm-md .cm-tbl td { border: 1px solid var(--border); padding: 5px 9px; text-align: left; vertical-align: top; }
+.cm-md .cm-tbl th { background: var(--muted); font-weight: 650; }
+.cm-md .cm-tbl tbody tr:nth-child(even) td { background: color-mix(in oklab, var(--muted) 40%, transparent); }
 
 /* 의미 지도 점 등장 */
 @keyframes cm-pop { from { opacity: 0 } to { opacity: var(--o, 0.9) } }

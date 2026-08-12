@@ -40,7 +40,8 @@ _PLUMBING_PREFIXES = (
     "<bash-stdout",                    # `!` bash 모드 표준출력
     "<bash-stderr",                    # `!` bash 모드 표준오류
     "[Request interrupted",            # 사용자 중단 마커(주입 이벤트)
-)
+    "[Image: source:",                 # 이미지 첨부 시 뒤따르는 캐시 참조 레코드(별도 턴 아님).
+)                                      #   → 경계로 안 봐야 어시스턴트 응답이 실제 질문 턴에 붙음.
 
 # 행동 상세로 뽑을 우선 키 순서.
 _ACTION_KEYS = ("file_path", "notebook_path", "path", "command", "pattern", "url", "query")
