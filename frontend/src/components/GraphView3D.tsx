@@ -18,22 +18,24 @@ function hueOf(s: string): number {
   return h % 360
 }
 
-export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, turnId?: string) => void }) {
+export function GraphView3D() {
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(true)
   const [err, setErr] = useState<string | null>(null)   // 로드 실패를 '데이터 없음'과 구분
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
-  const openRef = useRef(onOpenSession)
-  openRef.current = onOpenSession
   const linesRef = useRef<THREE.LineSegments | null>(null)
   const showLinesRef = useRef(showLines)
   showLinesRef.current = showLines
   const flyToRef = useRef<((id: number) => void) | null>(null)   // 군집 클릭 → 중앙 이동+확대
   const focusClusterRef = useRef<((id: number | null) => void) | null>(null)   // 지도에서 그 군집만 밝게
-  const clearRef = useRef<() => void>(() => {})   // 빈 공간 클릭 → 군집 격리 해제(three.js에서 호출)
-  const [selCluster, setSelCluster] = useState<number | null>(null)            // 군집 브라우저(2-pane) 대상
+  const focusSessionRef = useRef<((sid: string | null) => void) | null>(null)  // 지도에서 그 세션만 밝게
+  const clearRef = useRef<() => void>(() => {})            // 빈 공간 클릭 → 격리 해제(three.js에서 호출)
+  const pointClickRef = useRef<(session: string, turn: string) => void>(() => {})   // 점 클릭 → 세션 격리+대화목록
+  const [selCluster, setSelCluster] = useState<number | null>(null)            // 군집 격리+대화목록 대상
+  const [selSession, setSelSession] = useState<string | null>(null)            // 점 클릭 → 세션 격리+대화목록
+  const [clickedTurn, setClickedTurn] = useState<string | null>(null)          // 방금 클릭한 점의 턴(목록서 강조)
   const [selTurn, setSelTurn] = useState<{ session: string; turn: string } | null>(null)
 
   useEffect(() => {
@@ -183,29 +185,39 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
     const lmat0 = linesObj ? (linesObj.material as THREE.LineBasicMaterial) : null
     const lineOpBase = dark ? 0.22 : 0.3, lineOpHi = dark ? 0.5 : 0.65
 
-    let focusSess: string | null = null   // 대상 세션(hover)
-    let activeSess: string | null = null  // 페이드 동안 밝게 유지할 세션
-    let clusterFocus: number | null = null   // 선택 군집(브라우저) — 이 군집만 밝게
+    let focusSess: string | null = null   // 대상 세션(hover, 일시)
+    let activeSess: string | null = null  // 페이드 동안 밝게 유지할 세션(hover)
+    let clusterFocus: number | null = null   // 선택 군집(고정) — 이 군집만 밝게
     let activeCluster: number | null = null
+    let sessionFocus: string | null = null   // 선택 세션(고정, 점 클릭) — 이 세션만 밝게
+    let activeSession: string | null = null
     let focusT = 0                         // 0=전부 밝음 … 1=대상만 밝고 나머지 흐림
     let focusDirty = false
+    const sticky = () => clusterFocus != null || sessionFocus != null   // 고정 모드면 hover 무시
     function setHover(sess: string | null) {
-      if (clusterFocus != null) return     // 군집 포커스 중엔 hover 무시
+      if (sticky()) return
       if (sess === focusSess) return
       focusSess = sess
       if (sess) activeSess = sess
       focusDirty = true
     }
-    focusClusterRef.current = (id: number | null) => {   // 군집 선택 → 지도 격리
+    focusClusterRef.current = (id: number | null) => {   // 군집 선택 → 지도 격리(고정)
       if (id === clusterFocus) return
       clusterFocus = id
-      if (id != null) { activeCluster = id; focusSess = null; activeSess = null }
+      if (id != null) { activeCluster = id; sessionFocus = null; activeSession = null; focusSess = null; activeSess = null }
       focusDirty = true
     }
-    // t(0~1)만큼 비대상 점/선을 흐리게. 대상 = 군집(있으면) 우선, 없으면 hover 세션.
+    focusSessionRef.current = (sid: string | null) => {  // 점 클릭 → 그 세션 격리(고정)
+      if (sid === sessionFocus) return
+      sessionFocus = sid
+      if (sid != null) { activeSession = sid; clusterFocus = null; activeCluster = null; focusSess = null; activeSess = null }
+      focusDirty = true
+    }
+    // t(0~1)만큼 비대상 점/선을 흐리게. 대상 우선순위: 군집 고정 > 세션 고정 > hover 세션.
     function applyFocus(t: number) {
+      const keepSess = activeSession ?? activeSess   // 세션 기준으로 밝게 유지할 세션(고정/ hover)
       for (let i = 0; i < pts.length; i++) {
-        const keep = activeCluster != null ? pts[i].c === activeCluster : (activeSess != null && pts[i].s === activeSess)
+        const keep = activeCluster != null ? pts[i].c === activeCluster : (keepSess != null && pts[i].s === keepSess)
         if (keep) {
           col[i * 3] = colBase[i * 3]; col[i * 3 + 1] = colBase[i * 3 + 1]; col[i * 3 + 2] = colBase[i * 3 + 2]
         } else {
@@ -217,7 +229,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
       geo.attributes.color.needsUpdate = true
       if (lineCol && lineColBase && linesObj) {
         for (let v = 0; v < lineVertSess.length; v++) {
-          const keepL = activeCluster == null && activeSess != null && lineVertSess[v] === activeSess
+          const keepL = activeCluster == null && keepSess != null && lineVertSess[v] === keepSess
           if (keepL) {
             lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2]
           } else {
@@ -355,8 +367,8 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
       try { renderer.domElement.releasePointerCapture(e.pointerId) } catch (_) { /* noop */ }
       if (click && wasRotate) {
         const i = hitIndex(e.clientX, e.clientY)
-        if (i >= 0) openRef.current(pts[i].s, pts[i].t)   // 점 클릭 → 그 대화
-        else clearRef.current()                            // 빈 공간 클릭 → 군집 격리 해제
+        if (i >= 0) pointClickRef.current(pts[i].s, pts[i].t)   // 점 클릭 → 그 세션 격리+우측 대화목록
+        else clearRef.current()                                 // 빈 공간 클릭 → 격리 해제
       }
     }
     const onCtx = (e: Event) => e.preventDefault()
@@ -383,10 +395,10 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
         if (target.distanceTo(flyGoal.center) < 0.5 && camera.position.distanceTo(flyGoal.camTo) < 0.5) flyGoal = null
       }
       // hover 강조 부드럽게 페이드(대상 있으면 t→1, 없으면 t→0).
-      const ftarget = (focusSess != null || clusterFocus != null) ? 1 : 0
+      const ftarget = (focusSess != null || clusterFocus != null || sessionFocus != null) ? 1 : 0
       if (focusDirty || Math.abs(focusT - ftarget) > 0.002) {
         focusT += (ftarget - focusT) * 0.2
-        if (Math.abs(focusT - ftarget) < 0.004) { focusT = ftarget; focusDirty = false; if (ftarget === 0) { activeSess = null; activeCluster = null } }
+        if (Math.abs(focusT - ftarget) < 0.004) { focusT = ftarget; focusDirty = false; if (ftarget === 0) { activeSess = null; activeCluster = null; activeSession = null } }
         applyFocus(focusT)
       }
       // 확대할수록 점 조금 커짐(가까울수록 큼).
@@ -425,7 +437,7 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
       renderer.domElement.removeEventListener("contextmenu", onCtx)
       const ln = linesRef.current
       if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
-      flyToRef.current = null; focusClusterRef.current = null
+      flyToRef.current = null; focusClusterRef.current = null; focusSessionRef.current = null
       glowTex.dispose(); glowMat.dispose()
       dotTex.dispose(); geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
@@ -448,12 +460,23 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
     }
     return out
   }, [selCluster, data])
-  // 군집 선택되면 지도에서 그 군집만 밝게(나머지 어둡게) + 그 중심으로 확대. (오버레이는 아직 X)
-  useEffect(() => { focusClusterRef.current?.(selCluster) }, [selCluster])
+  // 선택 세션의 대화 목록(점=청크 → turn 기준 중복 제거).
+  const sessionTurns = useMemo(() => {
+    if (selSession == null || !data) return []
+    const seen = new Set<string>(); const out: { t: string; s: string; h: string }[] = []
+    for (const p of data.points) { if (p.s !== selSession || seen.has(p.t)) continue; seen.add(p.t); out.push({ t: p.t, s: p.s, h: p.h }) }
+    return out
+  }, [selSession, data])
 
-  const openCluster = (id: number) => { setSelCluster(id); setSelTurn(null); flyToRef.current?.(id) }  // 지도 확대+우측 대화목록
-  const clearCluster = () => { setSelCluster(null); setSelTurn(null) }                                  // 군집 해제(지도 복귀)
-  clearRef.current = clearCluster
+  // 군집/세션 선택 시 지도 격리.
+  useEffect(() => { focusClusterRef.current?.(selCluster) }, [selCluster])
+  useEffect(() => { focusSessionRef.current?.(selSession) }, [selSession])
+
+  const openCluster = (id: number) => { setSelSession(null); setClickedTurn(null); setSelCluster(id); setSelTurn(null); flyToRef.current?.(id) }
+  const openPointSession = (session: string, turn: string) => { setSelCluster(null); setSelSession(session); setClickedTurn(turn); setSelTurn(null) }
+  pointClickRef.current = openPointSession
+  const clearAll = () => { setSelCluster(null); setSelSession(null); setClickedTurn(null); setSelTurn(null) }   // 격리 해제
+  clearRef.current = clearAll
   const openTurn = (it: { s: string; t: string }) => setSelTurn({ session: it.s, turn: it.t })          // 대화 클릭 → 채팅 2-pane
   const selClusterLabel = selCluster != null ? clusters.find((c) => c.id === selCluster)?.label ?? "" : ""
 
@@ -499,24 +522,11 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
                   </div>
                 ))}
                 <div className="absolute right-6 top-4 z-20 flex max-h-[86%] w-64 flex-col rounded-xl border bg-card/90 text-xs shadow-md backdrop-blur">
-                  {selCluster == null ? (
-                    <>
-                      <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 확대+대화</div>
-                      <div className="overflow-y-auto p-1.5">
-                        {clusters.map((c) => (
-                          <button key={c.id} type="button" onClick={() => openCluster(c.id)}
-                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
-                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
-                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
-                            <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
+                  {selCluster != null ? (
+                    // ── 군집 대화 목록 ──
                     <>
                       <div className="flex items-center gap-1.5 border-b px-2 py-2">
-                        <button type="button" onClick={clearCluster} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="전체 군집으로">
+                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="격리 해제">
                           <ArrowLeft className="size-3.5" />
                         </button>
                         <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(selCluster) }} />
@@ -529,6 +539,41 @@ export function GraphView3D({ onOpenSession }: { onOpenSession: (id: string, tur
                             className="w-full rounded-md px-1.5 py-1.5 text-left hover:bg-muted">
                             <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
                             <span className="block truncate text-[10px] text-muted-foreground">세션 {it.s.slice(0, 8)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : selSession != null ? (
+                    // ── 세션 대화 목록(점 클릭) — 클릭한 턴 강조 ──
+                    <>
+                      <div className="flex items-center gap-1.5 border-b px-2 py-2">
+                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="격리 해제">
+                          <ArrowLeft className="size-3.5" />
+                        </button>
+                        <span className="min-w-0 flex-1 truncate font-medium">세션 {selSession.slice(0, 8)}</span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{sessionTurns.length}</span>
+                      </div>
+                      <div className="overflow-y-auto p-1.5">
+                        {sessionTurns.map((it) => (
+                          <button key={it.t} type="button" onClick={() => openTurn(it)}
+                            className={`w-full rounded-md px-1.5 py-1.5 text-left ${clickedTurn === it.t ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
+                            <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
+                            {clickedTurn === it.t && <span className="text-[9.5px] font-medium text-primary">방금 클릭</span>}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    // ── 범례(주제 군집) ──
+                    <>
+                      <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 확대+대화</div>
+                      <div className="overflow-y-auto p-1.5">
+                        {clusters.map((c) => (
+                          <button key={c.id} type="button" onClick={() => openCluster(c.id)}
+                            className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted">
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(c.id) }} />
+                            <span className="min-w-0 flex-1 truncate">{c.label}</span>
+                            <span className="shrink-0 tabular-nums text-muted-foreground">{c.n}</span>
                           </button>
                         ))}
                       </div>

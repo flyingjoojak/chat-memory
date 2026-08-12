@@ -3,7 +3,6 @@ import { Search, MessagesSquare, Layers, Box, Settings } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
 import { Browse3Pane } from "@/components/Browse3Pane"
 import { SettingsView } from "@/components/SettingsView"
-import { SessionDetail } from "@/components/SessionDetail"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { applyTheme } from "@/lib/theme"
 
@@ -22,9 +21,6 @@ const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
 
 export default function App() {
   const [view, setView] = useState<View>("search")
-  // 세션 열기(+ 클릭한 턴이 있으면 그 턴을 펼쳐 보여줌).
-  const [open, setOpen] = useState<{ session: string; turn?: string } | null>(null)
-  const openSession = (session: string, turn?: string) => setOpen({ session, turn })
   useEffect(() => { applyTheme() }, [])
 
   return (
@@ -35,7 +31,7 @@ export default function App() {
         {NAV.map((n) => (
           <button
             key={n.v}
-            onClick={() => { setView(n.v); setOpen(null) }}
+            onClick={() => setView(n.v)}
             title={n.label}
             aria-label={n.label}
             className={`grid size-10 place-items-center rounded-lg transition-colors ${
@@ -55,18 +51,12 @@ export default function App() {
           {view === "clusters" && <Browse3Pane kind="clusters" />}
           {view === "graph3d" && (
             <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
-              <GraphView3D onOpenSession={openSession} />
+              <GraphView3D />
             </Suspense>
           )}
           {view === "settings" && <SettingsView />}
         </ErrorBoundary>
       </main>
-
-      {open && (
-        <ErrorBoundary key={`${open.session}:${open.turn ?? ""}`}>
-          <SessionDetail id={open.session} focusTurn={open.turn} onClose={() => setOpen(null)} />
-        </ErrorBoundary>
-      )}
     </div>
   )
 }
