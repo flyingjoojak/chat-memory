@@ -478,7 +478,7 @@ export function GraphView3D() {
   useEffect(() => { if (selCluster != null) listScrollRef.current?.scrollTo({ top: 0 }) }, [selCluster])
   useEffect(() => {
     if (selSession == null) return
-    if (clickedRef.current) clickedRef.current.scrollIntoView({ block: "nearest" })
+    if (clickedRef.current) clickedRef.current.scrollIntoView({ behavior: "smooth", block: "center" })
     else listScrollRef.current?.scrollTo({ top: 0 })
   }, [selSession, clickedTurn])
 
