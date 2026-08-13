@@ -49,6 +49,24 @@ export async function resumeSession(id: string, force = false): Promise<ResumeRe
   return r.json()
 }
 
+// 세션 동기화 감시(Syncthing 충돌 해소) 상태·토글.
+export interface SyncStatus {
+  running: boolean
+  interval: number
+  resolved_total: number
+  last_error: string | null
+  projects_dir: string
+}
+export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
+export async function toggleSync(enabled: boolean, interval?: number): Promise<SyncStatus> {
+  const r = await fetch(`/api/sync/toggle`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled, interval }),
+  })
+  if (!r.ok) throw new Error(`동기화 토글 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+
 export const getStats = () => getJSON<Stats>(`/api/stats`)
 
 // 의미 지도(3D). 점=임베딩 청크, 군집=주제.
