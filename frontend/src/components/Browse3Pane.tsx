@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { ArrowLeft, ChevronRight, Loader2, MessagesSquare, Search } from "lucide-react"
+import { ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
@@ -40,6 +40,17 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   const [until, setUntil] = useState("")
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  // 세션 재개 커맨드(claude --resume <id>) 클립보드 복사.
+  const resumeCmd = sel ? `claude --resume ${sel}` : ""
+  async function copyResume() {
+    if (!resumeCmd) return
+    try {
+      await navigator.clipboard.writeText(resumeCmd)
+      setCopied(true); setTimeout(() => setCopied(false), 1500)
+    } catch { /* 클립보드 미지원/거부 시 무시 */ }
+  }
 
   // 지도에서 진입(그룹/대화)하면 선택 갱신. 객체 대신 원시값을 dep으로 써 매 렌더 재실행 방지.
   const jumpTurn = initialTurn?.turn ?? null
@@ -166,6 +177,22 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
               {selGroup?.label} · {convs?.length ?? 0}
             </span>
           </div>
+          {/* 세션 재개: claude --resume <id> 안내 + 복사 */}
+          {kind === "sessions" && sel && (
+            <div className="mb-2 rounded-lg border bg-muted/40 p-2">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                <RotateCcw className="size-3.5" />해당 세션 재개하기
+              </div>
+              <div className="flex items-center gap-1.5">
+                <code className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1 font-mono text-[11px]" title={resumeCmd}>{resumeCmd}</code>
+                <button type="button" onClick={copyResume} aria-label="재개 커맨드 복사"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] transition-colors hover:bg-muted">
+                  {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+                  {copied ? "복사됨" : "복사"}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-[16px] -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => runSearch(e.target.value)} placeholder={`이 ${title} 안에서 검색…`} className="h-9 rounded-lg pl-9 text-sm" />
