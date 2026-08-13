@@ -156,9 +156,12 @@ _SID_RE = re.compile(r"^[A-Za-z0-9._-]+$")   # 세션 id 화이트리스트(명�
 
 
 @app.post("/api/resume")
-def api_resume(session: str = Query(...)):
+def api_resume(session: str = Query(...), force: bool = False):
     """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 `claude --resume <id>` 실행.
-    로컬 전용(브라우저와 백엔드가 같은 PC일 때만 의미). id는 화이트리스트 + DB 존재 검증."""
+    로컬 전용(브라우저와 백엔드가 같은 PC일 때만 의미). id는 화이트리스트 + DB 존재 검증.
+
+    활성 가드(M3): 세션이 최근 수정됐으면(다른 기기에서 진행 중일 수 있음) force=false일 때
+    실행하지 않고 경고만 반환 → 프론트가 확인받고 force=true로 재요청."""
     sid = session.strip()
     if not _SID_RE.fullmatch(sid):
         raise HTTPException(status_code=400, detail="잘못된 세션 id")
@@ -169,6 +172,18 @@ def api_resume(session: str = Query(...)):
     cwd = (row["project"] or "").strip() or None
     if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
         cwd = None
+
+    # 활성 가드: 최근 수정된 세션이면 이중 재개(분기) 위험을 경고(실행은 보류).
+    from . import session_sync
+    act = session_sync.session_activity(session_sync.find_session_file(sid))
+    if act.active and not force:
+        secs = int(act.seconds_since or 0)
+        return {
+            "ok": False, "active": True, "seconds_since": secs,
+            "warning": f"이 세션이 약 {secs}초 전에 수정됐어요 — 다른 기기에서 진행 중이면 "
+                       "지금 재개 시 분기(fork)될 수 있어요.",
+        }
+
     try:
         _launch_resume(sid, cwd)
     except Exception as e:               # 실행 실패를 사용자에게 그대로 전달

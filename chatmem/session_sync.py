@@ -178,6 +178,41 @@ def watch(
             waited += 0.5
 
 
+# ── M3: 활성 세션 가드 ─────────────────────────────────────────────
+# 세션 jsonl의 mtime을 '마지막 활동 시각'으로 사용(Syncthing이 원본 mtime을 보존하므로
+# 다른 기기의 진행도 그 파일 mtime에 반영됨). 최근 window초 내 수정 = 어딘가에서
+# 진행 중일 수 있음 → 이중 재개 시 분기(fork) 위험 경고용. 별도 하트비트 파일 불필요.
+# Phase 1은 '경고만'(하드 차단 아님) — SESSION_SYNC_SPEC.md §5.2.
+
+ACTIVE_WINDOW_SEC = 300.0   # 이 시간 내 수정이면 '활성 가능성'으로 간주(경고 임계값)
+
+
+@dataclass(frozen=True)
+class Activity:
+    active: bool
+    seconds_since: float | None   # 마지막 수정 이후 경과초(파일 없으면 None)
+
+
+def find_session_file(sid: str, root: Path | None = None) -> Path | None:
+    """세션 id의 원본 jsonl을 projects 아래에서 찾는다(폴더명 무관 전역 검색)."""
+    from . import config as C
+
+    root = Path(root) if root is not None else C.PROJECTS_DIR
+    hits = list(root.rglob(f"{sid}.jsonl"))
+    return hits[0] if hits else None
+
+
+def session_activity(
+    path: Path | None, *, now: float | None = None, window: float = ACTIVE_WINDOW_SEC
+) -> Activity:
+    """세션 파일의 최근 수정 여부로 활성 가능성 판정. now는 테스트 주입용."""
+    if path is None or not Path(path).exists():
+        return Activity(False, None)
+    ref = time.time() if now is None else now
+    age = ref - Path(path).stat().st_mtime
+    return Activity(active=age < window, seconds_since=age)
+
+
 def default_index(log_fn: Callable[[str], None] = print) -> bool:
     """--index 옵션용 게이트형 증분 색인(새 데이터 있을 때만 모델 로드). 기존 파이프라인 재사용."""
     from .indexer import has_new_data, index_all, reconcile

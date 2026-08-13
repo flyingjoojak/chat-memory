@@ -32,8 +32,16 @@ export const listSessions = () =>
   getJSON<{ sessions: SessionRow[] }>(`/api/sessions`)
 
 // 이 PC에서 새 터미널로 `claude --resume <id>` 실행(로컬 전용).
-export async function resumeSession(id: string): Promise<{ ok: boolean; cwd?: string | null }> {
-  const r = await fetch(`/api/resume?session=${encodeURIComponent(id)}`, { method: "POST" })
+// 활성 가드: force=false에서 세션이 최근 수정됐으면 실행하지 않고 {ok:false, active, warning} 반환.
+export interface ResumeResult {
+  ok: boolean
+  cwd?: string | null
+  active?: boolean
+  seconds_since?: number
+  warning?: string
+}
+export async function resumeSession(id: string, force = false): Promise<ResumeResult> {
+  const r = await fetch(`/api/resume?session=${encodeURIComponent(id)}&force=${force}`, { method: "POST" })
   if (!r.ok) {
     const msg = await r.json().catch(() => null)
     throw new Error(msg?.detail || `실행 실패 (HTTP ${r.status})`)

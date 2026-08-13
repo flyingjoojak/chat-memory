@@ -11,8 +11,10 @@ from chatmem.session_sync import (
     ConflictOutcome,
     base_for_conflict,
     classify,
+    find_session_file,
     resolve_all,
     resolve_conflict_file,
+    session_activity,
     sync_tick,
 )
 
@@ -169,3 +171,36 @@ def test_sync_tick_index_fn_error_is_swallowed(tmp_path):
 
     res = sync_tick(tmp_path, index_fn=bad_index)
     assert res.indexed is False   # 색인 실패가 데몬을 죽이지 않음
+
+
+# ── M3: 활성 세션 가드 ───────────────────────────────────────────────
+
+def test_session_activity_recent_is_active(tmp_path):
+    f = _write(tmp_path / "s.jsonl", ["a"])
+    mtime = f.stat().st_mtime
+    # 수정 10초 뒤 기준 → window(300) 안 → active
+    act = session_activity(f, now=mtime + 10, window=300)
+    assert act.active is True
+    assert 9 < act.seconds_since < 11
+
+
+def test_session_activity_stale_is_inactive(tmp_path):
+    f = _write(tmp_path / "s.jsonl", ["a"])
+    mtime = f.stat().st_mtime
+    # 수정 600초 뒤 기준 → window(300) 밖 → 비활성
+    act = session_activity(f, now=mtime + 600, window=300)
+    assert act.active is False
+
+
+def test_session_activity_missing_file(tmp_path):
+    act = session_activity(tmp_path / "nope.jsonl")
+    assert act.active is False
+    assert act.seconds_since is None
+
+
+def test_find_session_file_locates_across_subfolders(tmp_path):
+    proj = tmp_path / "C--Users-JHJOO"
+    proj.mkdir()
+    target = _write(proj / "abc-123.jsonl", ["x"])
+    assert find_session_file("abc-123", root=tmp_path) == target
+    assert find_session_file("does-not-exist", root=tmp_path) is None
