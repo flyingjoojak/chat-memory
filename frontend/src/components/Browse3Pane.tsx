@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -44,14 +44,37 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   const [opening, setOpening] = useState(false)
   const [resumeMsg, setResumeMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  // 타이머 정리(unmount 후 setState 방지). copied 되돌림 / resumeMsg 자동 해제용.
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (copyTimer.current) clearTimeout(copyTimer.current)
+    if (msgTimer.current) clearTimeout(msgTimer.current)
+  }, [])
+  function flashMsg(m: { ok: boolean; text: string }) {
+    setResumeMsg(m)
+    if (msgTimer.current) clearTimeout(msgTimer.current)
+    msgTimer.current = setTimeout(() => setResumeMsg(null), 4000)
+  }
+
   // 세션 재개 커맨드(claude --resume <id>) 클립보드 복사.
   const resumeCmd = sel ? `claude --resume ${sel}` : ""
   async function copyResume() {
     if (!resumeCmd) return
+    // clipboard API는 비보안 컨텍스트(평문 http 비-localhost 등)에서 없을 수 있음 → 가드 + 폴백 안내.
+    const clip = typeof navigator !== "undefined" ? navigator.clipboard : undefined
+    if (!clip?.writeText) {
+      flashMsg({ ok: false, text: "클립보드를 쓸 수 없어요 — 커맨드를 직접 선택해 복사하세요" })
+      return
+    }
     try {
-      await navigator.clipboard.writeText(resumeCmd)
-      setCopied(true); setTimeout(() => setCopied(false), 1500)
-    } catch { /* 클립보드 미지원/거부 시 무시 */ }
+      await clip.writeText(resumeCmd)
+      setCopied(true)
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = setTimeout(() => setCopied(false), 1500)
+    } catch {
+      flashMsg({ ok: false, text: "복사 실패 — 커맨드를 직접 선택해 복사하세요" })
+    }
   }
   // 이 PC에서 새 터미널로 바로 재개(로컬 백엔드가 프로세스 실행).
   async function openResume() {
@@ -59,12 +82,11 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     setOpening(true); setResumeMsg(null)
     try {
       await resumeSession(sel)
-      setResumeMsg({ ok: true, text: "새 터미널에서 재개 실행됨" })
+      flashMsg({ ok: true, text: "새 터미널에서 재개 실행됨" })
     } catch (e) {
-      setResumeMsg({ ok: false, text: e instanceof Error ? e.message : "실행 실패" })
+      flashMsg({ ok: false, text: e instanceof Error ? e.message : "실행 실패" })
     } finally {
       setOpening(false)
-      setTimeout(() => setResumeMsg(null), 4000)
     }
   }
 
