@@ -193,6 +193,9 @@ def _resume_env() -> dict:
 
 def _launch_resume(sid: str, cwd: str | None) -> None:
     """플랫폼별로 새 터미널 창을 열어 claude --resume 실행(종료 후에도 창 유지)."""
+    # 방어심층: 호출자(api_resume)가 이미 검증하지만, 이 함수 단독 오용에도 안전하도록 재검증.
+    if not _SID_RE.fullmatch(sid):
+        raise ValueError(f"안전하지 않은 세션 id: {sid!r}")
     plat = _sys.platform
     env = _resume_env()
     if plat == "win32":
