@@ -77,11 +77,17 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     }
   }
   // 이 PC에서 새 터미널로 바로 재개(로컬 백엔드가 프로세스 실행).
+  // 활성 가드: 세션이 최근 수정됐으면(다른 기기 진행 가능) 확인받고 강제 재개.
   async function openResume() {
     if (!sel || opening) return
     setOpening(true); setResumeMsg(null)
     try {
-      await resumeSession(sel)
+      const r = await resumeSession(sel)
+      if (!r.ok && r.active) {
+        const go = window.confirm(`${r.warning ?? "다른 기기에서 진행 중일 수 있어요."}\n\n그래도 재개할까요? (분기될 수 있음)`)
+        if (!go) return
+        await resumeSession(sel, true)
+      }
       flashMsg({ ok: true, text: "새 터미널에서 재개 실행됨" })
     } catch (e) {
       flashMsg({ ok: false, text: e instanceof Error ? e.message : "실행 실패" })

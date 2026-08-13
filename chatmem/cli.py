@@ -297,6 +297,25 @@ def cmd_scheduler(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sync(args: argparse.Namespace) -> int:
+    """세션 동기화 감시: Syncthing 충돌 사본을 superset-wins/fork로 해소(+선택 색인)."""
+    from . import session_sync
+
+    index_fn = (lambda: session_sync.default_index(log_fn=print)) if args.index else None
+    if args.once:
+        res = session_sync.sync_tick(index_fn=index_fn)
+        for o in res.outcomes:
+            extra = f" → fork {o.forked_to}" if o.forked_to else ""
+            print(f"충돌 해소 {o.resolution}: {o.kept}{extra}")
+        print(f"완료: 충돌 {len(res.outcomes)}건 해소" + (" · 색인 실행" if res.indexed else ""))
+        return 0
+    try:
+        session_sync.watch(interval=args.interval, index_fn=index_fn)
+    except KeyboardInterrupt:
+        print("\n[sync] 중지")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     # 콘솔 진입점(chatmem/mem)은 main()을 인자 없이 호출 → sys.argv에서 직접 취함.
     if argv is None:
@@ -367,6 +386,12 @@ def main(argv: list[str] | None = None) -> int:
 
     st = sub.add_parser("stats", help="현황")
     st.set_defaults(func=cmd_stats)
+
+    sy = sub.add_parser("sync", help="세션 동기화 감시(Syncthing 충돌 해소 + 선택 색인)")
+    sy.add_argument("--once", action="store_true", help="한 번만 점검하고 종료")
+    sy.add_argument("--interval", type=float, default=10.0, help="점검 간격(초, 기본 10)")
+    sy.add_argument("--index", action="store_true", help="동기 직후 증분 색인도 실행(스케줄러 미사용 시)")
+    sy.set_defaults(func=cmd_sync)
 
     # `mem "질의"` 처럼 서브커맨드 생략 시 검색으로 간주:
     # 첫 토큰이 플래그도 아니고 알려진 서브커맨드도 아니면 앞에 'search'를 붙인다.

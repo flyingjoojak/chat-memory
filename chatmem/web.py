@@ -57,7 +57,16 @@ async def _lifespan(app: FastAPI):
             except Exception:
                 pass
     threading.Thread(target=_warm, daemon=True).start()
+
+    # 이전에 켜둔 세션 동기화 감시가 있으면 자동 재개(설정 지속).
+    with contextlib.suppress(Exception):
+        db = ArchiveDB()
+        if db.get_meta("sync_enabled") == "1":
+            iv = db.get_meta("sync_interval")
+            _sync_start(float(iv) if iv else None, persist=False)
+
     yield
+    _sync_stop(persist=False)
     _state.clear()
 
 
@@ -156,9 +165,12 @@ _SID_RE = re.compile(r"^[A-Za-z0-9._-]+$")   # 세션 id 화이트리스트(명�
 
 
 @app.post("/api/resume")
-def api_resume(session: str = Query(...)):
+def api_resume(session: str = Query(...), force: bool = False):
     """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 `claude --resume <id>` 실행.
-    로컬 전용(브라우저와 백엔드가 같은 PC일 때만 의미). id는 화이트리스트 + DB 존재 검증."""
+    로컬 전용(브라우저와 백엔드가 같은 PC일 때만 의미). id는 화이트리스트 + DB 존재 검증.
+
+    활성 가드(M3): 세션이 최근 수정됐으면(다른 기기에서 진행 중일 수 있음) force=false일 때
+    실행하지 않고 경고만 반환 → 프론트가 확인받고 force=true로 재요청."""
     sid = session.strip()
     if not _SID_RE.fullmatch(sid):
         raise HTTPException(status_code=400, detail="잘못된 세션 id")
@@ -169,6 +181,18 @@ def api_resume(session: str = Query(...)):
     cwd = (row["project"] or "").strip() or None
     if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
         cwd = None
+
+    # 활성 가드: 최근 수정된 세션이면 이중 재개(분기) 위험을 경고(실행은 보류).
+    from . import session_sync
+    act = session_sync.session_activity(session_sync.find_session_file(sid))
+    if act.active and not force:
+        secs = int(act.seconds_since or 0)
+        return {
+            "ok": False, "active": True, "seconds_since": secs,
+            "warning": f"이 세션이 약 {secs}초 전에 수정됐어요 — 다른 기기에서 진행 중이면 "
+                       "지금 재개 시 분기(fork)될 수 있어요.",
+        }
+
     try:
         _launch_resume(sid, cwd)
     except Exception as e:               # 실행 실패를 사용자에게 그대로 전달
@@ -215,6 +239,83 @@ def _launch_resume(sid: str, cwd: str | None) -> None:
         except FileNotFoundError:
             continue
     raise RuntimeError("사용 가능한 터미널을 찾지 못했습니다")
+
+
+# ── 세션 동기화 감시(인프로세스, M4) ────────────────────────────────
+# Syncthing 충돌 사본을 주기적으로 해소하는 경량 스레드. 색인은 하지 않음
+# (기존 인덱싱 스케줄러에 위임 → 임베더 중복 로드/이중 색인 방지).
+_sync: dict = {"thread": None, "stop": None, "running": False,
+               "interval": 10.0, "resolved_total": 0, "last_error": None}
+
+
+def _sync_loop() -> None:
+    from . import session_sync
+    st = _sync
+    while st["stop"] is not None and not st["stop"].is_set():
+        try:
+            res = session_sync.sync_tick()          # 충돌 해소만(색인 없음)
+            st["resolved_total"] += len(res.outcomes)
+            st["last_error"] = None
+        except Exception as ex:                     # 한 번의 오류로 스레드가 죽지 않게
+            st["last_error"] = str(ex)
+        st["stop"].wait(st["interval"])
+
+
+def _sync_start(interval: float | None = None, *, persist: bool = True) -> None:
+    import threading
+    if _sync["running"]:
+        if interval:
+            _sync["interval"] = float(interval)
+        return
+    if interval:
+        _sync["interval"] = float(interval)
+    _sync["stop"] = threading.Event()
+    _sync["running"] = True
+    _sync["last_error"] = None
+    t = threading.Thread(target=_sync_loop, daemon=True)
+    _sync["thread"] = t
+    t.start()
+    if persist:
+        with contextlib.suppress(Exception):
+            db = ArchiveDB(); db.set_meta("sync_enabled", "1")
+            db.set_meta("sync_interval", str(_sync["interval"])); db.commit()
+
+
+def _sync_stop(*, persist: bool = True) -> None:
+    if _sync["stop"] is not None:
+        _sync["stop"].set()
+    _sync["running"] = False
+    if persist:
+        with contextlib.suppress(Exception):
+            db = ArchiveDB(); db.set_meta("sync_enabled", "0"); db.commit()
+
+
+def _sync_status() -> dict:
+    from . import config as C
+    return {
+        "running": _sync["running"],
+        "interval": _sync["interval"],
+        "resolved_total": _sync["resolved_total"],
+        "last_error": _sync["last_error"],
+        "projects_dir": str(C.PROJECTS_DIR),
+    }
+
+
+@app.get("/api/sync/status")
+def api_sync_status():
+    return _sync_status()
+
+
+@app.post("/api/sync/toggle")
+def api_sync_toggle(payload: dict):
+    """세션 동기화 감시 스레드 on/off. body: {enabled: bool, interval?: number}."""
+    enabled = bool(payload.get("enabled"))
+    interval = payload.get("interval")
+    if enabled:
+        _sync_start(float(interval) if interval else None)
+    else:
+        _sync_stop()
+    return _sync_status()
 
 
 @app.get("/api/config")

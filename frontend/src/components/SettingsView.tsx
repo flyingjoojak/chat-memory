@@ -7,8 +7,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  getConfig, getEmbedModels, getMcp, getStats, mcpRegister, mcpUnregister, putConfig, reindex, verifyEnrich,
-  type Config, type EmbedModel, type McpTarget,
+  getConfig, getEmbedModels, getMcp, getStats, getSyncStatus, mcpRegister, mcpUnregister, putConfig,
+  reindex, toggleSync, verifyEnrich,
+  type Config, type EmbedModel, type McpTarget, type SyncStatus,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -87,6 +88,64 @@ function McpSection() {
         </div>
       )}
       {note && <div className="py-3 text-xs text-muted-foreground">{note}</div>}
+    </>
+  )
+}
+
+// 세션 동기화(멀티기기): Syncthing 페어링 안내 + 충돌 해소 감시 데몬 토글/상태.
+function SyncSection() {
+  const [st, setSt] = useState<SyncStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [guide, setGuide] = useState(false)
+
+  const load = () => getSyncStatus().then(setSt).catch(() => setSt(null))
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 5000)   // 상태·해소 카운트 주기 갱신
+    return () => clearInterval(id)
+  }, [])
+
+  async function toggle() {
+    if (!st) return
+    setBusy(true)
+    try { setSt(await toggleSync(!st.running)) } catch { /* noop */ } finally { setBusy(false) }
+  }
+
+  return (
+    <>
+      <Row label={
+        <span className="flex items-center gap-2">
+          감시 데몬
+          {st?.running
+            ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">감시 중</span>
+            : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">중지</span>}
+        </span>
+      }>
+        <Button variant={st?.running ? "outline" : "default"} size="sm" disabled={busy || !st} onClick={toggle}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? "중지" : "시작"}
+        </Button>
+      </Row>
+      {st && (
+        <div className="py-2 text-[11px] text-muted-foreground">
+          충돌 해소 누계 {st.resolved_total}건 · 간격 {st.interval}s
+          {st.last_error && <span className="text-destructive"> · 오류: {st.last_error}</span>}
+        </div>
+      )}
+      <div className="py-2 text-xs text-muted-foreground">
+        Syncthing이 <code className="rounded bg-muted px-1">~/.claude/projects</code>를 기기 간 동기하면, 이 데몬이 충돌 사본(<code className="rounded bg-muted px-1">.sync-conflict</code>)을 자동 정리합니다(긴 쪽 채택, 진짜 분기만 새 세션으로 보존). 색인은 기존 인덱싱 스케줄러가 처리합니다.
+        <button onClick={() => setGuide((v) => !v)} className="ml-1 font-medium text-primary hover:opacity-75">
+          {guide ? "설정 방법 접기" : "설정 방법 보기"}
+        </button>
+      </div>
+      {guide && (
+        <ol className="mb-3 list-decimal space-y-1 pl-5 text-[11.5px] text-muted-foreground">
+          <li>각 기기에 <b>Syncthing</b> 설치.</li>
+          <li>두 기기에서 <code className="rounded bg-muted px-1">~/.claude/projects</code> 폴더를 <b>같은 Folder ID</b>로 공유하고 서로를 기기로 승인.</li>
+          <li>파일 버저닝(Staggered)을 켜 삭제·덮어쓰기 이력 보존(권장).</li>
+          <li>여기서 <b>감시 데몬 시작</b> → 충돌이 생기면 자동 정리.</li>
+          <li>서로 다른 시간에만 켠다면 항상 켜진 노드(NAS/라즈베리파이) 하나를 허브로 추가.</li>
+        </ol>
+      )}
     </>
   )
 }
@@ -350,6 +409,10 @@ export function SettingsView() {
 
       <Section title="MCP 연동 (다른 AI가 과거 대화 검색)">
         <McpSection />
+      </Section>
+
+      <Section title="세션 동기화 (멀티기기)">
+        <SyncSection />
       </Section>
 
       <Section title="저장소 현황">
