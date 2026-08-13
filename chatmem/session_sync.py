@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import os
 import re
+import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -119,3 +121,79 @@ def resolve_all(root: Path) -> list[ConflictOutcome]:
             continue
         outcomes.append(resolve_conflict_file(base, cf))
     return outcomes
+
+
+# ── M2: 감시 데몬 ──────────────────────────────────────────────────
+# Syncthing이 파일을 나르고, 이 데몬이 도착분의 '충돌'을 정리한다(고유 역할).
+# 색인은 기존 인덱싱 스케줄러가 커서로 이미 처리하므로 기본 off — 이중 색인 충돌 방지.
+# 스케줄러를 안 쓰는 사용자는 index_fn을 주입해 동기 직후 색인을 붙일 수 있다.
+
+
+@dataclass(frozen=True)
+class SyncTickResult:
+    outcomes: list[ConflictOutcome]   # 이번 틱에 해소한 충돌들
+    indexed: bool                     # 이번 틱에 색인을 돌렸는지
+
+
+def sync_tick(root: Path | None = None, *, index_fn: Callable[[], bool] | None = None) -> SyncTickResult:
+    """한 번의 점검: 충돌 해소 + (선택) 색인. 데몬/수동(--once) 공용, 단독 테스트 가능."""
+    from . import config as C
+
+    root = Path(root) if root is not None else C.PROJECTS_DIR
+    outcomes = resolve_all(root)
+    indexed = False
+    if index_fn is not None:
+        try:
+            indexed = bool(index_fn())
+        except Exception:
+            indexed = False
+    return SyncTickResult(outcomes, indexed)
+
+
+def watch(
+    root: Path | None = None,
+    *,
+    interval: float = 10.0,
+    index_fn: Callable[[], bool] | None = None,
+    stop: Callable[[], bool] | None = None,
+    log_fn: Callable[[str], None] = print,
+) -> None:
+    """폴더를 주기적으로 점검(충돌 해소 + 선택 색인). stop()이 True를 반환하면 종료."""
+    from . import config as C
+
+    root = Path(root) if root is not None else C.PROJECTS_DIR
+    log_fn(f"[sync] 감시 시작: {root} (간격 {interval}s)")
+    while not (stop and stop()):
+        try:
+            res = sync_tick(root, index_fn=index_fn)
+            for o in res.outcomes:
+                extra = f" → fork {o.forked_to}" if o.forked_to else ""
+                log_fn(f"[sync] 충돌 해소 {o.resolution}: {o.kept}{extra}")
+        except Exception as ex:                       # 데몬은 한 번의 오류로 죽지 않게
+            log_fn(f"[sync] 오류: {ex}")
+        # stop에 빠르게 반응하도록 잘게 쪼개 대기
+        waited = 0.0
+        while waited < interval and not (stop and stop()):
+            time.sleep(min(0.5, interval - waited))
+            waited += 0.5
+
+
+def default_index(log_fn: Callable[[str], None] = print) -> bool:
+    """--index 옵션용 게이트형 증분 색인(새 데이터 있을 때만 모델 로드). 기존 파이프라인 재사용."""
+    from .indexer import has_new_data, index_all, reconcile
+    from .store import ArchiveDB
+    from .vectorindex import make_index
+
+    db = ArchiveDB()
+    vi = make_index()
+    try:
+        reconcile(db, vi, log_fn=log_fn)
+    except Exception as ex:
+        log_fn(f"[sync] reconcile 오류: {ex}")
+    if not has_new_data(db):
+        return False
+    from .embedder import Embedder
+
+    embedder = Embedder()
+    index_all(db, vi, embedder, log_fn=log_fn)
+    return True

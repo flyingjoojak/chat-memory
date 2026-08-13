@@ -13,6 +13,7 @@ from chatmem.session_sync import (
     classify,
     resolve_all,
     resolve_conflict_file,
+    sync_tick,
 )
 
 
@@ -133,3 +134,38 @@ def test_resolve_all_scans_and_resolves(tmp_path):
     assert (proj / "sess.jsonl").read_text(encoding="utf-8").splitlines() == ["a", "b", "c"]
     assert (proj / "other.jsonl").exists()
     assert not list(proj.glob("*.sync-conflict-*"))
+
+
+# ── sync_tick: M2 데몬 한 틱 ─────────────────────────────────────────
+
+def test_sync_tick_resolves_without_index(tmp_path):
+    _write(tmp_path / "s.jsonl", ["a"])
+    _write(tmp_path / "s.sync-conflict-20260101-120000-ABC123.jsonl", ["a", "b"])
+    res = sync_tick(tmp_path)
+    assert len(res.outcomes) == 1
+    assert res.outcomes[0].resolution == "conflict_wins"
+    assert res.indexed is False   # index_fn 미주입 → 색인 안 함
+    assert (tmp_path / "s.jsonl").read_text(encoding="utf-8").splitlines() == ["a", "b"]
+
+
+def test_sync_tick_calls_index_fn_after_resolving(tmp_path):
+    _write(tmp_path / "s.jsonl", ["a", "b"])
+    calls: list[int] = []
+
+    def index_fn() -> bool:
+        calls.append(1)
+        return True
+
+    res = sync_tick(tmp_path, index_fn=index_fn)
+    assert calls == [1]
+    assert res.indexed is True
+
+
+def test_sync_tick_index_fn_error_is_swallowed(tmp_path):
+    _write(tmp_path / "s.jsonl", ["a"])
+
+    def bad_index() -> bool:
+        raise RuntimeError("boom")
+
+    res = sync_tick(tmp_path, index_fn=bad_index)
+    assert res.indexed is False   # 색인 실패가 데몬을 죽이지 않음
