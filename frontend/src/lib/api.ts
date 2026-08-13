@@ -31,6 +31,16 @@ export const getSession = (id: string) =>
 export const listSessions = () =>
   getJSON<{ sessions: SessionRow[] }>(`/api/sessions`)
 
+// 이 PC에서 새 터미널로 `claude --resume <id>` 실행(로컬 전용).
+export async function resumeSession(id: string): Promise<{ ok: boolean; cwd?: string | null }> {
+  const r = await fetch(`/api/resume?session=${encodeURIComponent(id)}`, { method: "POST" })
+  if (!r.ok) {
+    const msg = await r.json().catch(() => null)
+    throw new Error(msg?.detail || `실행 실패 (HTTP ${r.status})`)
+  }
+  return r.json()
+}
+
 export const getStats = () => getJSON<Stats>(`/api/stats`)
 
 // 의미 지도(3D). 점=임베딩 청크, 군집=주제.
