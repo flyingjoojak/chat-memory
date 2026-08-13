@@ -177,11 +177,16 @@ def api_resume(session: str = Query(...)):
 
 
 def _resume_env() -> dict:
-    """재개된 claude가 트랜스크립트를 정상 저장하도록 환경 정리.
-    이 서버가 Claude Code 세션 안에서 실행됐다면 CLAUDE_CODE_CHILD_SESSION 마커를
-    상속받아 자식 claude가 '중첩 자식'으로 판단해 로그 저장을 꺼버림 → 마커 제거 + 저장 강제."""
+    """재개된 claude를 '평범한 터미널에서 새로 켠 것'과 동일하게 만드는 환경.
+    이 서버가 Claude Code 세션 안에서 실행되면 부모가 심은 마커들을 상속하는데,
+    그게 자식 claude로 전파되면:
+      - CLAUDE_CODE_CHILD_SESSION → '중첩 자식'으로 보고 트랜스크립트 저장을 끔
+      - NO_COLOR=1 → 모든 색 출력이 꺼져 흰 텍스트만 나옴
+      - CLAUDECODE/CLAUDE_CODE_ENTRYPOINT → 중첩 실행 컨텍스트로 오인
+    → 이 마커들을 제거하고 저장을 강제해 독립 세션처럼 동작하게 한다."""
     env = os.environ.copy()
-    env.pop("CLAUDE_CODE_CHILD_SESSION", None)
+    for k in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "NO_COLOR"):
+        env.pop(k, None)
     env["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1"
     return env
 
