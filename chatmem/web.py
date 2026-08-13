@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -175,22 +176,33 @@ def api_resume(session: str = Query(...)):
     return {"ok": True, "cwd": cwd}
 
 
+def _resume_env() -> dict:
+    """재개된 claude가 트랜스크립트를 정상 저장하도록 환경 정리.
+    이 서버가 Claude Code 세션 안에서 실행됐다면 CLAUDE_CODE_CHILD_SESSION 마커를
+    상속받아 자식 claude가 '중첩 자식'으로 판단해 로그 저장을 꺼버림 → 마커 제거 + 저장 강제."""
+    env = os.environ.copy()
+    env.pop("CLAUDE_CODE_CHILD_SESSION", None)
+    env["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1"
+    return env
+
+
 def _launch_resume(sid: str, cwd: str | None) -> None:
     """플랫폼별로 새 터미널 창을 열어 claude --resume 실행(종료 후에도 창 유지)."""
     plat = _sys.platform
+    env = _resume_env()
     if plat == "win32":
         # 새 콘솔 창에서 실행 + 창 유지(/k). sid는 위에서 화이트리스트 검증됨.
-        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", "claude", "--resume", sid], cwd=cwd)
+        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", "claude", "--resume", sid], cwd=cwd, env=env)
         return
     if plat == "darwin":
         inner = f'cd {shlex.quote(cwd or "~")} && claude --resume {shlex.quote(sid)}'
-        subprocess.Popen(["osascript", "-e", f"tell application \"Terminal\" to do script {json.dumps(inner)}"])
+        subprocess.Popen(["osascript", "-e", f"tell application \"Terminal\" to do script {json.dumps(inner)}"], env=env)
         return
     # linux: 흔한 터미널 emulator 순차 시도
     inner = f'cd {shlex.quote(cwd or "~")} && claude --resume {shlex.quote(sid)}; exec bash'
     for term in (["x-terminal-emulator", "-e"], ["gnome-terminal", "--"], ["konsole", "-e"], ["xterm", "-e"]):
         try:
-            subprocess.Popen(term + ["bash", "-lc", inner])
+            subprocess.Popen(term + ["bash", "-lc", inner], env=env)
             return
         except FileNotFoundError:
             continue
