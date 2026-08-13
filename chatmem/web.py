@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
+import re
+import shlex
+import subprocess
 from pathlib import Path
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -146,6 +150,68 @@ def api_sessions(limit: int = 500):
             "headline": (head["summary"] or head["question"] or "") if head else "",
         })
     return {"sessions": out}
+
+
+_SID_RE = re.compile(r"^[A-Za-z0-9._-]+$")   # 세션 id 화이트리스트(명령 주입 방지)
+
+
+@app.post("/api/resume")
+def api_resume(session: str = Query(...)):
+    """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 `claude --resume <id>` 실행.
+    로컬 전용(브라우저와 백엔드가 같은 PC일 때만 의미). id는 화이트리스트 + DB 존재 검증."""
+    sid = session.strip()
+    if not _SID_RE.fullmatch(sid):
+        raise HTTPException(status_code=400, detail="잘못된 세션 id")
+    db = ArchiveDB()
+    row = db.conn.execute("SELECT project FROM turns WHERE session_id=? LIMIT 1", (sid,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없음")
+    cwd = (row["project"] or "").strip() or None
+    if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
+        cwd = None
+    try:
+        _launch_resume(sid, cwd)
+    except Exception as e:               # 실행 실패를 사용자에게 그대로 전달
+        raise HTTPException(status_code=500, detail=f"터미널 실행 실패: {e}")
+    return {"ok": True, "cwd": cwd}
+
+
+def _resume_env() -> dict:
+    """재개된 claude를 '평범한 터미널에서 새로 켠 것'과 동일하게 만드는 환경.
+    이 서버가 Claude Code 세션 안에서 실행되면 부모가 심은 마커들을 상속하는데,
+    그게 자식 claude로 전파되면:
+      - CLAUDE_CODE_CHILD_SESSION → '중첩 자식'으로 보고 트랜스크립트 저장을 끔
+      - NO_COLOR=1 → 모든 색 출력이 꺼져 흰 텍스트만 나옴
+      - CLAUDECODE/CLAUDE_CODE_ENTRYPOINT → 중첩 실행 컨텍스트로 오인
+    → 이 마커들을 제거하고 저장을 강제해 독립 세션처럼 동작하게 한다."""
+    env = os.environ.copy()
+    for k in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "NO_COLOR"):
+        env.pop(k, None)
+    env["CLAUDE_CODE_FORCE_SESSION_PERSISTENCE"] = "1"
+    return env
+
+
+def _launch_resume(sid: str, cwd: str | None) -> None:
+    """플랫폼별로 새 터미널 창을 열어 claude --resume 실행(종료 후에도 창 유지)."""
+    plat = _sys.platform
+    env = _resume_env()
+    if plat == "win32":
+        # 새 콘솔 창에서 실행 + 창 유지(/k). sid는 위에서 화이트리스트 검증됨.
+        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", "claude", "--resume", sid], cwd=cwd, env=env)
+        return
+    if plat == "darwin":
+        inner = f'cd {shlex.quote(cwd or "~")} && claude --resume {shlex.quote(sid)}'
+        subprocess.Popen(["osascript", "-e", f"tell application \"Terminal\" to do script {json.dumps(inner)}"], env=env)
+        return
+    # linux: 흔한 터미널 emulator 순차 시도
+    inner = f'cd {shlex.quote(cwd or "~")} && claude --resume {shlex.quote(sid)}; exec bash'
+    for term in (["x-terminal-emulator", "-e"], ["gnome-terminal", "--"], ["konsole", "-e"], ["xterm", "-e"]):
+        try:
+            subprocess.Popen(term + ["bash", "-lc", inner], env=env)
+            return
+        except FileNotFoundError:
+            continue
+    raise RuntimeError("사용 가능한 터미널을 찾지 못했습니다")
 
 
 @app.get("/api/config")
