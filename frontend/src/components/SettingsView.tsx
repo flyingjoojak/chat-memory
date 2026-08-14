@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { AlertTriangle, Check, Loader2, Monitor, Moon, Sun, X } from "lucide-react"
+import { AlertTriangle, Check, Copy, ExternalLink, Loader2, Monitor, Moon, Sun, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -111,6 +111,20 @@ function SyncSection() {
     try { setSt(await toggleSync(!st.running)) } catch { /* noop */ } finally { setBusy(false) }
   }
 
+  const [copiedPath, setCopiedPath] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current) }, [])   // unmount 시 타이머 정리
+  async function copyPath() {
+    const p = st?.projects_dir
+    if (!p || !navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(p)
+      setCopiedPath(true)
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = setTimeout(() => setCopiedPath(false), 1500)
+    } catch { /* noop */ }
+  }
+
   return (
     <>
       <Row label={
@@ -132,19 +146,52 @@ function SyncSection() {
         </div>
       )}
       <div className="py-2 text-xs text-muted-foreground">
-        Syncthing이 <code className="rounded bg-muted px-1">~/.claude/projects</code>를 기기 간 동기하면, 이 데몬이 충돌 사본(<code className="rounded bg-muted px-1">.sync-conflict</code>)을 자동 정리합니다(긴 쪽 채택, 진짜 분기만 새 세션으로 보존). 색인은 기존 인덱싱 스케줄러가 처리합니다.
+        여러 기기(집·회사 PC 등)에서 Claude Code를 쓴다면, <b>Syncthing</b>이라는 무료 프로그램으로 대화 기록을 자동으로 똑같이 맞출 수 있어요. 이 앱은 그 과정에서 생기는 충돌만 정리합니다(긴 쪽 채택, 진짜 분기만 새 세션으로 보존).
         <button onClick={() => setGuide((v) => !v)} className="ml-1 font-medium text-primary hover:opacity-75">
-          {guide ? "설정 방법 접기" : "설정 방법 보기"}
+          {guide ? "설정 방법 접기" : "설정 방법 보기(비개발자용)"}
         </button>
       </div>
       {guide && (
-        <ol className="mb-3 list-decimal space-y-1 pl-5 text-[11.5px] text-muted-foreground">
-          <li>각 기기에 <b>Syncthing</b> 설치.</li>
-          <li>두 기기에서 <code className="rounded bg-muted px-1">~/.claude/projects</code> 폴더를 <b>같은 Folder ID</b>로 공유하고 서로를 기기로 승인.</li>
-          <li>파일 버저닝(Staggered)을 켜 삭제·덮어쓰기 이력 보존(권장).</li>
-          <li>여기서 <b>감시 데몬 시작</b> → 충돌이 생기면 자동 정리.</li>
-          <li>서로 다른 시간에만 켠다면 항상 켜진 노드(NAS/라즈베리파이) 하나를 허브로 추가.</li>
-        </ol>
+        <div className="mb-3 space-y-3 rounded-lg border bg-muted/30 p-3 text-[11.5px] leading-relaxed text-muted-foreground">
+          {/* 0) 동기화할 폴더 경로 — 이 앱이 아는 실제 경로를 그대로 복사 */}
+          <div>
+            <div className="mb-1 font-medium text-foreground">0. 동기화할 폴더 (아래 경로를 복사해두세요)</div>
+            <div className="flex items-center gap-1.5">
+              <code id="sync-folder-path" className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1" title={st?.projects_dir}>{st?.projects_dir ?? "…"}</code>
+              <button type="button" onClick={copyPath}
+                aria-label="세션 동기화 폴더 경로 복사" aria-describedby="sync-folder-path"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 transition-colors hover:bg-muted">
+                {copiedPath ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
+                {copiedPath ? "복사됨" : "복사"}
+              </button>
+            </div>
+          </div>
+
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>
+              <b>각 기기에 Syncthing 설치.</b>{" "}
+              <a href="https://syncthing.net/downloads/" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 font-medium text-primary hover:opacity-75">다운로드<ExternalLink className="size-3" /></a>
+              {" "}— 설치·실행하면 브라우저에 관리 화면(<code className="rounded bg-background px-1">http://localhost:8384</code>)이 열려요.
+            </li>
+            <li>
+              <b>두 기기를 서로 연결.</b> 기기 A 관리화면 우측 아래 <i>Actions → Show ID</i>로 A의 기기 ID를 확인하고, 기기 B 관리화면 <i>Add Remote Device</i>에 그 ID를 붙여넣어요. 그러면 기기 A에 <b>"새 기기가 연결하려 합니다" 팝업</b>이 떠요 → <b>수락</b>. (ID 수동 입력은 한쪽만 — 반대쪽은 팝업 수락이면 끝. 팝업이 안 뜨면 양쪽 다 ID를 넣어도 돼요.)
+            </li>
+            <li>
+              <b>폴더 공유 (한 번만).</b> 기기 A에서 <i>Add Folder</i> → <i>Folder Path</i>에 위 <b>0번 경로</b>를 붙여넣고, <i>Sharing</i> 탭에서 기기 B를 체크 → 저장. 기기 B에 "새 폴더 공유 요청"이 뜨면 수락. <b>반대로(B→A) 또 공유할 필요 없어요</b> — 수락하는 순간 양방향 자동 동기.
+              <div className="mt-1 rounded bg-background/70 px-2 py-1">⚠️ 경로는 기기마다 <b>달라도 됩니다</b>(사용자명·OS가 다르면 당연히 다름). 단, 기기 B에서도 반드시 <b>그 기기 자신의 <code className="rounded bg-muted px-1">.claude/projects</code> 폴더</b>로 지정하세요. 엉뚱한 폴더로 받으면 파일은 와도 Claude Code가 인식하지 못해요.</div>
+            </li>
+            <li>(권장) 폴더 설정에서 <i>File Versioning</i>을 <b>Staggered</b>로 켜 실수 삭제·덮어쓰기에 대비.</li>
+            <li>이 앱으로 돌아와 위 <b>감시 데몬 「시작」</b> → 이제 충돌이 생기면 자동 정리돼요.</li>
+            <li>(선택) 두 기기를 동시에 잘 안 켠다면, 항상 켜둔 기기(집 NAS·미니PC 등)를 하나 더 붙이면 시간이 안 겹쳐도 동기화돼요.</li>
+          </ol>
+
+          <div className="text-[11px]">
+            더 자세히:{" "}
+            <a href="https://docs.syncthing.net/intro/getting-started.html" target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 font-medium text-primary hover:opacity-75">Syncthing 공식 시작 가이드<ExternalLink className="size-3" /></a>
+          </div>
+        </div>
       )}
     </>
   )
