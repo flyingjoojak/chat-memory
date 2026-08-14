@@ -112,10 +112,17 @@ function SyncSection() {
   }
 
   const [copiedPath, setCopiedPath] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current) }, [])   // unmount 시 타이머 정리
   async function copyPath() {
     const p = st?.projects_dir
     if (!p || !navigator.clipboard?.writeText) return
-    try { await navigator.clipboard.writeText(p); setCopiedPath(true); setTimeout(() => setCopiedPath(false), 1500) } catch { /* noop */ }
+    try {
+      await navigator.clipboard.writeText(p)
+      setCopiedPath(true)
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = setTimeout(() => setCopiedPath(false), 1500)
+    } catch { /* noop */ }
   }
 
   return (
@@ -150,8 +157,9 @@ function SyncSection() {
           <div>
             <div className="mb-1 font-medium text-foreground">0. 동기화할 폴더 (아래 경로를 복사해두세요)</div>
             <div className="flex items-center gap-1.5">
-              <code className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1" title={st?.projects_dir}>{st?.projects_dir ?? "…"}</code>
-              <button type="button" onClick={copyPath} aria-label="폴더 경로 복사"
+              <code id="sync-folder-path" className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1" title={st?.projects_dir}>{st?.projects_dir ?? "…"}</code>
+              <button type="button" onClick={copyPath}
+                aria-label="세션 동기화 폴더 경로 복사" aria-describedby="sync-folder-path"
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 transition-colors hover:bg-muted">
                 {copiedPath ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
                 {copiedPath ? "복사됨" : "복사"}
@@ -167,10 +175,11 @@ function SyncSection() {
               {" "}— 설치·실행하면 브라우저에 관리 화면(<code className="rounded bg-background px-1">http://localhost:8384</code>)이 열려요.
             </li>
             <li>
-              <b>두 기기를 서로 연결.</b> 기기 A 관리화면 우측 아래 <i>Actions → Show ID</i>로 A의 기기 ID를 확인하고, 기기 B 관리화면 <i>Add Remote Device</i>에 그 ID를 붙여넣어요(반대로도 한 번). 서로 "연결 요청"이 뜨면 수락.
+              <b>두 기기를 서로 연결.</b> 기기 A 관리화면 우측 아래 <i>Actions → Show ID</i>로 A의 기기 ID를 확인하고, 기기 B 관리화면 <i>Add Remote Device</i>에 그 ID를 붙여넣어요. 그러면 기기 A에 <b>"새 기기가 연결하려 합니다" 팝업</b>이 떠요 → <b>수락</b>. (ID 수동 입력은 한쪽만 — 반대쪽은 팝업 수락이면 끝. 팝업이 안 뜨면 양쪽 다 ID를 넣어도 돼요.)
             </li>
             <li>
-              <b>폴더 공유.</b> 기기 A에서 <i>Add Folder</i> → <i>Folder Path</i>에 위 <b>0번 경로</b>를 붙여넣고, <i>Sharing</i> 탭에서 기기 B를 체크 → 저장. 기기 B에 "새 폴더 공유 요청"이 뜨면 수락(경로는 B의 같은 위치로).
+              <b>폴더 공유 (한 번만).</b> 기기 A에서 <i>Add Folder</i> → <i>Folder Path</i>에 위 <b>0번 경로</b>를 붙여넣고, <i>Sharing</i> 탭에서 기기 B를 체크 → 저장. 기기 B에 "새 폴더 공유 요청"이 뜨면 수락. <b>반대로(B→A) 또 공유할 필요 없어요</b> — 수락하는 순간 양방향 자동 동기.
+              <div className="mt-1 rounded bg-background/70 px-2 py-1">⚠️ 경로는 기기마다 <b>달라도 됩니다</b>(사용자명·OS가 다르면 당연히 다름). 단, 기기 B에서도 반드시 <b>그 기기 자신의 <code className="rounded bg-muted px-1">.claude/projects</code> 폴더</b>로 지정하세요. 엉뚱한 폴더로 받으면 파일은 와도 Claude Code가 인식하지 못해요.</div>
             </li>
             <li>(권장) 폴더 설정에서 <i>File Versioning</i>을 <b>Staggered</b>로 켜 실수 삭제·덮어쓰기에 대비.</li>
             <li>이 앱으로 돌아와 위 <b>감시 데몬 「시작」</b> → 이제 충돌이 생기면 자동 정리돼요.</li>
