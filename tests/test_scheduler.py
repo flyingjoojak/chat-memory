@@ -18,6 +18,16 @@ def test_cron_block_has_both_jobs():
     assert "-m chatmem index" in b and "-m chatmem enrich" in b
 
 
+def test_cron_block_has_sync_job():
+    b = S._cron_block()
+    assert "-m chatmem sync --once" in b               # 세션 동기화 충돌 해소(주기)
+
+
+def test_mac_jobs_include_sync():
+    labels = [label for label, _args, _when in S._mac_jobs()]
+    assert "com.chatmem.sync" in labels
+
+
 def test_cron_strip_is_idempotent():
     existing = "0 0 * * * echo hi\n"
     injected = existing + "\n" + S._cron_block()
