@@ -1,11 +1,12 @@
-"""크로스플랫폼 스케줄러 등록: 10분 증분 인덱싱 + 야간 정제.
+"""크로스플랫폼 스케줄러 등록: 10분 증분 인덱싱 + 야간 정제 + 세션 동기화 충돌 해소.
 
-- Windows: schtasks (chatmem-index / chatmem-enrich)
+- Windows: schtasks (chatmem-index / chatmem-enrich / chatmem-sync)
 - macOS:   launchd (~/Library/LaunchAgents/com.chatmem.*.plist)
 - Linux:   cron (crontab 관리 블록)
 
-스케줄이 실행하는 명령은 `<python> -m chatmem index|enrich` (콘솔 PATH 불필요).
-index/enrich 커맨드가 내부에서 절전방지·로그·메모리가드를 이미 처리한다.
+스케줄이 실행하는 명령은 `<python> -m chatmem index|enrich|sync --once` (콘솔 PATH 불필요).
+index/enrich 커맨드가 내부에서 절전방지·로그·메모리가드를 이미 처리하고,
+sync --once 는 헤드리스에서 Syncthing 충돌 사본을 주기적으로 해소(웹앱 안 켜도).
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ INDEX_EVERY_MIN, ENRICH_HOUR, ENRICH_MIN = _timing()
 
 _WIN_INDEX = "chatmem-index"
 _WIN_ENRICH = "chatmem-enrich"
+_WIN_SYNC = "chatmem-sync"
 _CRON_BEGIN = "# >>> chatmem >>>"
 _CRON_END = "# <<< chatmem <<<"
 
@@ -55,6 +57,11 @@ def _enrich_cmd() -> list[str]:
     return [_py(), "-m", "chatmem", "enrich"]
 
 
+def _sync_cmd() -> list[str]:
+    # 헤드리스에서 Syncthing 충돌 사본을 주기적으로 해소(웹앱 안 켜도). 색인은 index 작업이 담당.
+    return [_py(), "-m", "chatmem", "sync", "--once"]
+
+
 # ---------- Windows (schtasks) ----------
 def _win_install(dry_run: bool) -> list[str]:
     py = _py()
@@ -63,6 +70,8 @@ def _win_install(dry_run: bool) -> list[str]:
          ["/SC", "MINUTE", "/MO", str(INDEX_EVERY_MIN)]),
         (_WIN_ENRICH, f'"{py}" -m chatmem enrich',
          ["/SC", "DAILY", "/ST", f"{ENRICH_HOUR:02d}:{ENRICH_MIN:02d}"]),
+        (_WIN_SYNC, f'"{py}" -m chatmem sync --once',
+         ["/SC", "MINUTE", "/MO", str(INDEX_EVERY_MIN)]),
     ]
     lines = []
     for name, tr, sched in tasks:
@@ -75,7 +84,7 @@ def _win_install(dry_run: bool) -> list[str]:
 
 def _win_uninstall(dry_run: bool) -> list[str]:
     lines = []
-    for name in (_WIN_INDEX, _WIN_ENRICH):
+    for name in (_WIN_INDEX, _WIN_ENRICH, _WIN_SYNC):
         cmd = ["schtasks", "/Delete", "/TN", name, "/F"]
         lines.append(" ".join(cmd))
         if not dry_run:
@@ -85,7 +94,7 @@ def _win_uninstall(dry_run: bool) -> list[str]:
 
 def _win_status() -> str:
     out = []
-    for name in (_WIN_INDEX, _WIN_ENRICH):
+    for name in (_WIN_INDEX, _WIN_ENRICH, _WIN_SYNC):
         r = subprocess.run(["schtasks", "/Query", "/TN", name],
                            capture_output=True, text=True)
         out.append(f"{name}: {'등록됨' if r.returncode == 0 else '없음'}")
@@ -119,6 +128,7 @@ def _mac_jobs():
     return [
         ("com.chatmem.index", _index_cmd(), {"interval": INDEX_EVERY_MIN * 60}),
         ("com.chatmem.enrich", _enrich_cmd(), {"hour": ENRICH_HOUR, "minute": ENRICH_MIN}),
+        ("com.chatmem.sync", _sync_cmd(), {"interval": INDEX_EVERY_MIN * 60}),
     ]
 
 
@@ -158,9 +168,11 @@ def _mac_status() -> str:
 def _cron_block() -> str:
     idx = " ".join(_index_cmd())
     enr = " ".join(_enrich_cmd())
+    syn = " ".join(_sync_cmd())
     return (f"{_CRON_BEGIN}\n"
             f"*/{INDEX_EVERY_MIN} * * * * {idx}\n"
             f"{ENRICH_MIN} {ENRICH_HOUR} * * * {enr}\n"
+            f"*/{INDEX_EVERY_MIN} * * * * {syn}\n"
             f"{_CRON_END}\n")
 
 
