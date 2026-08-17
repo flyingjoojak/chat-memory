@@ -325,8 +325,20 @@ def _sync_loop() -> None:
         st["stop"].wait(st["interval"])
 
 
+def _persist_sync_meta_bg(enabled: bool) -> None:
+    """설정 저장(sync_enabled)을 백그라운드로 — busy_timeout(60s) 동안 DB 쓰기 락(자동 색인 등)에
+    토글 요청이 막혀 스피너가 안 멈추던 문제 방지. 저장은 best-effort."""
+    def _w() -> None:
+        with contextlib.suppress(Exception):
+            db = ArchiveDB()
+            db.set_meta("sync_enabled", "1" if enabled else "0")
+            if enabled:
+                db.set_meta("sync_interval", str(_sync["interval"]))
+            db.commit()
+    threading.Thread(target=_w, daemon=True).start()
+
+
 def _sync_start(interval: float | None = None, *, persist: bool = True) -> None:
-    import threading
     if _sync["running"]:
         if interval:
             _sync["interval"] = float(interval)
@@ -340,9 +352,7 @@ def _sync_start(interval: float | None = None, *, persist: bool = True) -> None:
     _sync["thread"] = t
     t.start()
     if persist:
-        with contextlib.suppress(Exception):
-            db = ArchiveDB(); db.set_meta("sync_enabled", "1")
-            db.set_meta("sync_interval", str(_sync["interval"])); db.commit()
+        _persist_sync_meta_bg(True)
 
 
 def _sync_stop(*, persist: bool = True) -> None:
@@ -350,8 +360,7 @@ def _sync_stop(*, persist: bool = True) -> None:
         _sync["stop"].set()
     _sync["running"] = False
     if persist:
-        with contextlib.suppress(Exception):
-            db = ArchiveDB(); db.set_meta("sync_enabled", "0"); db.commit()
+        _persist_sync_meta_bg(False)
 
 
 def _sync_status() -> dict:
