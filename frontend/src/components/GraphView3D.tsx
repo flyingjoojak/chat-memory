@@ -40,12 +40,20 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
   const [selSession, setSelSession] = useState<string | null>(null)            // 점 클릭 → 세션 격리+대화목록
   const [clickedTurn, setClickedTurn] = useState<string | null>(null)          // 방금 클릭한 점의 턴(목록서 강조)
 
+  const [refreshing, setRefreshing] = useState(false)
   useEffect(() => {
     getGraph3D().then(setData).catch((e) => {
       console.error("[graph3d] load failed", e)
       setErr(String(e)); setData({ points: [], clusters: [], method: null })
     })
   }, [])
+  // 군집·라벨 강제 재계산(정제로 태그가 바뀌면 캐시된 라벨이 옛것이라 새로 계산).
+  async function regenerate() {
+    setRefreshing(true)
+    try { setData(await getGraph3D(true)) }
+    catch (e) { setErr(String(e)) }
+    finally { setRefreshing(false) }
+  }
 
   useEffect(() => {
     const wrap = wrapRef.current
@@ -509,6 +517,15 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
             }`}
           >
             세션 선 {showLines ? "켜짐" : "꺼짐"}
+          </button>
+          <button
+            type="button"
+            onClick={regenerate}
+            disabled={refreshing}
+            title="군집·라벨을 다시 계산(정제 후 태그가 바뀌었을 때)"
+            className="rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
+          >
+            {refreshing ? "재계산 중…" : "지도 재생성"}
           </button>
           <span className="text-xs text-muted-foreground">
             {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}

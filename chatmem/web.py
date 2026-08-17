@@ -536,6 +536,8 @@ def api_enrich(payload: dict | None = None):
                 log_fn=lambda m: _enrich_state.__setitem__("phase", m),
                 progress_fn=lambda d, t: _enrich_state.update(done_sessions=d, total_sessions=t),
             )
+            if total:
+                _graph3d_invalidate()   # 태그가 바뀌었으니 군집 라벨도 다시 계산되게 지도 캐시 폐기
             _enrich_state.update(phase=f"완료: {total}턴 정제", enriched=total)
         except Exception as e:  # noqa: BLE001
             _enrich_state.update(phase="오류", last_error=str(e))
@@ -747,6 +749,13 @@ def _graph3d_data(refresh: bool = False) -> dict:
 
     # 캐시 없음(최초) 또는 강제 → 동기 계산. (보통 시작 시 예열로 이미 채워짐)
     return _graph3d_compute_and_cache(n)
+
+
+def _graph3d_invalidate() -> None:
+    """지도 캐시 폐기 → 다음 조회 시 군집·라벨 재계산. 정제로 태그가 바뀌었을 때 등."""
+    from . import config as C
+    with contextlib.suppress(Exception):
+        (C.DATA_DIR / "graph3d_cache.json").unlink(missing_ok=True)
 
 
 @app.get("/api/graph3d")
