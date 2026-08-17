@@ -112,7 +112,9 @@ export interface GraphPoint3D { x: number; y: number; z: number; c: number; s: s
 export interface GraphCluster3D { id: number; label: string; x: number; y: number; z: number; n: number }
 // paths: 같은 세션 점들을 시간순으로 잇는 인덱스 경로(성좌 선)
 export interface Graph3DData { points: GraphPoint3D[]; clusters: GraphCluster3D[]; paths?: number[][]; method: string | null }
-export const getGraph3D = () => getJSON<Graph3DData>(`/api/graph3d`)
+// refresh=true면 캐시 무시하고 군집·라벨 재계산(정제 후 등).
+export const getGraph3D = (refresh = false) =>
+  getJSON<Graph3DData>(`/api/graph3d${refresh ? "?refresh=true" : ""}`)
 
 export interface Config {
   enrich_backend: string

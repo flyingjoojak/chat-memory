@@ -325,8 +325,20 @@ def _sync_loop() -> None:
         st["stop"].wait(st["interval"])
 
 
+def _persist_sync_meta_bg(enabled: bool) -> None:
+    """설정 저장(sync_enabled)을 백그라운드로 — busy_timeout(60s) 동안 DB 쓰기 락(자동 색인 등)에
+    토글 요청이 막혀 스피너가 안 멈추던 문제 방지. 저장은 best-effort."""
+    def _w() -> None:
+        with contextlib.suppress(Exception):
+            db = ArchiveDB()
+            db.set_meta("sync_enabled", "1" if enabled else "0")
+            if enabled:
+                db.set_meta("sync_interval", str(_sync["interval"]))
+            db.commit()
+    threading.Thread(target=_w, daemon=True).start()
+
+
 def _sync_start(interval: float | None = None, *, persist: bool = True) -> None:
-    import threading
     if _sync["running"]:
         if interval:
             _sync["interval"] = float(interval)
@@ -340,9 +352,7 @@ def _sync_start(interval: float | None = None, *, persist: bool = True) -> None:
     _sync["thread"] = t
     t.start()
     if persist:
-        with contextlib.suppress(Exception):
-            db = ArchiveDB(); db.set_meta("sync_enabled", "1")
-            db.set_meta("sync_interval", str(_sync["interval"])); db.commit()
+        _persist_sync_meta_bg(True)
 
 
 def _sync_stop(*, persist: bool = True) -> None:
@@ -350,8 +360,7 @@ def _sync_stop(*, persist: bool = True) -> None:
         _sync["stop"].set()
     _sync["running"] = False
     if persist:
-        with contextlib.suppress(Exception):
-            db = ArchiveDB(); db.set_meta("sync_enabled", "0"); db.commit()
+        _persist_sync_meta_bg(False)
 
 
 def _sync_status() -> dict:
@@ -527,6 +536,8 @@ def api_enrich(payload: dict | None = None):
                 log_fn=lambda m: _enrich_state.__setitem__("phase", m),
                 progress_fn=lambda d, t: _enrich_state.update(done_sessions=d, total_sessions=t),
             )
+            if total:
+                _graph3d_invalidate()   # 태그가 바뀌었으니 군집 라벨도 다시 계산되게 지도 캐시 폐기
             _enrich_state.update(phase=f"완료: {total}턴 정제", enriched=total)
         except Exception as e:  # noqa: BLE001
             _enrich_state.update(phase="오류", last_error=str(e))
@@ -738,6 +749,13 @@ def _graph3d_data(refresh: bool = False) -> dict:
 
     # 캐시 없음(최초) 또는 강제 → 동기 계산. (보통 시작 시 예열로 이미 채워짐)
     return _graph3d_compute_and_cache(n)
+
+
+def _graph3d_invalidate() -> None:
+    """지도 캐시 폐기 → 다음 조회 시 군집·라벨 재계산. 정제로 태그가 바뀌었을 때 등."""
+    from . import config as C
+    with contextlib.suppress(Exception):
+        (C.DATA_DIR / "graph3d_cache.json").unlink(missing_ok=True)
 
 
 @app.get("/api/graph3d")
