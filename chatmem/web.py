@@ -79,7 +79,16 @@ def _run_incremental() -> bool:
 async def _lifespan(app: FastAPI):
     from .embedder import Embedder
 
-    _state["embedder"] = Embedder()  # 무거운 모델 1회 로드
+    # 첫 실행 온보딩(프리즈 exe 전용): 아직 모델을 고른 적 없으면(=색인 이력 없음) 무거운 기본 모델을
+    # 미리 로드하지 않는다. 저사양 기기가 6GB짜리 e5-large를 자동으로 물지 않게, 사용자가 먼저 고른다.
+    _needs_onboarding = False
+    with contextlib.suppress(Exception):
+        if getattr(_sys, "frozen", False) and ArchiveDB().get_meta("embed_model") is None:
+            _needs_onboarding = True
+    _state["needs_onboarding"] = _needs_onboarding
+
+    if not _needs_onboarding:
+        _state["embedder"] = Embedder()  # 이미 모델 확정됨 → 로드
 
     # 자동 색인(프리즈 exe 전용): 배포된 프로그램은 외부 스케줄러가 없으므로 웹서버가 스스로 색인한다.
     # 시작 시 1회 + 주기적으로 새 대화(동기 유입 포함)를 증분 색인. 개발(python)은 스케줄러가 하므로 미가동.
@@ -443,11 +452,14 @@ def api_config_put(payload: dict):
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
 _EMBED_ALLOW = {
     "intfloat/multilingual-e5-large": {
-        "note": "최고 품질. 기본값.", "ram_gb": 6.4, "cps": 0.8},
+        "note": "최고 품질. 고사양 기기용.", "ram_gb": 6.4, "cps": 0.8,
+        "tags": ["품질 최상", "램 부하 높음", "속도 느림"]},
     "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": {
-        "note": "중간 품질·RAM.", "ram_gb": 4.5, "cps": 2.1},
+        "note": "품질·부하 중간. 균형형.", "ram_gb": 4.5, "cps": 2.1,
+        "tags": ["품질 좋음", "램 부하 보통", "속도 보통"]},
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "가벼움. 저RAM 기기용.", "ram_gb": 1.2, "cps": 31.0},
+        "note": "가벼움. 저사양 기기 추천.", "ram_gb": 1.2, "cps": 31.0,
+        "tags": ["램 부하 적음", "속도 매우 빠름", "저사양 추천"]},
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0}
@@ -575,10 +587,37 @@ def api_embed_models():
             "ram_gb": meta["ram_gb"],                 # 임베딩 중 실사용 피크(실측)
             "cps": cps,
             "est_reindex_min": round(total_chunks / cps / 60, 1) if cps else None,
-            "note": meta["note"], "current": name == C.EMBED_MODEL,
+            "note": meta["note"], "tags": meta.get("tags", []), "current": name == C.EMBED_MODEL,
         })
     return {"models": out, "current": C.EMBED_MODEL,
             "total_chunks": total_chunks, "reindex": _reindex_state}
+
+
+@app.get("/api/onboarding")
+def api_onboarding():
+    """첫 실행 여부 — True면 프론트가 모델 선택 화면을 먼저 보여준다."""
+    return {"needed": bool(_state.get("needs_onboarding"))}
+
+
+@app.post("/api/onboarding/choose")
+def api_onboarding_choose(payload: dict):
+    """첫 실행에서 임베딩 모델 확정 → 설정 저장 + 그 모델 로드(백그라운드) + 색인 시작."""
+    from . import config as C
+    model = str((payload or {}).get("model", "")).strip()
+    if model not in _EMBED_ALLOW:
+        return {"ok": False, "error": "알 수 없는 모델"}
+    C.write_config({"CHATMEM_EMBED_MODEL": model})
+
+    def _load():
+        from .embedder import Embedder
+        with contextlib.suppress(Exception):
+            _state["embedder"] = Embedder(model)   # 다운로드/로드(가벼운 모델이면 빠름)
+        with contextlib.suppress(Exception):
+            ArchiveDB().set_meta("embed_model", model)   # 확정 표시 → 다음 실행부터 온보딩 안 함
+
+    _state["needs_onboarding"] = False
+    threading.Thread(target=_load, daemon=True).start()   # 자동 색인 스레드가 임베더 로드되면 색인 시작
+    return {"ok": True, "model": model}
 
 
 @app.post("/api/reindex")

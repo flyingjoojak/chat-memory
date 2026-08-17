@@ -158,12 +158,24 @@ export interface EmbedModel {
   cps: number             // 청크/초 처리량(실측)
   est_reindex_min: number | null
   note: string
+  tags: string[]          // 특징 라벨(예: "램 부하 적음", "품질 최상")
   current: boolean
 }
 export interface ReindexState { running: boolean; done: number; msg: string; done_files: number; total_files: number }
 
 export const getEmbedModels = () =>
   getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)
+
+// 첫 실행 온보딩(임베딩 모델 선택)
+export const getOnboarding = () => getJSON<{ needed: boolean }>(`/api/onboarding`)
+export async function chooseModel(model: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+  const r = await fetch(`/api/onboarding/choose`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  })
+  if (!r.ok) throw new Error(`모델 선택 실패 (HTTP ${r.status})`)
+  return r.json()
+}
 
 // MCP 클라이언트 등록
 export interface McpTarget {
