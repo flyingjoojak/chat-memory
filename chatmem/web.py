@@ -34,6 +34,10 @@ _DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
     else (Path(__file__).resolve().parent.parent / "frontend" / "dist")
 
 
+# 자동 색인 상태(프리즈 exe에서 백그라운드 색인 진행 상황 — UI에 노출).
+_autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기", "indexed_total": 0, "last_error": None}
+
+
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI):
     import threading
@@ -41,6 +45,42 @@ async def _lifespan(app: FastAPI):
     from .embedder import Embedder
 
     _state["embedder"] = Embedder()  # 무거운 모델 1회 로드
+
+    # 자동 색인(프리즈 exe 전용): 배포된 프로그램은 외부 스케줄러가 없으므로 웹서버가 스스로 색인한다.
+    # 시작 시 1회 + 주기적으로 새 대화(동기로 들어온 것 포함)를 증분 색인. 이미 로드된 임베더 재사용(이중 로드 없음).
+    # 개발(python 실행)은 스케줄러/CLI가 색인하므로 켜지 않음(이중 색인 방지).
+    def _autoindex():
+        import time
+
+        from . import config as C
+        from .indexer import has_new_data, index_all, reconcile
+
+        _autoindex_state["enabled"] = True
+        interval = max(60, int(getattr(C, "INDEX_INTERVAL_MIN", 10)) * 60)
+        while True:
+            try:
+                db = ArchiveDB()
+                vi = make_index()
+                with contextlib.suppress(Exception):
+                    reconcile(db, vi, log_fn=lambda m: None)   # 고아 벡터 정리(값쌈)
+                # 재색인(모델 교체) 중이면 충돌 방지로 이번 회차 건너뜀.
+                if not _reindex_state.get("running") and has_new_data(db):
+                    emb = _state.get("embedder")
+                    if emb is not None:
+                        _autoindex_state.update(running=True, phase="색인 중", last_error=None)
+
+                        def _log(msg: str) -> None:
+                            _autoindex_state["phase"] = msg
+
+                        total = index_all(db, vi, emb, log_fn=_log)
+                        _autoindex_state["indexed_total"] += total
+                        _autoindex_state.update(running=False, phase=f"최근 완료(+{total}턴)")
+            except Exception as ex:                       # 한 번의 오류로 스레드가 죽지 않게
+                _autoindex_state.update(running=False, phase="오류", last_error=str(ex))
+            time.sleep(interval)
+
+    if getattr(_sys, "frozen", False):
+        threading.Thread(target=_autoindex, daemon=True).start()
 
     # 의미 지도(3D)를 백그라운드에서 예열 + 주기적으로 갱신 → 사용자는 항상 즉시·최신.
     # 오래 사는 웹 서버에서 하므로 UMAP numba JIT은 1회만(짧은 인덱스 프로세스와 대조).
@@ -396,6 +436,12 @@ _EMBED_ALLOW = {
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": ""}
+
+
+@app.get("/api/index/status")
+def api_index_status():
+    """자동 색인(프리즈 exe) 상태 — UI 표시용."""
+    return _autoindex_state
 
 
 @app.post("/api/verify-enrich")

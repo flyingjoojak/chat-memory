@@ -58,6 +58,16 @@ export interface SyncStatus {
   projects_dir: string
 }
 export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
+
+// 자동 색인(프리즈 exe) 상태.
+export interface IndexStatus {
+  enabled: boolean
+  running: boolean
+  phase: string
+  indexed_total: number
+  last_error: string | null
+}
+export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
 export async function toggleSync(enabled: boolean, interval?: number): Promise<SyncStatus> {
   const r = await fetch(`/api/sync/toggle`, {
     method: "POST", headers: { "Content-Type": "application/json" },

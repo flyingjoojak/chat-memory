@@ -7,9 +7,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  getConfig, getEmbedModels, getMcp, getStats, getSyncStatus, mcpRegister, mcpUnregister, putConfig,
+  getConfig, getEmbedModels, getIndexStatus, getMcp, getStats, getSyncStatus, mcpRegister, mcpUnregister, putConfig,
   reindex, toggleSync, verifyEnrich,
-  type Config, type EmbedModel, type McpTarget, type SyncStatus,
+  type Config, type EmbedModel, type IndexStatus, type McpTarget, type SyncStatus,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -194,6 +194,30 @@ function SyncSection() {
         </div>
       )}
     </>
+  )
+}
+
+// 자동 색인 상태(프리즈 exe에서만 노출) — 개발 실행에선 enabled=false라 숨김.
+function AutoIndexRow() {
+  const [ix, setIx] = useState<IndexStatus | null>(null)
+  useEffect(() => {
+    let alive = true
+    const load = () => getIndexStatus().then((r) => { if (alive) setIx(r) }).catch(() => { /* noop */ })
+    load()
+    const id = setInterval(load, 3000)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
+  if (!ix?.enabled) return null
+  return (
+    <Row label={
+      <span className="flex items-center gap-2">자동 색인
+        {ix.running
+          ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">진행 중</span>
+          : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">대기</span>}
+      </span>
+    }>
+      <span className="text-xs text-muted-foreground">{ix.last_error ? `오류: ${ix.last_error}` : ix.phase}</span>
+    </Row>
   )
 }
 
@@ -467,6 +491,7 @@ export function SettingsView() {
         <Row label="턴">{stats?.turns ?? "—"}개</Row>
         <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
         <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
+        <AutoIndexRow />
       </Section>
 
       <AlertDialog open={!!confirmModel} onOpenChange={(o) => !o && setConfirmModel(null)}>
