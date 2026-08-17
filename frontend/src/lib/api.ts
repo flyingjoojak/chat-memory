@@ -65,6 +65,8 @@ export interface IndexStatus {
   running: boolean
   phase: string
   indexed_total: number
+  done_files: number
+  total_files: number
   last_error: string | null
 }
 export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
@@ -132,7 +134,7 @@ export interface EmbedModel {
   note: string
   current: boolean
 }
-export interface ReindexState { running: boolean; done: number; msg: string }
+export interface ReindexState { running: boolean; done: number; msg: string; done_files: number; total_files: number }
 
 export const getEmbedModels = () =>
   getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)
@@ -164,10 +166,11 @@ export async function mcpUnregister(target: string): Promise<{ ok: boolean; erro
   return r.json()
 }
 
-export async function reindex(model: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+// model 생략 시 현재 모델로 재색인(모델 교체 없이 인덱스만 다시 빌드).
+export async function reindex(model?: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
   const r = await fetch(`/api/reindex`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model }),
+    body: JSON.stringify(model ? { model } : {}),
   })
   return r.json()
 }

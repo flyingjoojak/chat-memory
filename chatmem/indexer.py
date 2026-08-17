@@ -191,10 +191,15 @@ def reconcile(db, vi, log_fn=print) -> int:
     return n
 
 
-def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print) -> int:
-    """모든 세션 파일을 최근순(기본)으로 증분 인덱싱."""
+def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print, progress_fn=None) -> int:
+    """모든 세션 파일을 최근순(기본)으로 증분 인덱싱.
+
+    progress_fn(done_files, total_files): 파일 단위 진행 콜백(진행바 표시용, 선택).
+    """
     total = 0
-    for f in discover_files(recent_first=recent_first):
+    files = list(discover_files(recent_first=recent_first))
+    total_files = len(files)
+    for i, f in enumerate(files):
         try:
             n = index_file(f, db, vi, embedder)
             if n:
@@ -202,4 +207,9 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print) -> int:
                 total += n
         except Exception as ex:  # 한 파일 실패가 전체를 막지 않도록
             log_fn(f"ERROR {os.path.basename(str(f))}: {ex}")
+        if progress_fn:
+            try:
+                progress_fn(i + 1, total_files)
+            except Exception:  # noqa: BLE001 — 진행 콜백 오류가 색인을 막지 않게
+                pass
     return total

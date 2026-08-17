@@ -35,7 +35,8 @@ _DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
 
 
 # 자동 색인 상태(프리즈 exe에서 백그라운드 색인 진행 상황 — UI에 노출).
-_autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기", "indexed_total": 0, "last_error": None}
+_autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기", "indexed_total": 0,
+                          "done_files": 0, "total_files": 0, "last_error": None}
 
 
 @contextlib.asynccontextmanager
@@ -67,12 +68,16 @@ async def _lifespan(app: FastAPI):
                 if not _reindex_state.get("running") and has_new_data(db):
                     emb = _state.get("embedder")
                     if emb is not None:
-                        _autoindex_state.update(running=True, phase="색인 중", last_error=None)
+                        _autoindex_state.update(running=True, phase="색인 중", last_error=None,
+                                                done_files=0, total_files=0)
 
                         def _log(msg: str) -> None:
                             _autoindex_state["phase"] = msg
 
-                        total = index_all(db, vi, emb, log_fn=_log)
+                        def _prog(done: int, tot: int) -> None:
+                            _autoindex_state.update(done_files=done, total_files=tot)
+
+                        total = index_all(db, vi, emb, log_fn=_log, progress_fn=_prog)
                         _autoindex_state["indexed_total"] += total
                         _autoindex_state.update(running=False, phase=f"최근 완료(+{total}턴)")
             except Exception as ex:                       # 한 번의 오류로 스레드가 죽지 않게
@@ -435,7 +440,7 @@ _EMBED_ALLOW = {
         "note": "가벼움. 저RAM 기기용.", "ram_gb": 1.2, "cps": 31.0},
 }
 
-_reindex_state: dict = {"running": False, "done": 0, "msg": ""}
+_reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0}
 
 
 @app.get("/api/index/status")
@@ -516,23 +521,24 @@ def api_embed_models():
 
 @app.post("/api/reindex")
 def api_reindex(payload: dict):
-    """임베딩 모델 교체 + 전체 재색인(백그라운드). 기존 벡터를 버리고 새 모델로 다시 임베딩."""
+    """전체 재색인(백그라운드). model 생략/빈값이면 **현재 모델로** 재색인, 지정하면 그 모델로 교체 후 재색인.
+    기존 벡터를 폐기하고 처음부터 다시 임베딩한다."""
     import threading
 
-    model = str((payload or {}).get("model", "")).strip()
-    if not model or model not in _EMBED_ALLOW:
+    from . import config as C
+    model = str((payload or {}).get("model", "")).strip() or C.EMBED_MODEL   # 빈값=현재 모델
+    if model not in _EMBED_ALLOW:
         return {"ok": False, "error": "알 수 없는 모델"}
     if _reindex_state["running"]:
         return {"ok": False, "error": "이미 재색인 중"}
 
     def worker():
-        from . import config as C
         from .embedder import Embedder
         from .indexer import index_all
-        _reindex_state.update(running=True, done=0, msg="시작")
+        _reindex_state.update(running=True, done=0, msg="시작", done_files=0, total_files=0)
         try:
             C.write_config({"CHATMEM_EMBED_MODEL": model})
-            # 새 모델 = 다른 차원 → 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
+            # 모델 교체든 현재모델 재색인이든, 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
             db = ArchiveDB()
             db.clear_cursors()
             vi = make_index()
@@ -541,7 +547,11 @@ def api_reindex(payload: dict):
 
             def log(msg):
                 _reindex_state["msg"] = msg
-            total = index_all(db, vi, emb, log_fn=log)
+
+            def prog(done, total):
+                _reindex_state.update(done_files=done, total_files=total)
+
+            total = index_all(db, vi, emb, log_fn=log, progress_fn=prog)
             db.set_meta("embed_model", model)
             _state["embedder"] = emb  # 실행 중 검색도 새 모델로
             _reindex_state.update(done=total, msg=f"완료: {total}턴")

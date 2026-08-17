@@ -216,7 +216,11 @@ function AutoIndexRow() {
           : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">대기</span>}
       </span>
     }>
-      <span className="text-xs text-muted-foreground">{ix.last_error ? `오류: ${ix.last_error}` : ix.phase}</span>
+      <span className="text-xs text-muted-foreground tabular-nums">
+        {ix.last_error ? `오류: ${ix.last_error}`
+          : ix.running && ix.total_files > 0 ? `색인 중 ${ix.done_files}/${ix.total_files} 파일`
+          : ix.phase}
+      </span>
     </Row>
   )
 }
@@ -242,6 +246,7 @@ export function SettingsView() {
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
   const [reindexMsg, setReindexMsg] = useState("")
+  const [reindexFiles, setReindexFiles] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [confirmModel, setConfirmModel] = useState<EmbedModel | null>(null)
   const poll = useRef<number | null>(null)
 
@@ -261,6 +266,7 @@ export function SettingsView() {
   function loadEmbed() {
     getEmbedModels().then((r) => {
       setEmbed(r.models); setReindexing(r.reindex.running); setReindexMsg(r.reindex.msg)
+      setReindexFiles({ done: r.reindex.done_files, total: r.reindex.total_files })
       if (r.reindex.running && !poll.current) startPoll()
     }).catch(() => {})
   }
@@ -268,6 +274,7 @@ export function SettingsView() {
     poll.current = window.setInterval(async () => {
       const r = await getEmbedModels()
       setEmbed(r.models); setReindexMsg(r.reindex.msg)
+      setReindexFiles({ done: r.reindex.done_files, total: r.reindex.total_files })
       if (!r.reindex.running) {
         setReindexing(false)
         if (poll.current) { window.clearInterval(poll.current); poll.current = null }
@@ -440,8 +447,21 @@ export function SettingsView() {
 
       <Section title="임베딩 모델">
         {reindexing && (
-          <div className="flex items-center gap-2 border-b py-3.5 text-sm text-primary">
-            <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
+          <div className="border-b py-3.5">
+            <div className="mb-1.5 flex items-center gap-2 text-sm text-primary">
+              <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
+            </div>
+            {reindexFiles.total > 0 && (
+              <>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-full origin-left rounded-full bg-primary transition-transform duration-300"
+                    style={{ transform: `scaleX(${reindexFiles.done / reindexFiles.total})` }} />
+                </div>
+                <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                  {reindexFiles.done}/{reindexFiles.total} 파일 ({Math.round(reindexFiles.done / reindexFiles.total * 100)}%)
+                </div>
+              </>
+            )}
           </div>
         )}
         {embed.map((m) => (
@@ -452,7 +472,10 @@ export function SettingsView() {
             </span>
           }>
             {m.current
-              ? <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
+              ? <span className="inline-flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
+                  <Button variant="outline" size="sm" disabled={reindexing} onClick={() => setConfirmModel(m)}>재색인</Button>
+                </span>
               : <Button variant="outline" size="sm" disabled={reindexing} onClick={() => setConfirmModel(m)}>변경</Button>}
           </Row>
         ))}
@@ -497,12 +520,14 @@ export function SettingsView() {
       <AlertDialog open={!!confirmModel} onOpenChange={(o) => !o && setConfirmModel(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>임베딩 모델 변경 = 전체 재색인</AlertDialogTitle>
+            <AlertDialogTitle>{confirmModel?.current ? "전체 재색인 (현재 모델)" : "임베딩 모델 변경 = 전체 재색인"}</AlertDialogTitle>
             <AlertDialogDescription>
-              <b>{confirmModel?.model.split("/").pop()}</b>로 바꾸면 기존 벡터를 모두 버리고
-              전 대화를 다시 임베딩합니다. 벡터가 모델마다 다른 좌표계라 섞을 수 없어 전체 재색인이 필요합니다.
+              {confirmModel?.current
+                ? <><b>{confirmModel?.model.split("/").pop()}</b>(현재 모델)로 기존 벡터를 모두 버리고 전 대화를 처음부터 다시 임베딩합니다. 모델은 그대로라 다운로드는 없습니다.</>
+                : <><b>{confirmModel?.model.split("/").pop()}</b>로 바꾸면 기존 벡터를 모두 버리고 전 대화를 다시 임베딩합니다. 벡터가 모델마다 다른 좌표계라 섞을 수 없어 전체 재색인이 필요합니다.</>}
               <br /><br />
-              예상: 재색인 <b>약 {confirmModel?.est_reindex_min}분</b>(이 기기 기준) + 새 모델 최초 다운로드 약 {confirmModel?.size_gb}GB.
+              예상: 재색인 <b>약 {confirmModel?.est_reindex_min}분</b>(이 기기 기준)
+              {!confirmModel?.current && <> + 새 모델 최초 다운로드 약 {confirmModel?.size_gb}GB</>}.
               임베딩 중 RAM 약 {confirmModel?.ram_gb}GB를 씁니다. 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
             </AlertDialogDescription>
           </AlertDialogHeader>
