@@ -1,9 +1,12 @@
 import { useEffect, useState, lazy, Suspense } from "react"
 import { Search, MessagesSquare, Layers, Box, Settings } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
 import { Browse3Pane } from "@/components/Browse3Pane"
 import { SettingsView } from "@/components/SettingsView"
+import { Onboarding } from "@/components/Onboarding"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { getOnboarding } from "@/lib/api"
 import { applyTheme } from "@/lib/theme"
 
 // three.js는 무거우니 3D 탭 열 때만 로드(초기 번들 경량).
@@ -26,7 +29,17 @@ export default function App() {
   const openTurn = (kind: "sessions" | "clusters", id: string, turn: string, session: string) => {
     setJump({ kind, id, turn, session }); setView(kind)
   }
+  // 첫 실행이면(프리즈 exe·모델 미선택) 모델 선택 화면을 먼저. null=확인중.
+  const [onboard, setOnboard] = useState<boolean | null>(null)
   useEffect(() => { applyTheme() }, [])
+  useEffect(() => { getOnboarding().then((r) => setOnboard(r.needed)).catch(() => setOnboard(false)) }, [])
+
+  if (onboard === null) {
+    return <div className="grid h-dvh place-items-center bg-background text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
+  }
+  if (onboard) {
+    return <Onboarding onDone={() => setOnboard(false)} />
+  }
 
   return (
     <div className="grid h-dvh grid-cols-[60px_1fr] overflow-hidden">

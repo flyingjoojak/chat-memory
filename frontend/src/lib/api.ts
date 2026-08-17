@@ -58,6 +58,44 @@ export interface SyncStatus {
   projects_dir: string
 }
 export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
+
+// 자동 색인(프리즈 exe) 상태.
+export interface IndexStatus {
+  enabled: boolean
+  running: boolean
+  phase: string
+  indexed_total: number
+  done_files: number
+  total_files: number
+  last_error: string | null
+}
+export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
+
+// 수동 증분 색인(새 대화만).
+export async function runIndex(): Promise<{ ok: boolean; started?: boolean; busy?: boolean }> {
+  const r = await fetch(`/api/index/run`, { method: "POST" })
+  if (!r.ok) throw new Error(`색인 실행 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+
+// 수동 정제(요약·태그). all=true면 이미 된 것도 다시.
+export interface EnrichStatus {
+  running: boolean
+  phase: string
+  done_sessions: number
+  total_sessions: number
+  enriched: number
+  last_error: string | null
+}
+export const getEnrichStatus = () => getJSON<EnrichStatus>(`/api/enrich/status`)
+export async function runEnrich(all = false): Promise<{ ok: boolean; started?: boolean; backend?: string; error?: string }> {
+  const r = await fetch(`/api/enrich`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ all }),
+  })
+  if (!r.ok) throw new Error(`정제 실행 실패 (HTTP ${r.status})`)
+  return r.json()
+}
 export async function toggleSync(enabled: boolean, interval?: number): Promise<SyncStatus> {
   const r = await fetch(`/api/sync/toggle`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -120,12 +158,24 @@ export interface EmbedModel {
   cps: number             // 청크/초 처리량(실측)
   est_reindex_min: number | null
   note: string
+  tags: string[]          // 특징 라벨(예: "램 부하 적음", "품질 최상")
   current: boolean
 }
-export interface ReindexState { running: boolean; done: number; msg: string }
+export interface ReindexState { running: boolean; done: number; msg: string; done_files: number; total_files: number }
 
 export const getEmbedModels = () =>
   getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)
+
+// 첫 실행 온보딩(임베딩 모델 선택)
+export const getOnboarding = () => getJSON<{ needed: boolean }>(`/api/onboarding`)
+export async function chooseModel(model: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+  const r = await fetch(`/api/onboarding/choose`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model }),
+  })
+  if (!r.ok) throw new Error(`모델 선택 실패 (HTTP ${r.status})`)
+  return r.json()
+}
 
 // MCP 클라이언트 등록
 export interface McpTarget {
@@ -154,10 +204,11 @@ export async function mcpUnregister(target: string): Promise<{ ok: boolean; erro
   return r.json()
 }
 
-export async function reindex(model: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+// model 생략 시 현재 모델로 재색인(모델 교체 없이 인덱스만 다시 빌드).
+export async function reindex(model?: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
   const r = await fetch(`/api/reindex`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model }),
+    body: JSON.stringify(model ? { model } : {}),
   })
   return r.json()
 }

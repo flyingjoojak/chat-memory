@@ -253,7 +253,7 @@ def enrich_session(session_id: str, db, backend: str = ENRICH_BACKEND,
 
 def enrich_all(db, backend: str = ENRICH_BACKEND, model: str | None = None,
                throttle: float = 1.0, only_missing: bool = True,
-               limit: int | None = None, log_fn=print) -> int:
+               limit: int | None = None, log_fn=print, progress_fn=None) -> int:
     if only_missing:
         rows = db.conn.execute(
             "SELECT DISTINCT session_id FROM turns WHERE summary IS NULL"
@@ -264,13 +264,19 @@ def enrich_all(db, backend: str = ENRICH_BACKEND, model: str | None = None,
     if limit:
         sessions = sessions[:limit]
 
+    total_sessions = len(sessions)
     total = 0
-    for sid in sessions:
+    for i, sid in enumerate(sessions):
         try:
             n = enrich_session(sid, db, backend=backend, model=model, missing_only=only_missing)
             total += n
             log_fn(f"enriched {n} turns  session {sid[:8]}")
         except Exception as ex:  # 한 세션 실패가 전체를 막지 않도록
             log_fn(f"ERROR enrich {sid[:8]}: {ex}")
+        if progress_fn:
+            try:
+                progress_fn(i + 1, total_sessions)
+            except Exception:  # noqa: BLE001 — 진행 콜백 오류가 정제를 막지 않게
+                pass
         time.sleep(throttle)
     return total

@@ -15,6 +15,7 @@ import os
 import re
 import shlex
 import subprocess
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -34,13 +35,76 @@ _DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
     else (Path(__file__).resolve().parent.parent / "frontend" / "dist")
 
 
+# 색인 상태(자동/수동 증분 색인 진행 — UI에 노출).
+_autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기", "indexed_total": 0,
+                          "done_files": 0, "total_files": 0, "last_error": None}
+# 증분색인·전체재색인 상호배제(자동 스레드/수동 트리거/재색인이 동시에 안 돌게).
+_index_lock = threading.Lock()
+
+
+def _run_incremental() -> bool:
+    """새 대화만 증분 색인(현재 임베더 재사용, 벡터 유지). 자동 스레드·수동 트리거 공용.
+    다른 색인 작업이 이미 돌고 있으면 스킵. 반환: 실제로 실행했으면 True."""
+    if not _index_lock.acquire(blocking=False):
+        return False
+    try:
+        from .indexer import has_new_data, index_all, reconcile
+        db = ArchiveDB()
+        vi = make_index()
+        with contextlib.suppress(Exception):
+            reconcile(db, vi, log_fn=lambda m: None)   # 고아 벡터 정리(값쌈)
+        if not has_new_data(db):
+            _autoindex_state.update(running=False, phase="새 대화 없음")
+            return True
+        emb = _state.get("embedder")
+        if emb is None:
+            return False
+        _autoindex_state.update(running=True, phase="색인 중", last_error=None, done_files=0, total_files=0)
+        total = index_all(
+            db, vi, emb,
+            log_fn=lambda m: _autoindex_state.__setitem__("phase", m),
+            progress_fn=lambda d, t: _autoindex_state.update(done_files=d, total_files=t),
+        )
+        _autoindex_state["indexed_total"] += total
+        _autoindex_state.update(running=False, phase=f"최근 완료(+{total}턴)")
+        return True
+    except Exception as ex:                       # 한 번의 오류로 죽지 않게
+        _autoindex_state.update(running=False, phase="오류", last_error=str(ex))
+        return True
+    finally:
+        _index_lock.release()
+
+
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI):
-    import threading
-
     from .embedder import Embedder
 
-    _state["embedder"] = Embedder()  # 무거운 모델 1회 로드
+    # 첫 실행 온보딩(프리즈 exe 전용): 아직 모델을 고른 적 없으면(=색인 이력 없음) 무거운 기본 모델을
+    # 미리 로드하지 않는다. 저사양 기기가 6GB짜리 e5-large를 자동으로 물지 않게, 사용자가 먼저 고른다.
+    _needs_onboarding = False
+    with contextlib.suppress(Exception):
+        if getattr(_sys, "frozen", False) and ArchiveDB().get_meta("embed_model") is None:
+            _needs_onboarding = True
+    _state["needs_onboarding"] = _needs_onboarding
+
+    if not _needs_onboarding:
+        _state["embedder"] = Embedder()  # 이미 모델 확정됨 → 로드
+
+    # 자동 색인(프리즈 exe 전용): 배포된 프로그램은 외부 스케줄러가 없으므로 웹서버가 스스로 색인한다.
+    # 시작 시 1회 + 주기적으로 새 대화(동기 유입 포함)를 증분 색인. 개발(python)은 스케줄러가 하므로 미가동.
+    def _autoindex():
+        import time
+
+        from . import config as C
+        _autoindex_state["enabled"] = True
+        interval = max(60, int(getattr(C, "INDEX_INTERVAL_MIN", 10)) * 60)
+        while True:
+            with contextlib.suppress(Exception):
+                _run_incremental()
+            time.sleep(interval)
+
+    if getattr(_sys, "frozen", False):
+        threading.Thread(target=_autoindex, daemon=True).start()
 
     # 의미 지도(3D)를 백그라운드에서 예열 + 주기적으로 갱신 → 사용자는 항상 즉시·최신.
     # 오래 사는 웹 서버에서 하므로 UMAP numba JIT은 1회만(짧은 인덱스 프로세스와 대조).
@@ -388,14 +452,32 @@ def api_config_put(payload: dict):
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
 _EMBED_ALLOW = {
     "intfloat/multilingual-e5-large": {
-        "note": "최고 품질. 기본값.", "ram_gb": 6.4, "cps": 0.8},
+        "note": "최고 품질. 고사양 기기용.", "ram_gb": 6.4, "cps": 0.8,
+        "tags": ["품질 최상", "램 부하 높음", "속도 느림"]},
     "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": {
-        "note": "중간 품질·RAM.", "ram_gb": 4.5, "cps": 2.1},
+        "note": "품질·부하 중간. 균형형.", "ram_gb": 4.5, "cps": 2.1,
+        "tags": ["품질 좋음", "램 부하 보통", "속도 보통"]},
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "가벼움. 저RAM 기기용.", "ram_gb": 1.2, "cps": 31.0},
+        "note": "가벼움. 저사양 기기 추천.", "ram_gb": 1.2, "cps": 31.0,
+        "tags": ["램 부하 적음", "속도 매우 빠름", "저사양 추천"]},
 }
 
-_reindex_state: dict = {"running": False, "done": 0, "msg": ""}
+_reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0}
+
+
+@app.get("/api/index/status")
+def api_index_status():
+    """증분 색인(자동/수동) 상태 — UI 표시용."""
+    return _autoindex_state
+
+
+@app.post("/api/index/run")
+def api_index_run():
+    """수동 증분 색인(새 대화만, 빠름). 이미 색인/재색인 중이면 busy."""
+    if _autoindex_state.get("running") or _reindex_state.get("running"):
+        return {"ok": False, "busy": True}
+    threading.Thread(target=_run_incremental, daemon=True).start()
+    return {"ok": True, "started": True}
 
 
 @app.post("/api/verify-enrich")
@@ -410,6 +492,49 @@ def api_verify_enrich(payload: dict):
         base_url=(payload or {}).get("ollama_url") or None,
     )
     return {"ok": ok, "message": msg}
+
+
+# 수동 정제 상태.
+_enrich_state: dict = {"running": False, "phase": "대기", "done_sessions": 0, "total_sessions": 0,
+                       "enriched": 0, "last_error": None}
+
+
+@app.get("/api/enrich/status")
+def api_enrich_status():
+    return _enrich_state
+
+
+@app.post("/api/enrich")
+def api_enrich(payload: dict | None = None):
+    """수동 정제(요약·태그). 설정된 백엔드가 가능할 때만. all=false면 아직 정제 안 된 것만."""
+    from . import config as C
+    from .enrich import backend_available, enrich_all
+    if _enrich_state["running"]:
+        return {"ok": False, "error": "이미 정제 중"}
+    backend = C.ENRICH_BACKEND
+    ok, why = backend_available(backend)
+    if not ok:
+        return {"ok": False, "error": why}   # 예: "claude CLI 없음", "ANTHROPIC_API_KEY 미설정"
+    only_missing = not bool((payload or {}).get("all"))
+
+    def worker():
+        _enrich_state.update(running=True, phase="시작", done_sessions=0, total_sessions=0,
+                             enriched=0, last_error=None)
+        try:
+            db = ArchiveDB()
+            total = enrich_all(
+                db, backend=backend, model=None, only_missing=only_missing,
+                log_fn=lambda m: _enrich_state.__setitem__("phase", m),
+                progress_fn=lambda d, t: _enrich_state.update(done_sessions=d, total_sessions=t),
+            )
+            _enrich_state.update(phase=f"완료: {total}턴 정제", enriched=total)
+        except Exception as e:  # noqa: BLE001
+            _enrich_state.update(phase="오류", last_error=str(e))
+        finally:
+            _enrich_state["running"] = False
+
+    threading.Thread(target=worker, daemon=True).start()
+    return {"ok": True, "started": True, "backend": backend}
 
 
 @app.get("/api/mcp")
@@ -462,31 +587,60 @@ def api_embed_models():
             "ram_gb": meta["ram_gb"],                 # 임베딩 중 실사용 피크(실측)
             "cps": cps,
             "est_reindex_min": round(total_chunks / cps / 60, 1) if cps else None,
-            "note": meta["note"], "current": name == C.EMBED_MODEL,
+            "note": meta["note"], "tags": meta.get("tags", []), "current": name == C.EMBED_MODEL,
         })
     return {"models": out, "current": C.EMBED_MODEL,
             "total_chunks": total_chunks, "reindex": _reindex_state}
 
 
+@app.get("/api/onboarding")
+def api_onboarding():
+    """첫 실행 여부 — True면 프론트가 모델 선택 화면을 먼저 보여준다."""
+    return {"needed": bool(_state.get("needs_onboarding"))}
+
+
+@app.post("/api/onboarding/choose")
+def api_onboarding_choose(payload: dict):
+    """첫 실행에서 임베딩 모델 확정 → 설정 저장 + 그 모델 로드(백그라운드) + 색인 시작."""
+    from . import config as C
+    model = str((payload or {}).get("model", "")).strip()
+    if model not in _EMBED_ALLOW:
+        return {"ok": False, "error": "알 수 없는 모델"}
+    C.write_config({"CHATMEM_EMBED_MODEL": model})
+
+    def _load():
+        from .embedder import Embedder
+        with contextlib.suppress(Exception):
+            _state["embedder"] = Embedder(model)   # 다운로드/로드(가벼운 모델이면 빠름)
+        with contextlib.suppress(Exception):
+            ArchiveDB().set_meta("embed_model", model)   # 확정 표시 → 다음 실행부터 온보딩 안 함
+
+    _state["needs_onboarding"] = False
+    threading.Thread(target=_load, daemon=True).start()   # 자동 색인 스레드가 임베더 로드되면 색인 시작
+    return {"ok": True, "model": model}
+
+
 @app.post("/api/reindex")
 def api_reindex(payload: dict):
-    """임베딩 모델 교체 + 전체 재색인(백그라운드). 기존 벡터를 버리고 새 모델로 다시 임베딩."""
-    import threading
-
-    model = str((payload or {}).get("model", "")).strip()
-    if not model or model not in _EMBED_ALLOW:
+    """전체 재색인(백그라운드). model 생략/빈값이면 **현재 모델로** 재색인, 지정하면 그 모델로 교체 후 재색인.
+    기존 벡터를 폐기하고 처음부터 다시 임베딩한다."""
+    from . import config as C
+    model = str((payload or {}).get("model", "")).strip() or C.EMBED_MODEL   # 빈값=현재 모델
+    if model not in _EMBED_ALLOW:
         return {"ok": False, "error": "알 수 없는 모델"}
-    if _reindex_state["running"]:
-        return {"ok": False, "error": "이미 재색인 중"}
+    if _reindex_state["running"] or _autoindex_state.get("running"):
+        return {"ok": False, "error": "이미 색인/재색인 중"}
 
     def worker():
-        from . import config as C
         from .embedder import Embedder
         from .indexer import index_all
-        _reindex_state.update(running=True, done=0, msg="시작")
+        if not _index_lock.acquire(blocking=False):   # 증분 색인과 상호배제
+            _reindex_state["msg"] = "다른 색인 진행 중 — 잠시 후 재시도"
+            return
+        _reindex_state.update(running=True, done=0, msg="시작", done_files=0, total_files=0)
         try:
             C.write_config({"CHATMEM_EMBED_MODEL": model})
-            # 새 모델 = 다른 차원 → 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
+            # 모델 교체든 현재모델 재색인이든, 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
             db = ArchiveDB()
             db.clear_cursors()
             vi = make_index()
@@ -495,7 +649,11 @@ def api_reindex(payload: dict):
 
             def log(msg):
                 _reindex_state["msg"] = msg
-            total = index_all(db, vi, emb, log_fn=log)
+
+            def prog(done, total):
+                _reindex_state.update(done_files=done, total_files=total)
+
+            total = index_all(db, vi, emb, log_fn=log, progress_fn=prog)
             db.set_meta("embed_model", model)
             _state["embedder"] = emb  # 실행 중 검색도 새 모델로
             _reindex_state.update(done=total, msg=f"완료: {total}턴")
@@ -503,6 +661,7 @@ def api_reindex(payload: dict):
             _reindex_state["msg"] = f"오류: {e}"
         finally:
             _reindex_state["running"] = False
+            _index_lock.release()
 
     threading.Thread(target=worker, daemon=True).start()
     return {"ok": True, "started": True}
