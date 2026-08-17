@@ -70,6 +70,32 @@ export interface IndexStatus {
   last_error: string | null
 }
 export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
+
+// 수동 증분 색인(새 대화만).
+export async function runIndex(): Promise<{ ok: boolean; started?: boolean; busy?: boolean }> {
+  const r = await fetch(`/api/index/run`, { method: "POST" })
+  if (!r.ok) throw new Error(`색인 실행 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+
+// 수동 정제(요약·태그). all=true면 이미 된 것도 다시.
+export interface EnrichStatus {
+  running: boolean
+  phase: string
+  done_sessions: number
+  total_sessions: number
+  enriched: number
+  last_error: string | null
+}
+export const getEnrichStatus = () => getJSON<EnrichStatus>(`/api/enrich/status`)
+export async function runEnrich(all = false): Promise<{ ok: boolean; started?: boolean; backend?: string; error?: string }> {
+  const r = await fetch(`/api/enrich`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ all }),
+  })
+  if (!r.ok) throw new Error(`정제 실행 실패 (HTTP ${r.status})`)
+  return r.json()
+}
 export async function toggleSync(enabled: boolean, interval?: number): Promise<SyncStatus> {
   const r = await fetch(`/api/sync/toggle`, {
     method: "POST", headers: { "Content-Type": "application/json" },

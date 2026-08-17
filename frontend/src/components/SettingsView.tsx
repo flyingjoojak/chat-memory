@@ -7,9 +7,9 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-  getConfig, getEmbedModels, getIndexStatus, getMcp, getStats, getSyncStatus, mcpRegister, mcpUnregister, putConfig,
-  reindex, toggleSync, verifyEnrich,
-  type Config, type EmbedModel, type IndexStatus, type McpTarget, type SyncStatus,
+  getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
+  mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex, toggleSync, verifyEnrich,
+  type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -197,20 +197,12 @@ function SyncSection() {
   )
 }
 
-// 자동 색인 상태(프리즈 exe에서만 노출) — 개발 실행에선 enabled=false라 숨김.
-function AutoIndexRow() {
-  const [ix, setIx] = useState<IndexStatus | null>(null)
-  useEffect(() => {
-    let alive = true
-    const load = () => getIndexStatus().then((r) => { if (alive) setIx(r) }).catch(() => { /* noop */ })
-    load()
-    const id = setInterval(load, 3000)
-    return () => { alive = false; clearInterval(id) }
-  }, [])
-  if (!ix?.enabled) return null
+// 색인 상태 행(프레젠테이션). 자동(프리즈) 또는 수동 색인이 돌 때 노출.
+function AutoIndexRow({ ix }: { ix: IndexStatus | null }) {
+  if (!ix || (!ix.enabled && !ix.running)) return null
   return (
     <Row label={
-      <span className="flex items-center gap-2">자동 색인
+      <span className="flex items-center gap-2">색인
         {ix.running
           ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">진행 중</span>
           : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">대기</span>}
@@ -248,7 +240,35 @@ export function SettingsView() {
   const [reindexMsg, setReindexMsg] = useState("")
   const [reindexFiles, setReindexFiles] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
   const [confirmModel, setConfirmModel] = useState<EmbedModel | null>(null)
+  const [ixStatus, setIxStatus] = useState<IndexStatus | null>(null)   // 증분 색인 상태(자동/수동)
+  const [enrichSt, setEnrichSt] = useState<EnrichStatus | null>(null)   // 정제 상태
+  const [enrichErr, setEnrichErr] = useState("")
   const poll = useRef<number | null>(null)
+
+  // 색인·정제 상태 폴링(진행 표시 + 버튼 비활성).
+  useEffect(() => {
+    let alive = true
+    const load = () => {
+      getIndexStatus().then((r) => alive && setIxStatus(r)).catch(() => {})
+      getEnrichStatus().then((r) => alive && setEnrichSt(r)).catch(() => {})
+    }
+    load()
+    const id = window.setInterval(load, 3000)
+    return () => { alive = false; window.clearInterval(id) }
+  }, [])
+
+  async function doRunIndex() {
+    setIxStatus((s) => s ? { ...s, running: true, phase: "시작…" } : s)
+    try { await runIndex() } catch { /* noop */ }
+  }
+  async function doEnrich() {
+    setEnrichErr("")
+    try {
+      const r = await runEnrich(false)
+      if (!r.ok) setEnrichErr(r.error || "정제 실행 실패")
+      else setEnrichSt((s) => ({ ...(s ?? { done_sessions: 0, total_sessions: 0, enriched: 0, last_error: null }), running: true, phase: "시작…" }))
+    } catch (e) { setEnrichErr(e instanceof Error ? e.message : "정제 실행 실패") }
+  }
 
   useEffect(() => {
     getStats().then(setStats).catch(() => {})
@@ -443,9 +463,34 @@ export function SettingsView() {
           )}
         </div>
       )}
+      {/* 수동 정제: 아직 요약·태그 없는 대화를 지금 정제(백엔드 가능해야 실행) */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 border-t py-3">
+        <Button variant="outline" size="sm" disabled={backend === "off" || !!enrichSt?.running} onClick={doEnrich}>
+          {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}지금 정제
+        </Button>
+        <span className={`text-[11px] ${enrichErr && !enrichSt?.running ? "text-destructive" : "text-muted-foreground"}`}>
+          {enrichSt?.running
+            ? `정제 중… ${enrichSt.total_sessions > 0 ? `${enrichSt.done_sessions}/${enrichSt.total_sessions} 세션` : enrichSt.phase}`
+            : enrichErr
+              ? enrichErr
+              : "아직 요약·태그 없는 대화를 지금 정제합니다(위 백엔드 설정·연결 필요)."}
+        </span>
+      </div>
       <p className="mb-6 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
 
       <Section title="임베딩 모델">
+        {/* 색인 실행: 증분(새 대화만·빠름) / 전체 재색인(처음부터·아래 모델 버튼) */}
+        <div className="flex flex-wrap items-center gap-2 border-b py-3">
+          <Button variant="outline" size="sm" disabled={!!ixStatus?.running || reindexing} onClick={doRunIndex}>
+            {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}증분 색인
+          </Button>
+          <span className="text-[11px] text-muted-foreground">새 대화만 빠르게 색인. 처음부터 다시 임베딩하려면 아래 모델의 「전체 재색인」.</span>
+        </div>
+        {ixStatus?.running && (
+          <div className="border-b py-2 text-[11px] text-muted-foreground tabular-nums">
+            색인 중… {ixStatus.total_files > 0 ? `${ixStatus.done_files}/${ixStatus.total_files} 파일` : ixStatus.phase}
+          </div>
+        )}
         {reindexing && (
           <div className="border-b py-3.5">
             <div className="mb-1.5 flex items-center gap-2 text-sm text-primary">
@@ -474,9 +519,9 @@ export function SettingsView() {
             {m.current
               ? <span className="inline-flex items-center gap-2">
                   <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
-                  <Button variant="outline" size="sm" disabled={reindexing} onClick={() => setConfirmModel(m)}>재색인</Button>
+                  <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>전체 재색인</Button>
                 </span>
-              : <Button variant="outline" size="sm" disabled={reindexing} onClick={() => setConfirmModel(m)}>변경</Button>}
+              : <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>변경</Button>}
           </Row>
         ))}
       </Section>
@@ -514,7 +559,7 @@ export function SettingsView() {
         <Row label="턴">{stats?.turns ?? "—"}개</Row>
         <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
         <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
-        <AutoIndexRow />
+        <AutoIndexRow ix={ixStatus} />
       </Section>
 
       <AlertDialog open={!!confirmModel} onOpenChange={(o) => !o && setConfirmModel(null)}>
