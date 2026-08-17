@@ -52,14 +52,20 @@ function McpSection() {
   useEffect(() => { load() }, [])
 
   async function toggle(t: McpTarget) {
+    const willRegister = !t.registered
     setBusy(t.id); setNote(null)
     try {
-      const r = t.registered ? await mcpUnregister(t.id) : await mcpRegister(t.id)
+      const r = willRegister ? await mcpRegister(t.id) : await mcpUnregister(t.id)
       if (!r.ok) { setNote(`${t.label}: ${r.error || "실패"}`); setSnip(t.id) }
-      else if (!t.registered) setNote(`✓ ${t.label}에 등록됨 — 적용하려면 ${t.label}를 재시작하세요`)
-      else setNote(`${t.label} 등록 해제됨`)
-      await load()
-    } finally { setBusy(null) }
+      else {
+        // 낙관적 반영: 즉시 등록/해제 상태로 바꿔 표시(느린 `claude mcp list` 재조회를 안 기다림).
+        setTargets((ts) => ts?.map((x) => (x.id === t.id ? { ...x, registered: willRegister } : x)) ?? ts)
+        setNote(willRegister ? `✓ ${t.label} 등록됨 — 적용하려면 ${t.label}를 재시작하세요` : `${t.label} 등록 해제됨`)
+      }
+    } finally {
+      setBusy(null)   // 스피너 즉시 종료(등록 subprocess만 끝나면 됨)
+    }
+    load()            // 실제 상태 재확인은 백그라운드(await 안 함 → 스피너에 안 걸림)
   }
 
   if (targets === null) return <Row label="불러오는 중…"><Loader2 className="size-4 animate-spin text-muted-foreground" /></Row>
@@ -97,6 +103,7 @@ function SyncSection() {
   const [st, setSt] = useState<SyncStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [guide, setGuide] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
 
   const load = () => getSyncStatus().then(setSt).catch(() => setSt(null))
   useEffect(() => {
@@ -107,8 +114,12 @@ function SyncSection() {
 
   async function toggle() {
     if (!st) return
-    setBusy(true)
-    try { setSt(await toggleSync(!st.running)) } catch { /* noop */ } finally { setBusy(false) }
+    setBusy(true); setNote(null)
+    try {
+      const r = await toggleSync(!st.running)
+      setSt(r)
+      setNote(r.running ? "✓ 시작됨 — 이제 항상 대기하며 충돌을 자동 정리해요(계속 켜두면 됨)" : "중지됨")
+    } catch { setNote("실패") } finally { setBusy(false) }
   }
 
   const [copiedPath, setCopiedPath] = useState(false)
@@ -139,6 +150,7 @@ function SyncSection() {
           {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? "중지" : "시작"}
         </Button>
       </Row>
+      {note && <div className="py-1 text-[11px] text-primary">{note}</div>}
       {st && (
         <div className="py-2 text-[11px] text-muted-foreground">
           충돌 해소 누계 {st.resolved_total}건 · 간격 {st.interval}s
