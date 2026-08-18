@@ -14,6 +14,14 @@ if getattr(sys, "frozen", False):
 
 
 def main() -> None:
+    # `chatmem-backend.exe --mcp` → 웹 대신 MCP(stdio) 서버로 동작.
+    # 이래야 exe만 받은 사용자도 별도 설치 없이 MCP를 등록·실행할 수 있다
+    # (frozen exe는 `-m chatmem.mcp_server`가 안 되므로 이 인자 모드가 유일한 경로).
+    if "--mcp" in sys.argv[1:]:
+        from chatmem.mcp_server import main as mcp_main
+        mcp_main()
+        return
+
     port = 8765
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         port = int(sys.argv[1])

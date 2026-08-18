@@ -27,6 +27,7 @@ pyinstaller --noconfirm --onedir --name chatmem-backend \
   --collect-all huggingface_hub \
   --collect-all uvicorn \
   --collect-all sqlite_vec \
+  --collect-all mcp \
   --collect-submodules chatmem \
   --add-data "frontend/dist${SEP}frontend/dist" \
   packaging/backend_entry.py
