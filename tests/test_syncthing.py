@@ -29,3 +29,26 @@ def test_binary_path_env_override(tmp_path, monkeypatch):
 def test_free_port_is_usable():
     p = S._free_port()
     assert 1 <= p <= 65535
+
+
+def test_add_device_request_shape(monkeypatch):
+    st = S.Syncthing(gui_port=1, apikey="k")
+    calls = []
+    monkeypatch.setattr(st, "_req", lambda m, p, body=None, timeout=8.0: calls.append((m, p, body)) or {})
+    st.add_device("DEVID123", "friend")
+    m, path, body = calls[-1]
+    assert m == "PUT" and path == "/rest/config/devices/DEVID123"
+    assert body["deviceID"] == "DEVID123" and body["name"] == "friend"
+
+
+def test_share_projects_request_shape(monkeypatch, tmp_path):
+    st = S.Syncthing(gui_port=1, apikey="k")
+    calls = []
+    monkeypatch.setattr(st, "device_id", lambda: "MYID")
+    monkeypatch.setattr(st, "_req", lambda m, p, body=None, timeout=8.0: calls.append((m, p, body)) or {})
+    st.share_projects(tmp_path / "proj", ["REMOTE1"], folder_id="fid")
+    m, path, body = calls[-1]
+    assert m == "PUT" and path == "/rest/config/folders/fid"
+    assert body["id"] == "fid" and body["path"].endswith("proj") and body["type"] == "sendreceive"
+    ids = {d["deviceID"] for d in body["devices"]}
+    assert ids == {"MYID", "REMOTE1"}   # 내 기기 + 상대(중복·self 제거)
