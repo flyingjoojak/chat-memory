@@ -53,3 +53,13 @@ def test_share_projects_request_shape(monkeypatch, tmp_path):
     ids = {d["deviceID"] for d in body["devices"]}
     assert ids == {"MYID", "REMOTE1"}   # 내 기기 + 상대(중복·self 제거)
     assert body["versioning"]["type"] == "staggered"   # 삭제·덮어쓰기 이력 보존
+
+
+def test_share_projects_dedupes_devices(monkeypatch, tmp_path):
+    st = S.Syncthing(gui_port=1, apikey="k")
+    calls = []
+    monkeypatch.setattr(st, "device_id", lambda: "MYID")
+    monkeypatch.setattr(st, "_req", lambda m, p, body=None, timeout=8.0: calls.append((m, p, body)) or {})
+    st.share_projects(tmp_path / "p", ["REMOTE1", "REMOTE1", "MYID", ""])   # 중복·self·빈값
+    ids = [d["deviceID"] for d in calls[-1][2]["devices"]]
+    assert ids == ["MYID", "REMOTE1"]   # 순서 유지 + 중복/빈값 제거

@@ -28,6 +28,7 @@ from . import config as C
 SYNCTHING_VERSION = "v2.1.3"   # pin(재현성). 갱신 시 여기만 바꾸면 됨.
 # 공유 폴더 ID는 양쪽 기기가 같아야 연결됨 → 고정값 사용(우리가 관리하는 전용 폴더).
 DEFAULT_FOLDER_ID = "chatmem-claude-projects"
+VERSIONING_MAX_AGE_SEC = 31536000   # 삭제·덮어쓰기 이력 보관 기간(기본 1년). 조정 시 여기만.
 _BIN_DIR = C.DATA_DIR / "bin"
 _HOME_DIR = C.DATA_DIR / "syncthing-home"
 
@@ -78,15 +79,17 @@ def ensure_binary(version: str = SYNCTHING_VERSION, log_fn=lambda m: None) -> Pa
     out = _BIN_DIR / exe
     if ext == ".zip":
         with zipfile.ZipFile(tmp) as z:
-            member = next(m for m in z.namelist() if m.rsplit("/", 1)[-1] == exe)
+            member = next((m for m in z.namelist() if m.rsplit("/", 1)[-1] == exe), None)
+            if member is None:
+                raise RuntimeError(f"'{exe}'를 zip에서 찾지 못함: {tmp}")
             with z.open(member) as src, open(out, "wb") as dst:
                 shutil.copyfileobj(src, dst)
     else:
         with tarfile.open(tmp) as t:
-            member = next(m for m in t.getmembers() if m.name.rsplit("/", 1)[-1] == exe)
-            src = t.extractfile(member)
+            member = next((m for m in t.getmembers() if m.name.rsplit("/", 1)[-1] == exe), None)
+            src = t.extractfile(member) if member is not None else None
             if src is None:
-                raise RuntimeError("아카이브에서 syncthing 실행파일을 찾지 못함")
+                raise RuntimeError(f"'{exe}'를 아카이브에서 찾지 못함: {tmp}")
             with open(out, "wb") as dst:
                 shutil.copyfileobj(src, dst)
     with contextlib.suppress(Exception):
@@ -101,8 +104,10 @@ def update_binary(version: str = SYNCTHING_VERSION, log_fn=print) -> Path:
     실행 중이면 먼저 중지해야 함(파일 락). env override/번들은 건드리지 않음."""
     _, _, _, exe = _plat()
     cached = _BIN_DIR / exe
-    with contextlib.suppress(Exception):
-        cached.unlink()
+    try:
+        cached.unlink(missing_ok=True)   # 없는 건 무시, 락 등 실제 오류는 표면화
+    except OSError as e:
+        raise RuntimeError(f"기존 바이너리 삭제 실패(Syncthing 실행 중이면 먼저 중지하세요): {e}") from e
     return ensure_binary(version=version, log_fn=log_fn)
 
 
@@ -149,7 +154,7 @@ class Syncthing:
             self.proc.terminate()
             try:
                 self.proc.wait(timeout=5)
-            except Exception:  # noqa: BLE001
+            except subprocess.TimeoutExpired:   # 정상 종료 안 되면 강제 종료
                 self.proc.kill()
 
     def _req(self, method: str, path: str, body=None, timeout: float = 8.0):
@@ -176,13 +181,17 @@ class Syncthing:
                        folder_id: str = DEFAULT_FOLDER_ID, label: str = "Claude projects") -> None:
         """~/.claude/projects 를 지정 folder_id로 등록하고 이 기기+상대들과 공유(upsert)."""
         my = self.device_id()
-        ids = ([my] if my else []) + [r for r in remote_ids if r and r != my]
+        # 내 기기 + 상대들(빈 값·중복 제거, 순서 유지). my가 선두라 self 중복도 자동 제외.
+        ids: list[str] = []
+        for d in ([my] if my else []) + list(remote_ids):
+            if d and d not in ids:
+                ids.append(d)
         body = {
             "id": folder_id, "label": label, "path": str(projects_dir),
             "type": "sendreceive",
             "devices": [{"deviceID": d} for d in ids],
             # 삭제·덮어쓰기 이력 보존(실수 대비) — SESSION_SYNC_SPEC §5.4.
-            "versioning": {"type": "staggered", "params": {"maxAge": "31536000"}},  # 최대 1년 보관
+            "versioning": {"type": "staggered", "params": {"maxAge": str(VERSIONING_MAX_AGE_SEC)}},
         }
         self._req("PUT", f"/rest/config/folders/{folder_id}", body)
 
@@ -197,13 +206,14 @@ class Syncthing:
 
     def pair_summary(self) -> dict:
         """UI용 요약: 내 Device ID / 등록 기기 / 공유 폴더 / 연결 상태."""
+        my = self.device_id()   # REST 왕복 1회로 캐시(아래 필터에서 재사용)
         cfg = self.config()
         conns = self.connections().get("connections", {})
         return {
-            "my_id": self.device_id(),
+            "my_id": my,
             "devices": [{"id": d.get("deviceID"), "name": d.get("name"),
                          "connected": bool(conns.get(d.get("deviceID"), {}).get("connected"))}
-                        for d in cfg.get("devices", []) if d.get("deviceID") != self.device_id()],
+                        for d in cfg.get("devices", []) if d.get("deviceID") != my],
             "folders": [{"id": f.get("id"), "path": f.get("path"),
                          "shared_with": [x.get("deviceID") for x in f.get("devices", [])]}
                         for f in cfg.get("folders", [])],
