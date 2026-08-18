@@ -90,6 +90,7 @@ export async function syncthingPair(deviceId: string, name = ""): Promise<{ ok: 
 }
 
 // 자동 색인(프리즈 exe) 상태.
+export interface IndexPending { new_sessions: number; updated_sessions: number; files: number }
 export interface IndexStatus {
   enabled: boolean
   running: boolean
@@ -98,6 +99,7 @@ export interface IndexStatus {
   done_files: number
   total_files: number
   last_error: string | null
+  pending?: IndexPending   // 새 바이트가 있는 로그 파일(=대화) 집계
 }
 export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
 
@@ -116,6 +118,7 @@ export interface EnrichStatus {
   total_sessions: number
   enriched: number
   last_error: string | null
+  pending_turns?: number   // 아직 요약·태그 없는 턴 수(summary IS NULL)
 }
 export const getEnrichStatus = () => getJSON<EnrichStatus>(`/api/enrich/status`)
 export async function runEnrich(all = false): Promise<{ ok: boolean; started?: boolean; backend?: string; error?: string }> {

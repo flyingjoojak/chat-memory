@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 import threading
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -571,10 +572,33 @@ _EMBED_ALLOW = {
 _reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0}
 
 
+# 대기 집계 캐시: 상태 폴링(3s)마다 357개 파일 stat+쿼리를 다시 돌지 않게 짧게 캐싱.
+_pending_cache: dict = {"at": 0.0, "index": {"new_sessions": 0, "updated_sessions": 0, "files": 0},
+                        "enrich_turns": 0}
+_PENDING_TTL = 8.0
+
+
+def _pending_snapshot() -> dict:
+    """색인·정제 대기 수를 값싸게(모델 로드 없이) 계산해 TTL 동안 캐싱."""
+    now = time.time()
+    if now - _pending_cache["at"] < _PENDING_TTL:
+        return _pending_cache
+    from . import config as C
+    from .indexer import count_pending
+    try:
+        db = ArchiveDB()
+        idx = count_pending(db, C.PROJECTS_DIR)
+        enr = db.conn.execute("SELECT COUNT(*) c FROM turns WHERE summary IS NULL").fetchone()["c"]
+    except Exception:  # noqa: BLE001 — 대기 조회 실패해도 UI가 죽지 않게 이전 값 유지
+        return _pending_cache
+    _pending_cache.update(at=now, index=idx, enrich_turns=enr)
+    return _pending_cache
+
+
 @app.get("/api/index/status")
 def api_index_status():
-    """증분 색인(자동/수동) 상태 — UI 표시용."""
-    return _autoindex_state
+    """증분 색인(자동/수동) 상태 + 대기(새 대화) 집계 — UI 표시용."""
+    return {**_autoindex_state, "pending": _pending_snapshot()["index"]}
 
 
 @app.post("/api/index/run")
@@ -607,7 +631,8 @@ _enrich_state: dict = {"running": False, "phase": "대기", "done_sessions": 0, 
 
 @app.get("/api/enrich/status")
 def api_enrich_status():
-    return _enrich_state
+    """정제 상태 + 아직 정제 안 된 턴 수(summary IS NULL)."""
+    return {**_enrich_state, "pending_turns": _pending_snapshot()["enrich_turns"]}
 
 
 @app.post("/api/enrich")

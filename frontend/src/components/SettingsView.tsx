@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react"
-import { AlertTriangle, Check, Copy, ExternalLink, Loader2, Monitor, Moon, Sun, X } from "lucide-react"
+import {
+  AlertTriangle, Check, Copy, Database, ExternalLink, Loader2, Monitor, Moon,
+  Plug, RefreshCw, SlidersHorizontal, Sparkles, Sun, X,
+} from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,6 +28,21 @@ const BACKENDS = [
   { v: "off", label: "정제 안 함", key: null, keyEx: "", modelEnv: null, models: [] },
 ] as const
 const CUSTOM = "__custom__"
+
+type TabKey = "general" | "enrich" | "index" | "sync" | "mcp"
+const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: "general", label: "일반", icon: <SlidersHorizontal className="size-4" /> },
+  { key: "enrich", label: "정제 AI", icon: <Sparkles className="size-4" /> },
+  { key: "index", label: "색인·임베딩", icon: <Database className="size-4" /> },
+  { key: "sync", label: "동기화", icon: <RefreshCw className="size-4" /> },
+  { key: "mcp", label: "MCP 연동", icon: <Plug className="size-4" /> },
+]
+
+// 대기 수 강조 배지(0이면 흐리게, 있으면 강조).
+function Pending({ n, unit }: { n: number; unit: string }) {
+  if (n <= 0) return <span className="text-muted-foreground">대기 없음</span>
+  return <span className="font-medium text-foreground">{n.toLocaleString()}{unit} 대기</span>
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -358,6 +376,8 @@ export function SettingsView() {
   const [blockMsg, setBlockMsg] = useState("")
   const [projectsDir, setProjectsDir] = useState("")
   const [projSaved, setProjSaved] = useState(false)
+  const [tab, setTab] = useState<TabKey>("general")
+  const [intervalSaved, setIntervalSaved] = useState(false)
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
@@ -452,7 +472,6 @@ export function SettingsView() {
     const u: Record<string, string> = {
       CHATMEM_ENRICH_BACKEND: backend,
       CHATMEM_ENRICH_TIME: enrichTime,
-      CHATMEM_INDEX_INTERVAL: String(interval),
     }
     if (be.modelEnv && model) u[be.modelEnv] = model
     if (be.key && apiKey) u[be.key] = apiKey
@@ -479,6 +498,12 @@ export function SettingsView() {
     getConfig().then(setCfg).catch(() => {})
   }
 
+  async function saveInterval() {
+    await putConfig({ CHATMEM_INDEX_INTERVAL: String(interval) })
+    setIntervalSaved(true); setTimeout(() => setIntervalSaved(false), 1800)
+    getConfig().then(setCfg).catch(() => {})
+  }
+
   async function doReindex() {
     if (!confirmModel) return
     const m = confirmModel.model
@@ -492,203 +517,254 @@ export function SettingsView() {
     { v: "system", icon: <Monitor className="size-4" />, label: "시스템" },
   ]
 
+  // 대기 집계 표시용 문구.
+  const p = ixStatus?.pending
+  const idxPendingText = p && p.files > 0
+    ? [p.new_sessions ? `새 대화 ${p.new_sessions}개` : "", p.updated_sessions ? `갱신 ${p.updated_sessions}개` : ""]
+        .filter(Boolean).join(" · ") + " 대기"
+    : "새 대화 없음 — 모두 색인됨"
+  const enrichPending = enrichSt?.pending_turns ?? 0
+
   return (
-    <div className="mx-auto max-w-2xl px-6 py-5">
-      <h2 className="mb-5 text-lg font-semibold">설정</h2>
+    <div className="mx-auto max-w-3xl px-6 py-5">
+      <h2 className="mb-4 text-lg font-semibold">설정</h2>
 
-      <Section title="모양">
-        <Row label="테마">
-          <div className="inline-flex overflow-hidden rounded-lg border">
-            {themes.map((t) => (
-              <button key={t.v} onClick={() => { setMode(t.v); setThemeMode(t.v) }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${mode === t.v ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
-                {t.icon}{t.label}
-              </button>
-            ))}
-          </div>
-        </Row>
-      </Section>
+      <div className="flex flex-col gap-5 md:flex-row md:items-start">
+        {/* 큰 메뉴 네비게이션 — 넓은 화면=좌측 세로, 좁은 화면=상단 가로 스크롤 */}
+        <nav aria-label="설정 메뉴"
+          className="flex shrink-0 gap-1 overflow-x-auto pb-1 md:w-40 md:flex-col md:overflow-visible md:pb-0">
+          {TABS.map((t) => (
+            <button key={t.key} type="button" onClick={() => setTab(t.key)}
+              aria-current={tab === t.key ? "page" : undefined}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                tab === t.key ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </nav>
 
-      <Section title="정제 AI">
-        <Row label="백엔드">
-          <select value={backend} onChange={(e) => onBackendChange(e.target.value)}
-            className="rounded-md border bg-background px-2 py-1.5 outline-none">
-            {BACKENDS.map((b) => <option key={b.v} value={b.v}>{b.label}</option>)}
-          </select>
-        </Row>
-        {be.modelEnv && (
-          <Row label="모델">
-            <select value={customModel ? CUSTOM : model}
-              onChange={(e) => { if (e.target.value === CUSTOM) { setCustomModel(true) } else { setCustomModel(false); setModel(e.target.value) } }}
-              className="rounded-md border bg-background px-2 py-1.5 outline-none">
-              {be.models.map((m) => <option key={m} value={m}>{m}</option>)}
-              <option value={CUSTOM}>기타(직접 입력)</option>
-            </select>
-            {customModel && (
-              <Input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-44" placeholder="모델명 입력" />
-            )}
-          </Row>
-        )}
-        {be.key && (
-          <Row label={`API 키 ${cfg?.keys[be.key] ? "(설정됨)" : ""}`}>
-            <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-              className="h-8 w-56" placeholder={cfg?.keys[be.key] ? "변경하려면 입력" : be.keyEx} />
-          </Row>
-        )}
-        {backend === "ollama" && (
-          <>
-            <Row label="Ollama 서버 주소">
-              <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)}
-                className="h-8 w-56" placeholder="http://localhost:11434/v1" />
-            </Row>
-            <div className="border-b py-3 text-xs text-muted-foreground last:border-0">
-              ⚠️ Ollama가 실행 중이어야 하고, 위 모델을 미리 받아둬야 합니다: <code className="cm-inline">ollama pull {model || "llama3.1"}</code>.
-              모델 파일 경로는 Ollama가 관리하므로 따로 지정할 필요 없습니다.
-            </div>
-          </>
-        )}
-        <Row label="정제 시각 (매일)">
-          <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" />
-        </Row>
-      </Section>
+        <div className="min-w-0 flex-1">
+          {/* ── 일반: 테마 + 로그 폴더 + 저장소 현황 ── */}
+          {tab === "general" && (
+            <>
+              <Section title="모양">
+                <Row label="테마">
+                  <div className="inline-flex overflow-hidden rounded-lg border">
+                    {themes.map((t) => (
+                      <button key={t.v} onClick={() => { setMode(t.v); setThemeMode(t.v) }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${mode === t.v ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+                        {t.icon}{t.label}
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+              </Section>
 
-      <Section title="인덱싱">
-        <Row label="증분 인덱싱 간격 (분)">
-          <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)}
-            onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
-        </Row>
-      </Section>
+              <Section title="Claude Code 로그 폴더">
+                <div className="py-3.5">
+                  <div className="mb-2 flex items-center gap-2 text-sm">
+                    {cfg?.projects_exists
+                      ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · JSONL {cfg?.jsonl_count}개 감지</span>
+                      : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)}
+                      className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.claude/projects" />
+                    <Button size="sm" variant="outline" onClick={saveProjects}>저장</Button>
+                    {projSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    기본값은 각 사용자 홈의 <code className="cm-inline">~/.claude/projects</code>로 자동 지정됩니다.
+                    Claude Code 로그가 다른 위치에 있으면 여기서 지정하세요.
+                  </p>
+                </div>
+              </Section>
 
-      <div className="mb-2 flex flex-wrap items-center gap-3">
-        {backend !== "off" && (
-          <Button variant="outline" onClick={runTest} disabled={testing}>
-            {testing ? <><Loader2 className="size-4 animate-spin" />테스트 중…</> : "연결 테스트"}
-          </Button>
-        )}
-        <Button onClick={save} disabled={testing}>저장</Button>
-        {saved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨 · 스케줄 반영</span>}
-      </div>
-      {blockMsg && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          <AlertTriangle className="size-4 shrink-0" />{blockMsg}
-        </div>
-      )}
-      {verify && (
-        <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${verify.ok ? "border-primary/40 bg-primary/5 text-primary" : "border-destructive/40 bg-destructive/5 text-destructive"}`}>
-          <div className="flex items-center gap-2">
-            {verify.ok ? <Check className="size-4 shrink-0" /> : <X className="size-4 shrink-0" />}
-            {verify.ok ? "연결 확인됨" : `연결 실패: ${verify.msg}`}
-          </div>
-          {!verify.ok && (
-            <div className="mt-2 flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={commitSave}>그래도 저장</Button>
-              <span className="text-xs text-muted-foreground">Ollama를 나중에 켜거나 일시 오류인 경우</span>
-            </div>
+              <Section title="저장소 현황">
+                <Row label="세션">{stats?.sessions ?? "—"}개</Row>
+                <Row label="턴">{stats?.turns ?? "—"}개</Row>
+                <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
+                <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
+                <AutoIndexRow ix={ixStatus} />
+              </Section>
+            </>
+          )}
+
+          {/* ── 정제 AI: 백엔드/모델/키/시각 + 저장 + 지금 정제 ── */}
+          {tab === "enrich" && (
+            <>
+              <Section title="정제 AI">
+                <Row label="백엔드">
+                  <select value={backend} onChange={(e) => onBackendChange(e.target.value)}
+                    className="rounded-md border bg-background px-2 py-1.5 outline-none">
+                    {BACKENDS.map((b) => <option key={b.v} value={b.v}>{b.label}</option>)}
+                  </select>
+                </Row>
+                {be.modelEnv && (
+                  <Row label="모델">
+                    <select value={customModel ? CUSTOM : model}
+                      onChange={(e) => { if (e.target.value === CUSTOM) { setCustomModel(true) } else { setCustomModel(false); setModel(e.target.value) } }}
+                      className="rounded-md border bg-background px-2 py-1.5 outline-none">
+                      {be.models.map((m) => <option key={m} value={m}>{m}</option>)}
+                      <option value={CUSTOM}>기타(직접 입력)</option>
+                    </select>
+                    {customModel && (
+                      <Input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-44" placeholder="모델명 입력" />
+                    )}
+                  </Row>
+                )}
+                {be.key && (
+                  <Row label={`API 키 ${cfg?.keys[be.key] ? "(설정됨)" : ""}`}>
+                    <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                      className="h-8 w-56" placeholder={cfg?.keys[be.key] ? "변경하려면 입력" : be.keyEx} />
+                  </Row>
+                )}
+                {backend === "ollama" && (
+                  <>
+                    <Row label="Ollama 서버 주소">
+                      <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)}
+                        className="h-8 w-56" placeholder="http://localhost:11434/v1" />
+                    </Row>
+                    <div className="border-b py-3 text-xs text-muted-foreground last:border-0">
+                      ⚠️ Ollama가 실행 중이어야 하고, 위 모델을 미리 받아둬야 합니다: <code className="cm-inline">ollama pull {model || "llama3.1"}</code>.
+                      모델 파일 경로는 Ollama가 관리하므로 따로 지정할 필요 없습니다.
+                    </div>
+                  </>
+                )}
+                <Row label="정제 시각 (매일)">
+                  <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" />
+                </Row>
+              </Section>
+
+              <div className="mb-2 flex flex-wrap items-center gap-3">
+                {backend !== "off" && (
+                  <Button variant="outline" onClick={runTest} disabled={testing}>
+                    {testing ? <><Loader2 className="size-4 animate-spin" />테스트 중…</> : "연결 테스트"}
+                  </Button>
+                )}
+                <Button onClick={save} disabled={testing}>저장</Button>
+                {saved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨 · 스케줄 반영</span>}
+              </div>
+              {blockMsg && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  <AlertTriangle className="size-4 shrink-0" />{blockMsg}
+                </div>
+              )}
+              {verify && (
+                <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${verify.ok ? "border-primary/40 bg-primary/5 text-primary" : "border-destructive/40 bg-destructive/5 text-destructive"}`}>
+                  <div className="flex items-center gap-2">
+                    {verify.ok ? <Check className="size-4 shrink-0" /> : <X className="size-4 shrink-0" />}
+                    {verify.ok ? "연결 확인됨" : `연결 실패: ${verify.msg}`}
+                  </div>
+                  {!verify.ok && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={commitSave}>그래도 저장</Button>
+                      <span className="text-xs text-muted-foreground">Ollama를 나중에 켜거나 일시 오류인 경우</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* 수동 정제: 아직 요약·태그 없는 턴을 지금 정제(대기 수 표시) */}
+              <div className="mb-3 flex flex-wrap items-center gap-2 border-t py-3">
+                <Button variant="outline" size="sm" disabled={backend === "off" || !!enrichSt?.running} onClick={doEnrich}>
+                  {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}지금 정제
+                </Button>
+                <span className={`text-[11px] ${enrichErr && !enrichSt?.running ? "text-destructive" : "text-muted-foreground"}`}>
+                  {enrichSt?.running
+                    ? `정제 중… ${enrichSt.total_sessions > 0 ? `${enrichSt.done_sessions}/${enrichSt.total_sessions} 세션` : enrichSt.phase}`
+                    : enrichErr
+                      ? enrichErr
+                      : <>정제 안 된 턴 <Pending n={enrichPending} unit="개" /> · 지금 누르면 요약·태그를 만듭니다(백엔드 설정·연결 필요).</>}
+                </span>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
+            </>
+          )}
+
+          {/* ── 색인·임베딩: 증분 간격 + 증분 색인(대기 수) + 임베딩 모델/재색인 ── */}
+          {tab === "index" && (
+            <>
+              <Section title="증분 색인">
+                <Row label="증분 색인 간격 (분)">
+                  <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)}
+                    onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
+                  <Button size="sm" variant="outline" onClick={saveInterval}>저장</Button>
+                  {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
+                </Row>
+                {/* 지금 색인 + 대기(새 대화) 수 */}
+                <div className="flex flex-wrap items-center gap-2 border-b py-3 last:border-0">
+                  <Button variant="outline" size="sm" disabled={!!ixStatus?.running || reindexing} onClick={doRunIndex}>
+                    {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}증분 색인
+                  </Button>
+                  <span className="text-[11px] text-muted-foreground">
+                    {ixStatus?.running
+                      ? `색인 중… ${ixStatus.total_files > 0 ? `${ixStatus.done_files}/${ixStatus.total_files} 파일` : ixStatus.phase}`
+                      : <><b className="text-foreground">{idxPendingText}</b> · 새 대화만 빠르게 색인합니다.</>}
+                  </span>
+                </div>
+              </Section>
+
+              <Section title="임베딩 모델">
+                <div className="border-b py-2.5 text-[11px] text-muted-foreground">
+                  처음부터 다시 임베딩하려면 현재 모델의 「전체 재색인」, 다른 모델로 바꾸려면 「변경」.
+                </div>
+                {reindexing && (
+                  <div className="border-b py-3.5">
+                    <div className="mb-1.5 flex items-center gap-2 text-sm text-primary">
+                      <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
+                    </div>
+                    {reindexFiles.total > 0 && (
+                      <>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                          <div className="h-full origin-left rounded-full bg-primary transition-transform duration-300"
+                            style={{ transform: `scaleX(${reindexFiles.done / reindexFiles.total})` }} />
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+                          {reindexFiles.done}/{reindexFiles.total} 파일 ({Math.round(reindexFiles.done / reindexFiles.total * 100)}%)
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+                {embed.map((m) => (
+                  <Row key={m.model} label={
+                    <span className="flex flex-col">
+                      <span className="font-mono text-[13px]">{m.model.split("/").pop()}</span>
+                      <span className="text-xs text-muted-foreground">{m.note} · 디스크 {m.size_gb}GB · <b className="text-foreground/80">임베딩 중 RAM 약 {m.ram_gb}GB</b></span>
+                    </span>
+                  }>
+                    {m.current
+                      ? <span className="inline-flex items-center gap-2">
+                          <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
+                          <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>전체 재색인</Button>
+                        </span>
+                      : <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>변경</Button>}
+                  </Row>
+                ))}
+              </Section>
+            </>
+          )}
+
+          {/* ── 동기화: 내장 엔진 + 멀티기기 세션 동기화 ── */}
+          {tab === "sync" && (
+            <>
+              <Section title="기기 연결 (앱 내장 동기)">
+                <SyncthingSection />
+              </Section>
+              <Section title="세션 동기화 (멀티기기)">
+                <SyncSection />
+              </Section>
+            </>
+          )}
+
+          {/* ── MCP 연동 ── */}
+          {tab === "mcp" && (
+            <Section title="MCP 연동 (다른 AI가 과거 대화 검색)">
+              <McpSection />
+            </Section>
           )}
         </div>
-      )}
-      {/* 수동 정제: 아직 요약·태그 없는 대화를 지금 정제(백엔드 가능해야 실행) */}
-      <div className="mb-3 flex flex-wrap items-center gap-2 border-t py-3">
-        <Button variant="outline" size="sm" disabled={backend === "off" || !!enrichSt?.running} onClick={doEnrich}>
-          {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}지금 정제
-        </Button>
-        <span className={`text-[11px] ${enrichErr && !enrichSt?.running ? "text-destructive" : "text-muted-foreground"}`}>
-          {enrichSt?.running
-            ? `정제 중… ${enrichSt.total_sessions > 0 ? `${enrichSt.done_sessions}/${enrichSt.total_sessions} 세션` : enrichSt.phase}`
-            : enrichErr
-              ? enrichErr
-              : "아직 요약·태그 없는 대화를 지금 정제합니다(위 백엔드 설정·연결 필요)."}
-        </span>
       </div>
-      <p className="mb-6 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
-
-      <Section title="임베딩 모델">
-        {/* 색인 실행: 증분(새 대화만·빠름) / 전체 재색인(처음부터·아래 모델 버튼) */}
-        <div className="flex flex-wrap items-center gap-2 border-b py-3">
-          <Button variant="outline" size="sm" disabled={!!ixStatus?.running || reindexing} onClick={doRunIndex}>
-            {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}증분 색인
-          </Button>
-          <span className="text-[11px] text-muted-foreground">새 대화만 빠르게 색인. 처음부터 다시 임베딩하려면 아래 모델의 「전체 재색인」.</span>
-        </div>
-        {ixStatus?.running && (
-          <div className="border-b py-2 text-[11px] text-muted-foreground tabular-nums">
-            색인 중… {ixStatus.total_files > 0 ? `${ixStatus.done_files}/${ixStatus.total_files} 파일` : ixStatus.phase}
-          </div>
-        )}
-        {reindexing && (
-          <div className="border-b py-3.5">
-            <div className="mb-1.5 flex items-center gap-2 text-sm text-primary">
-              <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
-            </div>
-            {reindexFiles.total > 0 && (
-              <>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div className="h-full origin-left rounded-full bg-primary transition-transform duration-300"
-                    style={{ transform: `scaleX(${reindexFiles.done / reindexFiles.total})` }} />
-                </div>
-                <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-                  {reindexFiles.done}/{reindexFiles.total} 파일 ({Math.round(reindexFiles.done / reindexFiles.total * 100)}%)
-                </div>
-              </>
-            )}
-          </div>
-        )}
-        {embed.map((m) => (
-          <Row key={m.model} label={
-            <span className="flex flex-col">
-              <span className="font-mono text-[13px]">{m.model.split("/").pop()}</span>
-              <span className="text-xs text-muted-foreground">{m.note} · 디스크 {m.size_gb}GB · <b className="text-foreground/80">임베딩 중 RAM 약 {m.ram_gb}GB</b></span>
-            </span>
-          }>
-            {m.current
-              ? <span className="inline-flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
-                  <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>전체 재색인</Button>
-                </span>
-              : <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>변경</Button>}
-          </Row>
-        ))}
-      </Section>
-
-      <Section title="Claude Code 로그 폴더">
-        <div className="py-3.5">
-          <div className="mb-2 flex items-center gap-2 text-sm">
-            {cfg?.projects_exists
-              ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · JSONL {cfg?.jsonl_count}개 감지</span>
-              : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)}
-              className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.claude/projects" />
-            <Button size="sm" variant="outline" onClick={saveProjects}>저장</Button>
-            {projSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            기본값은 각 사용자 홈의 <code className="cm-inline">~/.claude/projects</code>로 자동 지정됩니다.
-            Claude Code 로그가 다른 위치에 있으면 여기서 지정하세요.
-          </p>
-        </div>
-      </Section>
-
-      <Section title="MCP 연동 (다른 AI가 과거 대화 검색)">
-        <McpSection />
-      </Section>
-
-      <Section title="기기 연결 (앱 내장 동기)">
-        <SyncthingSection />
-      </Section>
-
-      <Section title="세션 동기화 (멀티기기)">
-        <SyncSection />
-      </Section>
-
-      <Section title="저장소 현황">
-        <Row label="세션">{stats?.sessions ?? "—"}개</Row>
-        <Row label="턴">{stats?.turns ?? "—"}개</Row>
-        <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
-        <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
-        <AutoIndexRow ix={ixStatus} />
-      </Section>
 
       <AlertDialog open={!!confirmModel} onOpenChange={(o) => !o && setConfirmModel(null)}>
         <AlertDialogContent>
