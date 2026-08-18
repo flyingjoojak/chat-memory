@@ -23,7 +23,14 @@ NAME = "chat-memory"
 
 
 def mcp_command() -> tuple[str, list[str]]:
-    """클라이언트가 실행할 커맨드. 콘솔스크립트가 있으면 그 절대경로, 없으면 python -m."""
+    """클라이언트가 실행할 커맨드.
+
+    - 패키지(frozen) exe: 자기 자신을 `--mcp` 인자로 실행(별도 설치·python 불필요).
+      frozen에선 `-m chatmem.mcp_server`가 동작하지 않으므로 이 경로가 유일하다.
+    - 개발: 콘솔스크립트(chatmem-mcp)가 있으면 그 절대경로, 없으면 `python -m`.
+    """
+    if getattr(sys, "frozen", False):
+        return sys.executable, ["--mcp"]
     exe = shutil.which("chatmem-mcp")
     if exe:
         return exe, []
