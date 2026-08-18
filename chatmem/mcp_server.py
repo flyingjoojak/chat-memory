@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import functools
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -17,6 +20,18 @@ from mcp.server.fastmcp import FastMCP
 
 mcp = FastMCP("chat-memory")
 _state: dict = {}
+
+# 무거운 작업(임베딩·벡터검색·sqlite)은 단일 전용 워커 스레드로 오프로드한다.
+# 이유 1) FastMCP는 동기 툴을 이벤트 루프에서 그대로 실행 → 도는 동안 서버가 멈춘다(핑·동시요청 불가).
+# 이유 2) sqlite 연결은 만든 스레드에서만 쓸 수 있다 → 워커를 하나로 고정해 _db/_embedder/_vi
+#         싱글톤이 항상 같은 스레드에서 생성·사용되게 한다(크로스스레드 에러·동시성 충돌 동시 차단).
+_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="chatmem-mcp")
+
+
+async def _offload(fn, *args):
+    """동기 함수를 전용 워커 스레드에서 실행하고 결과를 await. 이벤트 루프는 계속 자유."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_pool, functools.partial(fn, *args))
 
 
 def _embedder():
@@ -66,15 +81,7 @@ def _kst(ts: str) -> str:
         return (ts or "")[:16].replace("T", " ")
 
 
-@mcp.tool()
-def search_memory(query: str, k: int = 5, semantic_only: bool = False,
-                  since: str = "", until: str = "") -> str:
-    """과거 Claude Code 대화를 의미+키워드 하이브리드로 검색해 원문과 요약을 반환한다.
-
-    사용자가 이전에 무엇을 했는지/결정했는지/어떻게 구현했는지 등을 물으면 먼저 이 도구로 찾아라.
-    query: 자연어 질의(개념·의역 가능). k: 결과 수(기본 5). since/until: 'YYYY-MM-DD'(KST) 날짜 범위.
-    각 결과에 session 값이 있으니, 더 자세한 맥락이 필요하면 get_session(session)으로 세션 전체를 열람하라.
-    """
+def _search_memory(query: str, k: int, semantic_only: bool, since: str, until: str) -> str:
     from .config import EMBED_MODEL
     from .search import search as run_search
 
@@ -110,12 +117,7 @@ def search_memory(query: str, k: int = 5, semantic_only: bool = False,
     return "\n\n".join(blocks)
 
 
-@mcp.tool()
-def get_session(session: str, limit: int = 120) -> str:
-    """특정 세션의 전체 대화를 시간순으로 반환한다. session은 전체 ID 또는 앞 8자 접두.
-
-    search_memory 결과의 session 값으로 호출해 그 대화의 전체 맥락(작업 흐름)을 확인하라.
-    """
+def _get_session(session: str, limit: int) -> str:
     db = _db()
     rows = db.conn.execute(
         "SELECT session_id, timestamp, question, answer, summary FROM turns "
@@ -133,9 +135,7 @@ def get_session(session: str, limit: int = 120) -> str:
     return "\n\n".join(out)
 
 
-@mcp.tool()
-def recent_sessions(limit: int = 20) -> str:
-    """최근 대화 세션 목록(대표 제목·턴 수·시각). 무슨 작업들이 있었는지 훑을 때 사용."""
+def _recent_sessions(limit: int) -> str:
     db = _db()
     # 세션별 대표 제목(첫 턴)·턴수·마지막시각을 윈도우 함수로 단일 쿼리에서 산출(N+1 제거).
     rows = db.conn.execute(
@@ -156,14 +156,47 @@ def recent_sessions(limit: int = 20) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
-def stats() -> str:
-    """저장된 대화 규모(세션·턴·벡터·정제 수)."""
+def _stats() -> str:
     db, vi = _db(), _vi()
     t = db.conn.execute("SELECT COUNT(*) c FROM turns").fetchone()["c"]
     s = db.conn.execute("SELECT COUNT(DISTINCT session_id) c FROM turns").fetchone()["c"]
     e = db.conn.execute("SELECT COUNT(*) c FROM turns WHERE summary IS NOT NULL").fetchone()["c"]
     return f"세션 {s} · 턴 {t} · 벡터 {len(vi)} · 정제 {e}"
+
+
+# ── MCP 툴(async 래퍼): 본문은 전용 워커 스레드로 오프로드해 이벤트 루프를 막지 않는다.
+# 시그니처·docstring은 FastMCP가 툴 스키마로 노출하므로 래퍼에 유지한다.
+@mcp.tool()
+async def search_memory(query: str, k: int = 5, semantic_only: bool = False,
+                        since: str = "", until: str = "") -> str:
+    """과거 Claude Code 대화를 의미+키워드 하이브리드로 검색해 원문과 요약을 반환한다.
+
+    사용자가 이전에 무엇을 했는지/결정했는지/어떻게 구현했는지 등을 물으면 먼저 이 도구로 찾아라.
+    query: 자연어 질의(개념·의역 가능). k: 결과 수(기본 5). since/until: 'YYYY-MM-DD'(KST) 날짜 범위.
+    각 결과에 session 값이 있으니, 더 자세한 맥락이 필요하면 get_session(session)으로 세션 전체를 열람하라.
+    """
+    return await _offload(_search_memory, query, k, semantic_only, since, until)
+
+
+@mcp.tool()
+async def get_session(session: str, limit: int = 120) -> str:
+    """특정 세션의 전체 대화를 시간순으로 반환한다. session은 전체 ID 또는 앞 8자 접두.
+
+    search_memory 결과의 session 값으로 호출해 그 대화의 전체 맥락(작업 흐름)을 확인하라.
+    """
+    return await _offload(_get_session, session, limit)
+
+
+@mcp.tool()
+async def recent_sessions(limit: int = 20) -> str:
+    """최근 대화 세션 목록(대표 제목·턴 수·시각). 무슨 작업들이 있었는지 훑을 때 사용."""
+    return await _offload(_recent_sessions, limit)
+
+
+@mcp.tool()
+async def stats() -> str:
+    """저장된 대화 규모(세션·턴·벡터·정제 수)."""
+    return await _offload(_stats)
 
 
 def main() -> None:
