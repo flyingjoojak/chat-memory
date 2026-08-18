@@ -310,8 +310,10 @@ function SyncthingSection() {
               ))}
             </div>
           )}
-          <div className="py-2 text-[11px] text-muted-foreground">
+          <div className="py-2 text-[11px] leading-relaxed text-muted-foreground">
             양쪽 기기에서 서로의 코드를 넣고 연결하면 <code className="rounded bg-muted px-1">~/.claude/projects</code>가 자동 동기돼요. 상대 앱에 "새 기기/폴더 요청"이 뜨면 수락하세요.
+            <br />· 첫 연결 때 <b>방화벽 허용 팝업</b>이 뜨면 <b>허용</b>하세요(네트워크 통신에 필요).
+            <br />· 삭제·덮어쓰기는 자동으로 <b>이력 보존(최대 1년)</b>되어 실수해도 복구할 수 있어요.
           </div>
         </>
       )}

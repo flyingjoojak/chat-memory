@@ -52,3 +52,4 @@ def test_share_projects_request_shape(monkeypatch, tmp_path):
     assert body["id"] == "fid" and body["path"].endswith("proj") and body["type"] == "sendreceive"
     ids = {d["deviceID"] for d in body["devices"]}
     assert ids == {"MYID", "REMOTE1"}   # 내 기기 + 상대(중복·self 제거)
+    assert body["versioning"]["type"] == "staggered"   # 삭제·덮어쓰기 이력 보존

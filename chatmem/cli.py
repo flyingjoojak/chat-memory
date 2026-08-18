@@ -317,8 +317,12 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_syncthing(args: argparse.Namespace) -> int:
-    """임베디드 Syncthing 자가점검: 바이너리 확보 → 헤드리스 기동 → Device ID → 종료."""
+    """임베디드 Syncthing 자가점검 / 바이너리 갱신."""
     from . import syncthing
+    if args.update:
+        p = syncthing.update_binary(log_fn=print)
+        print(f"갱신 완료: {p} (버전 {syncthing.SYNCTHING_VERSION})")
+        return 0
     r = syncthing.self_check()
     print(f"\n결과: ready={r['ready']} · device_id={r['device_id']} · gui={r['gui']}")
     return 0 if r["ready"] else 1
@@ -402,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
     sy.set_defaults(func=cmd_sync)
 
     st = sub.add_parser("syncthing", help="임베디드 Syncthing 자가점검(바이너리 확보+기동+Device ID)")
+    st.add_argument("--update", action="store_true", help="번들 바이너리를 지정 버전으로 다시 받음")
     st.set_defaults(func=cmd_syncthing)
 
     # `mem "질의"` 처럼 서브커맨드 생략 시 검색으로 간주:
