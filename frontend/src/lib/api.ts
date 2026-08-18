@@ -62,10 +62,12 @@ export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
 // 임베디드 Syncthing(앱 내장 P2P) — 기기 연결/페어링.
 export interface SyncthingSync {
   state: string          // idle(최신)/scanning/syncing/error 등
-  completion: number     // 0~100, 로컬이 글로벌 대비 받은 비율
+  completion: number     // 0~100, 로컬이 글로벌 대비 받은 비율(수신)
   need_items: number     // 아직 받아야 할 파일·폴더 수
   need_bytes: number
   global_bytes: number
+  peers_connected?: number       // 지금 연결된 상대 기기 수
+  remote_complete?: number | null // 연결된 상대들이 내 폴더를 받은 최소 %(전송). null=연결 상대 없음
 }
 export interface SyncthingStatus {
   running: boolean

@@ -495,6 +495,7 @@ def api_config():
     import os
 
     from . import config as C
+    from .indexer import iter_jsonl
     return {
         "enrich_backend": C.ENRICH_BACKEND,
         "models": {
@@ -512,7 +513,8 @@ def api_config():
         # Claude Code 로그 소스 — 각 사용자 홈 기준 자동 해석, 필요 시 직접 지정.
         "projects_dir": str(C.PROJECTS_DIR),
         "projects_exists": C.PROJECTS_DIR.exists(),
-        "jsonl_count": (sum(1 for _ in C.PROJECTS_DIR.glob("**/*.jsonl"))
+        # .stversions(Syncthing 버전 백업) 제외 — 색인 대상과 같은 기준으로 카운트.
+        "jsonl_count": (sum(1 for _ in iter_jsonl(C.PROJECTS_DIR))
                         if C.PROJECTS_DIR.exists() else 0),
     }
 

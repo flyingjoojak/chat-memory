@@ -219,6 +219,18 @@ class Syncthing:
         return {"state": s.get("state") or "idle", "completion": completion,
                 "need_items": need_items, "need_bytes": nb, "global_bytes": gb}
 
+    def device_completion(self, device_id: str, folder_id: str = DEFAULT_FOLDER_ID) -> float | None:
+        """상대 기기가 이 폴더를 몇 % 받았는지(우리 관점). 전송 방향 진척 판단용.
+
+        folder_sync.completion은 '내가 받은 비율'(수신)이라, 이것과 합쳐야
+        '양쪽 다 최신'(진짜 수렴)을 판정할 수 있다. None=조회 실패.
+        """
+        try:
+            c = self._get(f"/rest/db/completion?folder={folder_id}&device={device_id}")
+            return float(c.get("completion", 0.0))
+        except Exception:  # noqa: BLE001
+            return None
+
     def pair_summary(self) -> dict:
         """UI용 요약: 내 Device ID / 등록 기기 / 공유 폴더 / 연결 상태 / 동기 진행."""
         my = self.device_id()   # REST 왕복 1회로 캐시(아래 필터에서 재사용)
@@ -231,6 +243,17 @@ class Syncthing:
         if managed:
             with contextlib.suppress(Exception):
                 sync = self.folder_sync(DEFAULT_FOLDER_ID)
+        # 연결된 상대들이 내 폴더를 얼마나 받았는지(전송 방향) → '진짜 최신' 판정용.
+        if sync is not None:
+            remotes = []
+            for d in cfg.get("devices", []):
+                did = d.get("deviceID")
+                if did and did != my and conns.get(did, {}).get("connected"):
+                    v = self.device_completion(did, DEFAULT_FOLDER_ID)
+                    if v is not None:
+                        remotes.append(v)
+            sync["peers_connected"] = len(remotes)
+            sync["remote_complete"] = round(min(remotes), 1) if remotes else None
         return {
             "my_id": my,
             "devices": [{"id": d.get("deviceID"), "name": d.get("name"),
