@@ -316,6 +316,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_syncthing(args: argparse.Namespace) -> int:
+    """임베디드 Syncthing 자가점검: 바이너리 확보 → 헤드리스 기동 → Device ID → 종료."""
+    from . import syncthing
+    r = syncthing.self_check()
+    print(f"\n결과: ready={r['ready']} · device_id={r['device_id']} · gui={r['gui']}")
+    return 0 if r["ready"] else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     # 콘솔 진입점(chatmem/mem)은 main()을 인자 없이 호출 → sys.argv에서 직접 취함.
     if argv is None:
@@ -392,6 +400,9 @@ def main(argv: list[str] | None = None) -> int:
     sy.add_argument("--interval", type=float, default=10.0, help="점검 간격(초, 기본 10)")
     sy.add_argument("--index", action="store_true", help="동기 직후 증분 색인도 실행(스케줄러 미사용 시)")
     sy.set_defaults(func=cmd_sync)
+
+    st = sub.add_parser("syncthing", help="임베디드 Syncthing 자가점검(바이너리 확보+기동+Device ID)")
+    st.set_defaults(func=cmd_syncthing)
 
     # `mem "질의"` 처럼 서브커맨드 생략 시 검색으로 간주:
     # 첫 토큰이 플래그도 아니고 알려진 서브커맨드도 아니면 앞에 'search'를 붙인다.
