@@ -14,7 +14,7 @@ import {
   getSyncthingStatus, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
   syncthingPair, syncthingStart, syncthingStop, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
-  type SyncthingStatus,
+  type SyncthingStatus, type SyncthingSync,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -298,6 +298,7 @@ function SyncthingSection() {
 
       {running && (
         <>
+          <SyncStateLine sync={st?.sync} />
           <div className="py-2">
             <div className="mb-1 text-[11px] font-medium text-muted-foreground">내 연결 코드 (상대 기기에 붙여넣기)</div>
             <div className="flex items-center gap-1.5">
@@ -336,6 +337,27 @@ function SyncthingSection() {
         </>
       )}
     </>
+  )
+}
+
+// 공유 폴더 동기 상태 한 줄(최신/스캔/동기화 %/오류). 내장 엔진 실행 중일 때 노출.
+function SyncStateLine({ sync }: { sync?: SyncthingSync | null }) {
+  let dot = "bg-muted-foreground/40"
+  let text: React.ReactNode = "공유 폴더 준비 중 — 상대 기기를 연결하면 자동 공유돼요"
+  if (sync) {
+    if (sync.state === "error") { dot = "bg-destructive"; text = <span className="text-destructive">동기화 오류 — 아래 방화벽·폴더 설정을 확인하세요</span> }
+    else if (sync.state === "scanning") { dot = "bg-amber-500"; text = "스캔 중… (파일 점검)" }
+    else if (sync.state === "syncing" || sync.need_items > 0 || sync.need_bytes > 0) {
+      dot = "bg-amber-500"
+      text = <>동기화 중 <b className="text-foreground tabular-nums">{sync.completion}%</b>{sync.need_items > 0 ? ` · 남은 항목 ${sync.need_items.toLocaleString()}개` : ""}</>
+    } else { dot = "bg-primary"; text = <span className="text-primary">최신 상태 ✓</span> }
+  }
+  return (
+    <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">
+      <span className={`size-2 shrink-0 rounded-full ${dot}`} />
+      <span className="font-medium text-foreground/80">동기화 상태:</span>
+      <span>{text}</span>
+    </div>
   )
 }
 

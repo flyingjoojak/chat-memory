@@ -204,11 +204,33 @@ class Syncthing:
     def folder_status(self, folder_id: str = DEFAULT_FOLDER_ID) -> dict:
         return self._get(f"/rest/db/status?folder={folder_id}")
 
+    def folder_sync(self, folder_id: str = DEFAULT_FOLDER_ID) -> dict:
+        """공유 폴더의 동기 상태 요약(이 기기 기준).
+
+        state: idle(최신)/scanning(스캔 중)/syncing(동기화 중)/error 등 syncthing 원상태.
+        completion: 로컬이 글로벌 대비 몇 % 받았는지(0~100). need_*: 아직 받아야 할 양.
+        """
+        s = self.folder_status(folder_id)
+        gb = int(s.get("globalBytes") or 0)
+        nb = int(s.get("needBytes") or 0)
+        need_items = sum(int(s.get(k) or 0) for k in
+                         ("needFiles", "needDirectories", "needSymlinks", "needDeletes"))
+        completion = 100.0 if gb <= 0 else max(0.0, min(100.0, round((gb - nb) / gb * 100, 1)))
+        return {"state": s.get("state") or "idle", "completion": completion,
+                "need_items": need_items, "need_bytes": nb, "global_bytes": gb}
+
     def pair_summary(self) -> dict:
-        """UI용 요약: 내 Device ID / 등록 기기 / 공유 폴더 / 연결 상태."""
+        """UI용 요약: 내 Device ID / 등록 기기 / 공유 폴더 / 연결 상태 / 동기 진행."""
         my = self.device_id()   # REST 왕복 1회로 캐시(아래 필터에서 재사용)
         cfg = self.config()
         conns = self.connections().get("connections", {})
+        folders = cfg.get("folders", [])
+        # 우리가 관리하는 폴더가 설정돼 있을 때만 동기 상태 조회(없으면 None → UI에서 안내)
+        managed = any(f.get("id") == DEFAULT_FOLDER_ID for f in folders)
+        sync = None
+        if managed:
+            with contextlib.suppress(Exception):
+                sync = self.folder_sync(DEFAULT_FOLDER_ID)
         return {
             "my_id": my,
             "devices": [{"id": d.get("deviceID"), "name": d.get("name"),
@@ -216,7 +238,8 @@ class Syncthing:
                         for d in cfg.get("devices", []) if d.get("deviceID") != my],
             "folders": [{"id": f.get("id"), "path": f.get("path"),
                          "shared_with": [x.get("deviceID") for x in f.get("devices", [])]}
-                        for f in cfg.get("folders", [])],
+                        for f in folders],
+            "sync": sync,
         }
 
     def wait_ready(self, timeout: float = 40.0) -> bool:

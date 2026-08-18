@@ -63,3 +63,26 @@ def test_share_projects_dedupes_devices(monkeypatch, tmp_path):
     st.share_projects(tmp_path / "p", ["REMOTE1", "REMOTE1", "MYID", ""])   # 중복·self·빈값
     ids = [d["deviceID"] for d in calls[-1][2]["devices"]]
     assert ids == ["MYID", "REMOTE1"]   # 순서 유지 + 중복/빈값 제거
+
+
+def _sync_with(monkeypatch, status: dict) -> dict:
+    st = S.Syncthing(gui_port=1, apikey="k")
+    monkeypatch.setattr(st, "folder_status", lambda folder_id=S.DEFAULT_FOLDER_ID: status)
+    return st.folder_sync()
+
+
+def test_folder_sync_idle_is_complete(monkeypatch):
+    r = _sync_with(monkeypatch, {"state": "idle", "globalBytes": 1000, "needBytes": 0})
+    assert r["state"] == "idle" and r["completion"] == 100.0 and r["need_items"] == 0
+
+
+def test_folder_sync_partial_completion(monkeypatch):
+    r = _sync_with(monkeypatch, {"state": "syncing", "globalBytes": 1000, "needBytes": 250,
+                                 "needFiles": 3, "needDirectories": 1})
+    assert r["state"] == "syncing" and r["completion"] == 75.0 and r["need_items"] == 4
+
+
+def test_folder_sync_empty_global_is_100(monkeypatch):
+    # 빈 폴더(글로벌 0바이트)는 0으로 나누지 않고 최신(100%)으로 취급
+    r = _sync_with(monkeypatch, {"state": "idle", "globalBytes": 0, "needBytes": 0})
+    assert r["completion"] == 100.0

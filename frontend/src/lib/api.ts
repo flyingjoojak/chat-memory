@@ -60,6 +60,13 @@ export interface SyncStatus {
 export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
 
 // 임베디드 Syncthing(앱 내장 P2P) — 기기 연결/페어링.
+export interface SyncthingSync {
+  state: string          // idle(최신)/scanning/syncing/error 등
+  completion: number     // 0~100, 로컬이 글로벌 대비 받은 비율
+  need_items: number     // 아직 받아야 할 파일·폴더 수
+  need_bytes: number
+  global_bytes: number
+}
 export interface SyncthingStatus {
   running: boolean
   starting: boolean
@@ -68,6 +75,7 @@ export interface SyncthingStatus {
   last_error: string | null
   devices?: { id: string; name: string; connected: boolean }[]
   folders?: { id: string; path: string; shared_with: string[] }[]
+  sync?: SyncthingSync | null   // 공유 폴더 동기 진행(폴더 미설정 시 null)
 }
 export const getSyncthingStatus = () => getJSON<SyncthingStatus>(`/api/syncthing/status`)
 export async function syncthingStart(): Promise<{ ok: boolean; phase?: string }> {
