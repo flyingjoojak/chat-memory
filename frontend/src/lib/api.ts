@@ -62,6 +62,7 @@ export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
 // 임베디드 Syncthing(앱 내장 P2P) — 기기 연결/페어링.
 export interface SyncthingStatus {
   running: boolean
+  starting: boolean
   phase: string
   my_id: string | null
   last_error: string | null

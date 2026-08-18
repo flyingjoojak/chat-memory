@@ -397,15 +397,18 @@ def api_sync_toggle(payload: dict):
 
 # ── 임베디드 Syncthing (E3): 관리형 인스턴스 + 페어링 엔드포인트 ──────
 # 지연 실행: 사용자가 "기기 연결"을 켤 때만 spawn(단일 기기는 오버헤드 0).
-_st_state: dict = {"running": False, "phase": "중지", "my_id": None, "last_error": None}
+# running/starting = 기계 판독용 상태(프론트가 이걸 봄), phase = 사람용/로그 텍스트.
+_st_state: dict = {"running": False, "starting": False, "phase": "중지", "my_id": None, "last_error": None}
 _st: dict = {"inst": None}
+_st_lock = threading.Lock()   # 웹 스레드 ↔ 백그라운드 스레드 상태 변경 상호배제
 _ST_DEVID_RE = re.compile(r"^[A-Z2-7]{7}(-[A-Z2-7]{7}){7}$")   # Syncthing Device ID 형식
 
 
 def _st_start_bg(persist: bool = True) -> None:
-    if _st_state["running"] or _st_state["phase"] == "시작 중":
-        return
-    _st_state.update(phase="시작 중", last_error=None)
+    with _st_lock:   # check-and-set 원자화(이중 시작 방지)
+        if _st_state["running"] or _st_state["starting"]:
+            return
+        _st_state.update(starting=True, phase="시작 중", last_error=None)
 
     def _w() -> None:
         try:
@@ -414,14 +417,18 @@ def _st_start_bg(persist: bool = True) -> None:
             _st["inst"] = inst
             inst.start(log_fn=lambda m: _st_state.__setitem__("phase", m))
             if inst.wait_ready():
-                _st_state.update(running=True, phase="실행 중", my_id=inst.device_id())
+                with _st_lock:
+                    _st_state.update(running=True, starting=False, phase="실행 중", my_id=inst.device_id())
                 if persist:
                     with contextlib.suppress(Exception):
                         db = ArchiveDB(); db.set_meta("syncthing_enabled", "1"); db.commit()
             else:
-                _st_state.update(running=False, phase="시작 실패", last_error="Syncthing이 준비되지 않음")
+                with _st_lock:
+                    _st_state.update(running=False, starting=False, phase="시작 실패",
+                                     last_error="Syncthing이 준비되지 않음")
         except Exception as ex:  # noqa: BLE001
-            _st_state.update(running=False, phase="오류", last_error=str(ex))
+            with _st_lock:
+                _st_state.update(running=False, starting=False, phase="오류", last_error=str(ex))
 
     threading.Thread(target=_w, daemon=True).start()
 
@@ -431,7 +438,8 @@ def _st_stop(persist: bool = True) -> None:
     if inst is not None:
         with contextlib.suppress(Exception):
             inst.stop()
-    _st_state.update(running=False, phase="중지", my_id=None)
+    with _st_lock:
+        _st_state.update(running=False, starting=False, phase="중지", my_id=None)
     if persist:
         with contextlib.suppress(Exception):
             db = ArchiveDB(); db.set_meta("syncthing_enabled", "0"); db.commit()

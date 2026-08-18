@@ -227,7 +227,7 @@ function SyncthingSection() {
     return () => { clearInterval(id); if (copyTimer.current) clearTimeout(copyTimer.current) }
   }, [])
 
-  const starting = st?.phase === "시작 중"
+  const starting = !!st?.starting
   async function start() { setBusy(true); try { await syncthingStart() } catch { /* noop */ } finally { setBusy(false); load() } }
   async function stop() { setBusy(true); try { await syncthingStop() } catch { /* noop */ } finally { setBusy(false); load() } }
   async function copyMyId() {
