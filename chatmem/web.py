@@ -128,9 +128,13 @@ async def _lifespan(app: FastAPI):
         if db.get_meta("sync_enabled") == "1":
             iv = db.get_meta("sync_interval")
             _sync_start(float(iv) if iv else None, persist=False)
+        # 이전에 켜둔 임베디드 Syncthing이 있으면 자동 재개.
+        if db.get_meta("syncthing_enabled") == "1":
+            _st_start_bg(persist=False)
 
     yield
     _sync_stop(persist=False)
+    _st_stop(persist=False)
     _state.clear()
 
 
@@ -389,6 +393,91 @@ def api_sync_toggle(payload: dict):
     else:
         _sync_stop()
     return _sync_status()
+
+
+# ── 임베디드 Syncthing (E3): 관리형 인스턴스 + 페어링 엔드포인트 ──────
+# 지연 실행: 사용자가 "기기 연결"을 켤 때만 spawn(단일 기기는 오버헤드 0).
+_st_state: dict = {"running": False, "phase": "중지", "my_id": None, "last_error": None}
+_st: dict = {"inst": None}
+_ST_DEVID_RE = re.compile(r"^[A-Z2-7]{7}(-[A-Z2-7]{7}){7}$")   # Syncthing Device ID 형식
+
+
+def _st_start_bg(persist: bool = True) -> None:
+    if _st_state["running"] or _st_state["phase"] == "시작 중":
+        return
+    _st_state.update(phase="시작 중", last_error=None)
+
+    def _w() -> None:
+        try:
+            from . import syncthing
+            inst = _st.get("inst") or syncthing.Syncthing()
+            _st["inst"] = inst
+            inst.start(log_fn=lambda m: _st_state.__setitem__("phase", m))
+            if inst.wait_ready():
+                _st_state.update(running=True, phase="실행 중", my_id=inst.device_id())
+                if persist:
+                    with contextlib.suppress(Exception):
+                        db = ArchiveDB(); db.set_meta("syncthing_enabled", "1"); db.commit()
+            else:
+                _st_state.update(running=False, phase="시작 실패", last_error="Syncthing이 준비되지 않음")
+        except Exception as ex:  # noqa: BLE001
+            _st_state.update(running=False, phase="오류", last_error=str(ex))
+
+    threading.Thread(target=_w, daemon=True).start()
+
+
+def _st_stop(persist: bool = True) -> None:
+    inst = _st.get("inst")
+    if inst is not None:
+        with contextlib.suppress(Exception):
+            inst.stop()
+    _st_state.update(running=False, phase="중지", my_id=None)
+    if persist:
+        with contextlib.suppress(Exception):
+            db = ArchiveDB(); db.set_meta("syncthing_enabled", "0"); db.commit()
+
+
+@app.get("/api/syncthing/status")
+def api_syncthing_status():
+    out = dict(_st_state)
+    inst = _st.get("inst")
+    if _st_state["running"] and inst is not None:
+        with contextlib.suppress(Exception):
+            out.update(inst.pair_summary())
+    return out
+
+
+@app.post("/api/syncthing/start")
+def api_syncthing_start():
+    _st_start_bg()
+    return {"ok": True, "phase": _st_state["phase"]}
+
+
+@app.post("/api/syncthing/stop")
+def api_syncthing_stop():
+    _st_stop()
+    return {"ok": True}
+
+
+@app.post("/api/syncthing/pair")
+def api_syncthing_pair(payload: dict):
+    """상대 Device ID를 추가 + ~/.claude/projects 공유. body: {device_id, name?}."""
+    from . import config as C
+    inst = _st.get("inst")
+    if not _st_state["running"] or inst is None:
+        return {"ok": False, "error": "먼저 '기기 연결'을 시작하세요"}
+    did = str((payload or {}).get("device_id", "")).strip().upper().replace(" ", "")
+    if not _ST_DEVID_RE.fullmatch(did):
+        return {"ok": False, "error": "Device ID 형식이 올바르지 않아요(예: XXXXXXX-XXXXXXX-… 8묶음)"}
+    if did == _st_state.get("my_id"):
+        return {"ok": False, "error": "내 기기 ID예요 — 상대 기기의 ID를 넣어주세요"}
+    try:
+        name = str((payload or {}).get("name", "")).strip()
+        inst.add_device(did, name)
+        inst.share_projects(C.PROJECTS_DIR, [did])
+        return {"ok": True}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": f"연결 실패: {e}"}
 
 
 @app.get("/api/config")
