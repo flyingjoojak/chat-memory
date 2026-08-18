@@ -8,8 +8,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
-  mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex, toggleSync, verifyEnrich,
+  getSyncthingStatus, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
+  syncthingPair, syncthingStart, syncthingStop, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
+  type SyncthingStatus,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -204,6 +206,114 @@ function SyncSection() {
               className="inline-flex items-center gap-0.5 font-medium text-primary hover:opacity-75">Syncthing 공식 시작 가이드<ExternalLink className="size-3" /></a>
           </div>
         </div>
+      )}
+    </>
+  )
+}
+
+// 기기 연결(앱 내장 Syncthing) — 외부 프로그램 설치 없이 앱 안에서 기기 페어링.
+function SyncthingSection() {
+  const [st, setSt] = useState<SyncthingStatus | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [peer, setPeer] = useState("")
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const load = () => getSyncthingStatus().then(setSt).catch(() => setSt(null))
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 3000)
+    return () => { clearInterval(id); if (copyTimer.current) clearTimeout(copyTimer.current) }
+  }, [])
+
+  const starting = st?.phase === "시작 중"
+  async function start() { setBusy(true); try { await syncthingStart() } catch { /* noop */ } finally { setBusy(false); load() } }
+  async function stop() { setBusy(true); try { await syncthingStop() } catch { /* noop */ } finally { setBusy(false); load() } }
+  async function copyMyId() {
+    if (!st?.my_id || !navigator.clipboard?.writeText) return
+    try {
+      await navigator.clipboard.writeText(st.my_id)
+      setCopied(true)
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = setTimeout(() => setCopied(false), 1500)
+    } catch { /* noop */ }
+  }
+  async function pair() {
+    const id = peer.trim()
+    if (!id) return
+    setBusy(true); setNote(null)
+    try {
+      const r = await syncthingPair(id)
+      if (r.ok) { setNote({ ok: true, text: "✓ 연결 요청 보냄 — 상대 앱에서 수락하면 동기 시작" }); setPeer("") }
+      else setNote({ ok: false, text: r.error || "연결 실패" })
+      load()
+    } catch (e) { setNote({ ok: false, text: e instanceof Error ? e.message : "연결 실패" }) }
+    finally { setBusy(false) }
+  }
+
+  const running = !!st?.running
+  return (
+    <>
+      <Row label={
+        <span className="flex items-center gap-2">
+          내장 동기 엔진
+          {running
+            ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">실행 중</span>
+            : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">중지</span>}
+        </span>
+      }>
+        {running
+          ? <Button variant="outline" size="sm" disabled={busy} onClick={stop}>중지</Button>
+          : <Button size="sm" disabled={busy || starting} onClick={start}>
+              {busy || starting ? <Loader2 className="size-4 animate-spin" /> : "시작"}
+            </Button>}
+      </Row>
+
+      {!running && (
+        <div className="py-2 text-[11px] text-muted-foreground">
+          {starting ? "엔진 준비 중… (첫 실행은 엔진을 내려받아 잠시 걸려요)"
+            : st?.last_error ? <span className="text-destructive">오류: {st.last_error}</span>
+              : "Syncthing을 따로 설치할 필요 없이 앱에 내장된 엔진으로 기기를 연결해요. 「시작」을 누르면 준비됩니다."}
+        </div>
+      )}
+
+      {running && (
+        <>
+          <div className="py-2">
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">내 연결 코드 (상대 기기에 붙여넣기)</div>
+            <div className="flex items-center gap-1.5">
+              <code className="min-w-0 flex-1 truncate rounded bg-muted px-1.5 py-1 font-mono text-[11px]" title={st?.my_id ?? ""}>{st?.my_id ?? "…"}</code>
+              <button type="button" onClick={copyMyId} aria-label="내 연결 코드 복사"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] hover:bg-muted">
+                {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}{copied ? "복사됨" : "복사"}
+              </button>
+            </div>
+          </div>
+          <div className="py-2">
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">상대 기기 코드 붙여넣기 → 연결</div>
+            <div className="flex items-center gap-1.5">
+              <Input value={peer} onChange={(e) => setPeer(e.target.value)} placeholder="XXXXXXX-XXXXXXX-…" className="h-8 min-w-0 flex-1 font-mono text-[12px]" />
+              <Button size="sm" disabled={busy || !peer.trim()} onClick={pair}>연결</Button>
+            </div>
+            {note && <div className={`mt-1 text-[11px] ${note.ok ? "text-primary" : "text-destructive"}`}>{note.text}</div>}
+          </div>
+          {st?.devices && st.devices.length > 0 && (
+            <div className="py-2">
+              <div className="mb-1 text-[11px] font-medium text-muted-foreground">연결된 기기</div>
+              {st.devices.map((d) => (
+                <div key={d.id} className="flex items-center gap-2 py-0.5 text-[11px]">
+                  <span className={`size-2 rounded-full ${d.connected ? "bg-primary" : "bg-muted-foreground/40"}`} />
+                  <span className="truncate font-mono">{d.name || d.id.slice(0, 7)}</span>
+                  <span className="text-muted-foreground">{d.connected ? "연결됨" : "대기"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="py-2 text-[11px] text-muted-foreground">
+            양쪽 기기에서 서로의 코드를 넣고 연결하면 <code className="rounded bg-muted px-1">~/.claude/projects</code>가 자동 동기돼요. 상대 앱에 "새 기기/폴더 요청"이 뜨면 수락하세요.
+          </div>
+        </>
       )}
     </>
   )
@@ -560,6 +670,10 @@ export function SettingsView() {
 
       <Section title="MCP 연동 (다른 AI가 과거 대화 검색)">
         <McpSection />
+      </Section>
+
+      <Section title="기기 연결 (앱 내장 동기)">
+        <SyncthingSection />
       </Section>
 
       <Section title="세션 동기화 (멀티기기)">

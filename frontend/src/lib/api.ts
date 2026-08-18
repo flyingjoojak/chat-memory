@@ -59,6 +59,35 @@ export interface SyncStatus {
 }
 export const getSyncStatus = () => getJSON<SyncStatus>(`/api/sync/status`)
 
+// 임베디드 Syncthing(앱 내장 P2P) — 기기 연결/페어링.
+export interface SyncthingStatus {
+  running: boolean
+  phase: string
+  my_id: string | null
+  last_error: string | null
+  devices?: { id: string; name: string; connected: boolean }[]
+  folders?: { id: string; path: string; shared_with: string[] }[]
+}
+export const getSyncthingStatus = () => getJSON<SyncthingStatus>(`/api/syncthing/status`)
+export async function syncthingStart(): Promise<{ ok: boolean; phase?: string }> {
+  const r = await fetch(`/api/syncthing/start`, { method: "POST" })
+  if (!r.ok) throw new Error(`시작 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+export async function syncthingStop(): Promise<{ ok: boolean }> {
+  const r = await fetch(`/api/syncthing/stop`, { method: "POST" })
+  if (!r.ok) throw new Error(`중지 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+export async function syncthingPair(deviceId: string, name = ""): Promise<{ ok: boolean; error?: string }> {
+  const r = await fetch(`/api/syncthing/pair`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device_id: deviceId, name }),
+  })
+  if (!r.ok) throw new Error(`연결 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+
 // 자동 색인(프리즈 exe) 상태.
 export interface IndexStatus {
   enabled: boolean
