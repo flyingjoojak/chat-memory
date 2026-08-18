@@ -146,3 +146,10 @@ python -m chatmem config                          # 현재 유효 설정·파일
 ## 상태
 
 Phase 1 (코어 + CLI) 구현·테스트 완료. 남은 것: 야간 정제(Sonnet), 자동 배치 스케줄러, 전체 백필. Phase 2 = 자체 프로그램(FastAPI+React).
+
+## 라이선스
+
+MIT License — [LICENSE](LICENSE) 참고.
+
+기기 간 동기화에는 [Syncthing](https://syncthing.net/)(MPL-2.0) 엔진을 내장 구동하며,
+그 외 서드파티 구성요소의 라이선스·출처는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 정리돼 있다.
