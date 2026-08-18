@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from chatmem.indexer import count_pending
+from chatmem.indexer import count_pending, iter_jsonl
 
 
 class _FakeDB:
@@ -40,3 +40,23 @@ def test_new_updated_and_done_classification(tmp_path):
     assert r == {"new_sessions": 1, "updated_sessions": 1, "files": 2}
     # fresh는 커서가 없어 new로만 잡히고, done은 어디에도 안 들어감
     assert fresh not in (partial, done)
+
+
+def test_iter_jsonl_excludes_stversions(tmp_path):
+    live = tmp_path / "proj" / "live.jsonl"
+    live.parent.mkdir(parents=True)
+    live.write_text("x")
+    ver = tmp_path / "proj" / ".stversions" / "old~1.jsonl"   # Syncthing 버전 백업
+    ver.parent.mkdir(parents=True)
+    ver.write_text("x")
+    found = {p.name for p in iter_jsonl(tmp_path)}
+    assert found == {"live.jsonl"}   # .stversions 백업본은 제외
+
+
+def test_count_pending_ignores_stversions(tmp_path):
+    _make(tmp_path, "live.jsonl", 100)               # 새 대화 1
+    stv = tmp_path / ".stversions"
+    stv.mkdir()
+    (stv / "backup.jsonl").write_bytes(b"x" * 100)    # 버전 백업 — 세면 안 됨
+    r = count_pending(_FakeDB({}), tmp_path)
+    assert r == {"new_sessions": 1, "updated_sessions": 0, "files": 1}

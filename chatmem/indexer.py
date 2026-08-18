@@ -26,6 +26,20 @@ from .models import Turn
 from .parser import extract_turns, is_real_user_prompt, iter_json_lines
 
 
+# Syncthing 버전 백업 폴더 — 원본이 아니라 이력 스냅샷이라 색인·카운트에서 제외.
+_SKIP_DIRS = {".stversions"}
+
+
+def iter_jsonl(root: Path):
+    """프로젝트 폴더의 실제 세션 jsonl만 순회. Syncthing 버전 백업(.stversions) 등 제외.
+
+    버전 백업본은 기기마다 달라 개수·세션 수를 부풀리고 중복 세션을 만든다 → 걸러낸다.
+    """
+    for p in root.rglob("*.jsonl"):
+        if _SKIP_DIRS.isdisjoint(p.parts):
+            yield p
+
+
 def has_new_data(db, projects_dir: str | Path = PROJECTS_DIR) -> bool:
     """커서 이후 새로 생긴 바이트가 있는 파일이 하나라도 있으면 True.
 
@@ -34,7 +48,7 @@ def has_new_data(db, projects_dir: str | Path = PROJECTS_DIR) -> bool:
     root = Path(projects_dir)
     if not root.exists():
         return False
-    for p in root.rglob("*.jsonl"):
+    for p in iter_jsonl(root):
         f = str(p)
         try:
             size = p.stat().st_size
@@ -58,7 +72,7 @@ def count_pending(db, projects_dir: str | Path = PROJECTS_DIR) -> dict:
     if not root.exists():
         return {"new_sessions": 0, "updated_sessions": 0, "files": 0}
     new = updated = 0
-    for p in root.rglob("*.jsonl"):
+    for p in iter_jsonl(root):
         try:
             size = p.stat().st_size
         except OSError:
@@ -77,7 +91,7 @@ def discover_files(projects_dir: str | Path = PROJECTS_DIR, recent_first: bool =
     root = Path(projects_dir)
     if not root.exists():
         return []
-    files = [str(p) for p in root.rglob("*.jsonl")]
+    files = [str(p) for p in iter_jsonl(root)]
     files.sort(key=lambda f: os.path.getmtime(f), reverse=recent_first)
     return files
 

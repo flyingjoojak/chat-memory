@@ -340,17 +340,29 @@ function SyncthingSection() {
   )
 }
 
-// 공유 폴더 동기 상태 한 줄(최신/스캔/동기화 %/오류). 내장 엔진 실행 중일 때 노출.
+// 공유 폴더 동기 상태 한 줄. 수신(내가 받음)과 전송(상대가 받음)을 합쳐 '진짜 최신'을 판정.
 function SyncStateLine({ sync }: { sync?: SyncthingSync | null }) {
   let dot = "bg-muted-foreground/40"
   let text: React.ReactNode = "공유 폴더 준비 중 — 상대 기기를 연결하면 자동 공유돼요"
   if (sync) {
-    if (sync.state === "error") { dot = "bg-destructive"; text = <span className="text-destructive">동기화 오류 — 아래 방화벽·폴더 설정을 확인하세요</span> }
-    else if (sync.state === "scanning") { dot = "bg-amber-500"; text = "스캔 중… (파일 점검)" }
-    else if (sync.state === "syncing" || sync.need_items > 0 || sync.need_bytes > 0) {
+    const receiving = sync.state === "syncing" || sync.need_items > 0 || sync.need_bytes > 0
+    const sending = sync.remote_complete != null && sync.remote_complete < 100
+    if (sync.state === "error") {
+      dot = "bg-destructive"; text = <span className="text-destructive">동기화 오류 — 아래 방화벽·폴더 설정을 확인하세요</span>
+    } else if (sync.state === "scanning") {
+      dot = "bg-amber-500"; text = "스캔 중… (파일 점검)"
+    } else if (receiving) {
       dot = "bg-amber-500"
-      text = <>동기화 중 <b className="text-foreground tabular-nums">{sync.completion}%</b>{sync.need_items > 0 ? ` · 남은 항목 ${sync.need_items.toLocaleString()}개` : ""}</>
-    } else { dot = "bg-primary"; text = <span className="text-primary">최신 상태 ✓</span> }
+      text = <>받는 중 <b className="text-foreground tabular-nums">{sync.completion}%</b>{sync.need_items > 0 ? ` · 남은 항목 ${sync.need_items.toLocaleString()}개` : ""}</>
+    } else if (sending) {
+      dot = "bg-amber-500"
+      text = <>상대 기기로 전송 중 <b className="text-foreground tabular-nums">{sync.remote_complete}%</b></>
+    } else if ((sync.peers_connected ?? 0) === 0) {
+      // 이 기기는 최신이지만 상대가 연결 안 돼 있어 '양쪽 최신'은 확인 불가.
+      dot = "bg-muted-foreground/40"; text = <>이 기기 최신 · <span className="text-muted-foreground">상대 기기 미연결(전송 대기)</span></>
+    } else {
+      dot = "bg-primary"; text = <span className="text-primary">양쪽 최신 ✓</span>
+    }
   }
   return (
     <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">

@@ -86,3 +86,27 @@ def test_folder_sync_empty_global_is_100(monkeypatch):
     # 빈 폴더(글로벌 0바이트)는 0으로 나누지 않고 최신(100%)으로 취급
     r = _sync_with(monkeypatch, {"state": "idle", "globalBytes": 0, "needBytes": 0})
     assert r["completion"] == 100.0
+
+
+def test_pair_summary_folds_remote_completion(monkeypatch):
+    st = S.Syncthing(gui_port=1, apikey="k")
+    monkeypatch.setattr(st, "device_id", lambda: "MYID")
+    monkeypatch.setattr(st, "config", lambda: {
+        "devices": [{"deviceID": "MYID"}, {"deviceID": "PEER1"}, {"deviceID": "PEER2"}],
+        "folders": [{"id": S.DEFAULT_FOLDER_ID, "path": "/p", "devices": []}],
+    })
+    # PEER1 연결·80%, PEER2 미연결 → 연결된 상대만 집계, 최소치 채택
+    monkeypatch.setattr(st, "connections", lambda: {"connections": {
+        "PEER1": {"connected": True}, "PEER2": {"connected": False}}})
+    monkeypatch.setattr(st, "folder_sync", lambda fid=S.DEFAULT_FOLDER_ID: {
+        "state": "idle", "completion": 100.0, "need_items": 0, "need_bytes": 0, "global_bytes": 1})
+    monkeypatch.setattr(st, "device_completion", lambda did, fid=S.DEFAULT_FOLDER_ID: 80.0 if did == "PEER1" else 0.0)
+    out = st.pair_summary()
+    assert out["sync"]["remote_complete"] == 80.0   # 연결된 PEER1만
+    assert out["sync"]["peers_connected"] == 1
+
+
+def test_device_completion_parses(monkeypatch):
+    st = S.Syncthing(gui_port=1, apikey="k")
+    monkeypatch.setattr(st, "_get", lambda p, timeout=5.0: {"completion": 42.5})
+    assert st.device_completion("PEER1") == 42.5
