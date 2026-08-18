@@ -96,6 +96,16 @@ def ensure_binary(version: str = SYNCTHING_VERSION, log_fn=lambda m: None) -> Pa
     return out
 
 
+def update_binary(version: str = SYNCTHING_VERSION, log_fn=print) -> Path:
+    """캐시된 바이너리를 지우고 지정 버전을 다시 받는다(번들 버전 갱신용).
+    실행 중이면 먼저 중지해야 함(파일 락). env override/번들은 건드리지 않음."""
+    _, _, _, exe = _plat()
+    cached = _BIN_DIR / exe
+    with contextlib.suppress(Exception):
+        cached.unlink()
+    return ensure_binary(version=version, log_fn=log_fn)
+
+
 def _free_port(preferred: int = 8384) -> int:
     for port in (preferred, 0):
         try:
@@ -171,6 +181,8 @@ class Syncthing:
             "id": folder_id, "label": label, "path": str(projects_dir),
             "type": "sendreceive",
             "devices": [{"deviceID": d} for d in ids],
+            # 삭제·덮어쓰기 이력 보존(실수 대비) — SESSION_SYNC_SPEC §5.4.
+            "versioning": {"type": "staggered", "params": {"maxAge": "31536000"}},  # 최대 1년 보관
         }
         self._req("PUT", f"/rest/config/folders/{folder_id}", body)
 
