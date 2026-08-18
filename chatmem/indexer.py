@@ -46,6 +46,33 @@ def has_new_data(db, projects_dir: str | Path = PROJECTS_DIR) -> bool:
     return False
 
 
+def count_pending(db, projects_dir: str | Path = PROJECTS_DIR) -> dict:
+    """값싼 대기 집계(모델 로드 없이 stat+커서 비교만).
+
+    반환: {"new_sessions": 아직 한 번도 색인 안 된 로그 파일 수,
+           "updated_sessions": 이어져 새 내용이 생긴 파일 수,
+           "files": 새 바이트가 있는 파일 총수}
+    JSONL 파일 1개 = Claude Code 세션(대화) 1개라 파일 수를 대화 수로 본다.
+    """
+    root = Path(projects_dir)
+    if not root.exists():
+        return {"new_sessions": 0, "updated_sessions": 0, "files": 0}
+    new = updated = 0
+    for p in root.rglob("*.jsonl"):
+        try:
+            size = p.stat().st_size
+        except OSError:
+            continue
+        offset, _, _ = db.get_cursor(str(p))
+        if size <= offset:
+            continue
+        if offset == 0:
+            new += 1
+        else:
+            updated += 1
+    return {"new_sessions": new, "updated_sessions": updated, "files": new + updated}
+
+
 def discover_files(projects_dir: str | Path = PROJECTS_DIR, recent_first: bool = True) -> list[str]:
     root = Path(projects_dir)
     if not root.exists():
