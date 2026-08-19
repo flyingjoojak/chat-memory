@@ -19,6 +19,9 @@ import time
 from .config import ENRICH_BACKEND  # 기본 인자용(핫값은 _presets()/_resolve_model에서 런타임 읽기)
 from .models import Turn
 
+# windowed(콘솔 없는) exe에서 claude CLI 서브프로세스가 콘솔 창을 띄우지 않게(Windows 전용 플래그).
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # 창이 크면 LLM이 긴 JSON 목록에서 일부 턴을 누락함 → 작게 잡아 커버리지 확보.
 _MAX_TURNS_PER_CALL = 20
 _FIELD_CHARS = 400
@@ -64,6 +67,7 @@ def _call_claude_cli(prompt: str, model: str, timeout: int = 240) -> str:
     r = subprocess.run(
         ["claude", "-p", prompt, "--model", model],
         capture_output=True, text=True, encoding="utf-8", timeout=timeout,
+        creationflags=_NO_WINDOW,
     )
     if r.returncode != 0:
         raise RuntimeError(f"claude -p 실패(rc={r.returncode}): {(r.stderr or '')[:200]}")
