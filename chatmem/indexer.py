@@ -124,7 +124,7 @@ def _group_with_offsets(proc: list[tuple], final_offset: int) -> list[tuple[Turn
 def index_file(
     path: str | Path, db, vi, embedder,
     idle_secs: int = IDLE_SECS, batch: int = EMBED_BATCH,
-    checkpoint_turns: int = CHECKPOINT_TURNS,
+    checkpoint_turns: int = CHECKPOINT_TURNS, on_flush=None,
 ) -> int:
     """한 JSONL 파일을 커서 이후부터 증분 처리. 처리한 턴 수 반환.
 
@@ -177,9 +177,12 @@ def index_file(
 
     def flush_vectors() -> None:
         if buf_texts:
+            n = len(buf_texts)
             vi.add(buf_keys, embedder.embed_passages(buf_texts))
             buf_texts.clear()
             buf_keys.clear()
+            if on_flush:
+                on_flush(n)   # 청크 단위 진행 보고(임베딩 배치가 저장될 때마다)
 
     def checkpoint(off: int) -> None:
         flush_vectors()
@@ -232,17 +235,31 @@ def reconcile(db, vi, log_fn=print) -> int:
     return n
 
 
-def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print, progress_fn=None) -> int:
+def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
+              progress_fn=None, chunk_progress_fn=None) -> int:
     """모든 세션 파일을 최근순(기본)으로 증분 인덱싱.
 
-    progress_fn(done_files, total_files): 파일 단위 진행 콜백(진행바 표시용, 선택).
+    progress_fn(done_files, total_files): 파일 단위 진행 콜백.
+    chunk_progress_fn(done_chunks): 임베딩된 청크 누계 콜백(전체 재색인 진행바용 — 거대 파일
+      하나가 대부분을 차지해도 부드럽게 진행이 보이게). 둘 다 선택.
     """
     total = 0
     files = list(discover_files(recent_first=recent_first))
     total_files = len(files)
+    embedded = 0
+
+    def _on_flush(n):
+        nonlocal embedded
+        embedded += n
+        if chunk_progress_fn:
+            try:
+                chunk_progress_fn(embedded)
+            except Exception:  # noqa: BLE001 — 진행 콜백 오류가 색인을 막지 않게
+                pass
+
     for i, f in enumerate(files):
         try:
-            n = index_file(f, db, vi, embedder)
+            n = index_file(f, db, vi, embedder, on_flush=_on_flush)
             if n:
                 log_fn(f"indexed {n} turns  {os.path.basename(f)}")
                 total += n
@@ -251,6 +268,67 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print, progres
         if progress_fn:
             try:
                 progress_fn(i + 1, total_files)
-            except Exception:  # noqa: BLE001 — 진행 콜백 오류가 색인을 막지 않게
+            except Exception:  # noqa: BLE001
                 pass
     return total
+
+
+def backfill_missing(db, vi, embedder, batch: int = EMBED_BATCH,
+                     log_fn=print, progress_fn=None) -> int:
+    """활성 벡터 저장소에 벡터가 없는 기존 청크를 임베딩해 채운다(전체 재색인 없이 자가복구).
+
+    백엔드 전환(npy↔sqlite-vec)이나 벡터 파일 유실로 archive.db엔 청크가 있는데 벡터가 비어
+    있을 때, 증분만으로 복구되게 한다. 맥락 입력(직전 질문+프로젝트)은 index_file과 동일 재구성.
+    progress_fn(done, total): 청크 단위 진행 콜백(선택).
+    """
+    from itertools import groupby
+
+    have = set(vi.keys())
+    rows = db.conn.execute(
+        "SELECT t.id AS tid, t.session_id AS sid, t.project AS project, t.question AS question, "
+        "       c.chunk_key AS ck, c.text AS text "
+        "FROM turns t LEFT JOIN chunks c ON c.turn_id = t.id "
+        "ORDER BY t.session_id, t.timestamp, t.id, c.idx",
+    ).fetchall()
+    total = sum(1 for r in rows if r["ck"] and r["ck"] not in have)
+    if total == 0:
+        return 0
+    log_fn(f"자가복구: 벡터 없는 청크 {total}개 임베딩")
+
+    prev_q: dict[str, str] = {}
+    buf_keys: list[str] = []
+    buf_texts: list[str] = []
+    done = 0
+
+    def flush() -> None:
+        nonlocal done
+        if not buf_texts:
+            return
+        vi.add(buf_keys, embedder.embed_passages(buf_texts))
+        done += len(buf_texts)
+        buf_keys.clear()
+        buf_texts.clear()
+        vi.save()
+        if progress_fn:
+            try:
+                progress_fn(done, total)
+            except Exception:  # noqa: BLE001
+                pass
+
+    for _tid, group in groupby(rows, key=lambda r: r["tid"]):
+        grp = list(group)
+        first = grp[0]
+        ctx = prev_q.get(first["sid"], "")
+        for r in grp:
+            ck = r["ck"]
+            if ck and ck not in have:
+                buf_keys.append(ck)
+                buf_texts.append(_contextual(ctx, r["text"], first["project"] or ""))
+                if len(buf_texts) >= batch:
+                    flush()
+        if first["question"]:
+            prev_q[first["sid"]] = first["question"]
+    flush()
+    db.set_meta("embed_model", embedder.model_name)
+    db.commit()
+    return done
