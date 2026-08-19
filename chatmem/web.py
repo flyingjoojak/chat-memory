@@ -186,6 +186,38 @@ async def _friendly_error(request, exc):  # noqa: ANN001 — FastAPI 핸들러 �
     return JSONResponse(status_code=500, content={"error": msg, "detail": str(exc)[:300]})
 
 
+@app.get("/api/debug/index")
+def api_debug_index():
+    """기기 간 비교 진단: 세션별 (원본 JSONL 바이트 vs 색인된 턴 수).
+
+    두 기기에서 열어 비교 → jsonl_total_kb가 다르면 '내용 동기화 지연'(B 파일이 짧음),
+    같은데 turns가 다르면 '색인 불일치'(진짜 버그). 파일명 stem = 세션 uuid.
+    """
+    from . import config as C
+    from .indexer import iter_jsonl
+    db = ArchiveDB()
+    turns = {r["session_id"]: r["n"] for r in
+             db.conn.execute("SELECT session_id, COUNT(*) n FROM turns GROUP BY session_id")}
+    files: dict[str, int] = {}
+    total = 0
+    if C.PROJECTS_DIR.exists():
+        for p in iter_jsonl(C.PROJECTS_DIR):
+            try:
+                sz = p.stat().st_size
+            except OSError:
+                continue
+            total += sz
+            files[p.stem] = files.get(p.stem, 0) + sz   # stem = 세션 uuid
+    sids = set(turns) | set(files)
+    rows = sorted(
+        ({"session": s[:8], "turns": turns.get(s, 0), "file_kb": round(files.get(s, 0) / 1024)}
+         for s in sids),
+        key=lambda r: -max(r["turns"], r["file_kb"]))
+    return {"jsonl_files": len(files), "jsonl_total_kb": round(total / 1024),
+            "indexed_turns": sum(turns.values()), "indexed_sessions": len(turns),
+            "top": rows[:40]}
+
+
 @app.get("/api/system")
 def api_system():
     """기기 메모리 + 모델/벡터 불일치 경고(배너용)."""
