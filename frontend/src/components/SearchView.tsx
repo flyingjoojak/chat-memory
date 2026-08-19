@@ -34,7 +34,7 @@ export function SearchView() {
 
   async function run(query = q, m: SearchMode = mode) {
     const term = query.trim()
-    if (!term) { setState("idle"); setHits([]); setSel(null); return }
+    if (!term) { reqId.current++; setState("idle"); setHits([]); setSel(null); return }   // 진행 중 요청 무효화
     const myId = ++reqId.current
     setState("loading")
     try {

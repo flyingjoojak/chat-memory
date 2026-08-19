@@ -16,7 +16,6 @@ import shutil
 import subprocess
 import time
 
-from .config import ENRICH_BACKEND  # 기본 인자용(핫값은 _presets()/_resolve_model에서 런타임 읽기)
 from .models import Turn
 
 # windowed(콘솔 없는) exe에서 claude CLI 서브프로세스가 콘솔 창을 띄우지 않게(Windows 전용 플래그).
@@ -226,8 +225,10 @@ def _parse_json(out: str) -> list[dict]:
 
 
 # --- 정제 ------------------------------------------------------------
-def enrich_session(session_id: str, db, backend: str = ENRICH_BACKEND,
+def enrich_session(session_id: str, db, backend: str | None = None,
                    model: str | None = None, missing_only: bool = True) -> int:
+    from . import config as C   # 기본값도 런타임 읽기(재시작 없이 설정 반영)
+    backend = backend or C.ENRICH_BACKEND
     model = _resolve_model(backend, model)
     # 증분: missing_only면 아직 요약 없는 턴만 처리(재실행 시 구멍만 채움).
     where = "session_id=?" + (" AND summary IS NULL" if missing_only else "")
@@ -252,9 +253,11 @@ def enrich_session(session_id: str, db, backend: str = ENRICH_BACKEND,
     return done
 
 
-def enrich_all(db, backend: str = ENRICH_BACKEND, model: str | None = None,
+def enrich_all(db, backend: str | None = None, model: str | None = None,
                throttle: float = 1.0, only_missing: bool = True,
                limit: int | None = None, log_fn=print, progress_fn=None) -> int:
+    from . import config as C   # 기본값도 런타임 읽기(재시작 없이 설정 반영)
+    backend = backend or C.ENRICH_BACKEND
     if only_missing:
         rows = db.conn.execute(
             "SELECT DISTINCT session_id FROM turns WHERE summary IS NULL"

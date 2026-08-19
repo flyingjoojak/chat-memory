@@ -55,7 +55,13 @@ export default function App() {
     const id = setInterval(checkOnboard, 2000)
     return () => clearInterval(id)
   }, [backendDown, checkOnboard])
-  useEffect(() => { getSystem().then((s) => setMismatch(s.model_mismatch)).catch(() => {}) }, [])
+  // 모델↔벡터 불일치 배너: 폴링으로 (1) 콜드스타트 시 재시도해 결국 표시, (2) 재색인으로 해소되면 자동 사라짐.
+  useEffect(() => {
+    const load = () => getSystem().then((s) => setMismatch(s.model_mismatch)).catch(() => {})
+    load()
+    const id = window.setInterval(load, 20000)
+    return () => window.clearInterval(id)
+  }, [])
 
   if (backendDown) {
     return (
