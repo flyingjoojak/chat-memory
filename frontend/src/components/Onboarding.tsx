@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react"
-import { Loader2 } from "lucide-react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 import { chooseModel, getEmbedModels, type EmbedModel } from "@/lib/api"
 
 // 첫 실행 화면: 기기 성능에 맞는 임베딩 모델을 고르게 한다(저사양 기기가 기본 최대모델을 자동으로 물지 않게).
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [models, setModels] = useState<EmbedModel[] | null>(null)
   const [picking, setPicking] = useState<string | null>(null)
+  const [err, setErr] = useState(false)   // 목록 로드 실패(백엔드 미기동 등) — 막다른 길 대신 재시도 노출
 
-  useEffect(() => {
-    getEmbedModels().then((r) => setModels(r.models)).catch(() => setModels([]))
-  }, [])
+  function load() {
+    setErr(false); setModels(null)
+    getEmbedModels().then((r) => setModels(r.models)).catch(() => setErr(true))
+  }
+  useEffect(() => { load() }, [])
 
   async function pick(m: EmbedModel) {
     setPicking(m.model)
@@ -27,7 +30,14 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </p>
 
         <div className="mt-6 space-y-3">
-          {!models && (
+          {err && (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center text-sm">
+              <span className="inline-flex items-center gap-2 text-destructive"><AlertTriangle className="size-4" />모델 목록을 불러오지 못했어요</span>
+              <span className="text-muted-foreground">앱(백엔드)이 아직 준비 중일 수 있어요. 잠시 후 다시 시도해 주세요.</span>
+              <button onClick={load} className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground">다시 시도</button>
+            </div>
+          )}
+          {!models && !err && (
             <div className="grid h-32 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
           )}
           {models?.map((m) => (

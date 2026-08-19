@@ -7,7 +7,7 @@ import { search, type SearchMode } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
 import type { Hit } from "@/lib/types"
 
-const EXAMPLES = ["급여 계산", "STAGE1 우회", "마이그레이션", "sqlite-vec", "정제 백엔드"]
+const EXAMPLES = ["어제 뭐 했지", "에러 해결", "어떻게 구현했더라", "설정 방법", "결정한 내용"]
 const MODES: { v: SearchMode; label: string }[] = [
   { v: "hybrid", label: "🔀 하이브리드" },
   { v: "semantic", label: "🧠 의미기반" },
@@ -27,7 +27,7 @@ export function SearchView() {
   const [since, setSince] = useState("")
   const [until, setUntil] = useState("")
   const [hits, setHits] = useState<Hit[]>([])
-  const [state, setState] = useState<"idle" | "loading" | "done">("idle")
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle")
   // 선택한 결과 → 오른쪽 채팅 스레드로 표시(열고닫기 없이 클릭 전환).
   const [sel, setSel] = useState<{ session: string; turn: string } | null>(null)
 
@@ -40,7 +40,7 @@ export function SearchView() {
       const list = r.hits || []
       setHits(list); setState("done")
       setSel(list.length ? { session: list[0].session_full, turn: list[0].id } : null)   // 첫 결과 자동 선택
-    } catch { setHits([]); setState("done"); setSel(null) }
+    } catch { setHits([]); setState("error"); setSel(null) }   // 실패는 '결과 없음'과 구분
   }
   function pick(e: string) { setQ(e); run(e) }
 
@@ -103,6 +103,15 @@ export function SearchView() {
           {state === "done" && hits.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
               <div className="mb-2 text-3xl">∅</div>결과가 없어요.
+            </div>
+          )}
+
+          {state === "error" && (
+            <div className="py-12 text-center text-sm">
+              <div className="mb-2 text-3xl">⚠️</div>
+              <div className="text-destructive">검색에 실패했어요</div>
+              <div className="mt-1 text-muted-foreground">앱이 준비 중이거나 색인 전일 수 있어요.</div>
+              <button onClick={() => run()} className="mt-3 rounded-lg border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">다시 시도</button>
             </div>
           )}
 
