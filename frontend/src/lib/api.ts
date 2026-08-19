@@ -256,10 +256,16 @@ export async function mcpUnregister(target: string): Promise<{ ok: boolean; erro
 }
 
 // model 생략 시 현재 모델로 재색인(모델 교체 없이 인덱스만 다시 빌드).
-export async function reindex(model?: string): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+// fast=true: 재파싱 없이 병렬(멀티프로세싱)로 대량 임베딩 — RAM 여유 있는 고성능 기기용.
+export async function reindex(
+  model?: string, opts: { fast?: boolean; parallel?: number } = {},
+): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+  const body: Record<string, unknown> = {}
+  if (model) body.model = model
+  if (opts.fast) { body.fast = true; if (opts.parallel) body.parallel = opts.parallel }
   const r = await fetch(`/api/reindex`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(model ? { model } : {}),
+    body: JSON.stringify(body),
   })
   return r.json()
 }

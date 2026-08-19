@@ -780,17 +780,25 @@ def api_onboarding_choose(payload: dict):
 @app.post("/api/reindex")
 def api_reindex(payload: dict):
     """전체 재색인(백그라운드). model 생략/빈값이면 **현재 모델로** 재색인, 지정하면 그 모델로 교체 후 재색인.
-    기존 벡터를 폐기하고 처음부터 다시 임베딩한다."""
+    기존 벡터를 폐기하고 처음부터 다시 임베딩한다.
+    fast=true: 재파싱 없이 chunks에서 병렬 대량 임베딩(고RAM 기기 전용, parallel 프로세스 수)."""
     from . import config as C
-    model = str((payload or {}).get("model", "")).strip() or C.EMBED_MODEL   # 빈값=현재 모델
+    payload = payload or {}
+    model = str(payload.get("model", "")).strip() or C.EMBED_MODEL   # 빈값=현재 모델
     if model not in _EMBED_ALLOW:
         return {"ok": False, "error": "알 수 없는 모델"}
     if _reindex_state["running"] or _autoindex_state.get("running"):
         return {"ok": False, "error": "이미 색인/재색인 중"}
+    fast = bool(payload.get("fast"))
+    try:
+        parallel = int(payload.get("parallel") or 2)
+    except (TypeError, ValueError):
+        parallel = 2
+    parallel = max(2, min(parallel, 8))   # 안전 범위(프로세스당 모델 RAM 부담)
 
     def worker():
         from .embedder import Embedder
-        from .indexer import index_all
+        from .indexer import backfill_missing, index_all
         if not _index_lock.acquire(blocking=False):   # 증분 색인과 상호배제
             _reindex_state["msg"] = "다른 색인 진행 중 — 잠시 후 재시도"
             return
@@ -800,27 +808,38 @@ def api_reindex(payload: dict):
             C.write_config({"CHATMEM_EMBED_MODEL": model})
             # 모델 교체든 현재모델 재색인이든, 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
             db = ArchiveDB()
-            # 진행률 분모: 벡터 폐기 전 청크 수(재파싱해도 chunk_key가 같아 개수 거의 동일).
             total_chunks = db.conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
-            db.clear_cursors()
             vi = make_index()
-            vi.reset()
             emb = Embedder(model)
             _reindex_state["total_chunks"] = total_chunks
 
             def log(msg):
                 _reindex_state["msg"] = msg
 
-            def prog(done, total):
-                _reindex_state.update(done_files=done, total_files=total)
-
-            def chunk_prog(done_c):
-                _reindex_state["done_chunks"] = done_c
-
-            total = index_all(db, vi, emb, log_fn=log, progress_fn=prog, chunk_progress_fn=chunk_prog)
+            # fast: chunks 테이블에서 재파싱 없이 병렬 임베딩(커서 보존 → 이후 증분 정상).
+            if fast and total_chunks > 0:
+                vi.reset()
+                _reindex_state["msg"] = f"빠른 재색인(병렬 {parallel})…"
+                try:
+                    total = backfill_missing(
+                        db, vi, emb, batch=512, parallel=parallel, log_fn=log,
+                        progress_fn=lambda d, t: _reindex_state.update(done_chunks=d, total_chunks=t))
+                except Exception as pe:  # noqa: BLE001 — 병렬 실패 시 순차로 폴백
+                    log(f"병렬 실패({pe}) → 순차 재색인으로 전환")
+                    vi.reset()
+                    total = backfill_missing(
+                        db, vi, emb, log_fn=log,
+                        progress_fn=lambda d, t: _reindex_state.update(done_chunks=d, total_chunks=t))
+            else:
+                db.clear_cursors()
+                vi.reset()
+                total = index_all(
+                    db, vi, emb, log_fn=log,
+                    progress_fn=lambda d, t: _reindex_state.update(done_files=d, total_files=t),
+                    chunk_progress_fn=lambda d: _reindex_state.__setitem__("done_chunks", d))
             db.set_meta("embed_model", model)
             _state["embedder"] = emb  # 실행 중 검색도 새 모델로
-            _reindex_state.update(done=total, msg=f"완료: {total}턴")
+            _reindex_state.update(done=total, msg=f"완료: {total}")
         except Exception as e:  # noqa: BLE001
             _reindex_state["msg"] = f"오류: {e}"
         finally:

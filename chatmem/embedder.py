@@ -30,10 +30,18 @@ class Embedder:
     def _prefix(self, texts: list[str], prefix: str) -> list[str]:
         return [prefix + t for t in texts] if self._is_e5 else list(texts)
 
-    def embed_passages(self, texts: list[str]) -> np.ndarray:
+    def embed_passages(self, texts: list[str], parallel: int | None = None,
+                       batch_size: int | None = None) -> np.ndarray:
+        """passage 임베딩. parallel=N이면 fastembed 멀티프로세싱(N 프로세스)으로 대량 가속.
+        parallel은 프로세스마다 모델을 또 로드하므로 RAM을 N배 쓴다(고성능 기기 전용)."""
         if not texts:
             return np.zeros((0, 0), dtype=np.float32)
-        vecs = list(self._model.embed(self._prefix(texts, E5_PASSAGE_PREFIX)))
+        kw: dict = {}
+        if parallel is not None:
+            kw["parallel"] = parallel
+        if batch_size is not None:
+            kw["batch_size"] = batch_size
+        vecs = list(self._model.embed(self._prefix(texts, E5_PASSAGE_PREFIX), **kw))
         return _l2_normalize(np.asarray(vecs, dtype=np.float32))
 
     def embed_query(self, text: str) -> np.ndarray:
