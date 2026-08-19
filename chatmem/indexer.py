@@ -274,12 +274,13 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
 
 
 def backfill_missing(db, vi, embedder, batch: int = EMBED_BATCH,
-                     log_fn=print, progress_fn=None) -> int:
+                     log_fn=print, progress_fn=None, parallel: int | None = None) -> int:
     """활성 벡터 저장소에 벡터가 없는 기존 청크를 임베딩해 채운다(전체 재색인 없이 자가복구).
 
     백엔드 전환(npy↔sqlite-vec)이나 벡터 파일 유실로 archive.db엔 청크가 있는데 벡터가 비어
     있을 때, 증분만으로 복구되게 한다. 맥락 입력(직전 질문+프로젝트)은 index_file과 동일 재구성.
-    progress_fn(done, total): 청크 단위 진행 콜백(선택).
+    또한 vi.reset() 직후 호출하면 '재파싱 없는 전체 재임베딩'이 된다(재색인 fast 경로가 재사용).
+    progress_fn(done, total): 청크 단위 진행 콜백. parallel=N: 멀티프로세싱 가속(고RAM 기기).
     """
     from itertools import groupby
 
@@ -304,7 +305,7 @@ def backfill_missing(db, vi, embedder, batch: int = EMBED_BATCH,
         nonlocal done
         if not buf_texts:
             return
-        vi.add(buf_keys, embedder.embed_passages(buf_texts))
+        vi.add(buf_keys, embedder.embed_passages(buf_texts, parallel=parallel))
         done += len(buf_texts)
         buf_keys.clear()
         buf_texts.clear()

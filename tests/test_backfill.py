@@ -31,7 +31,7 @@ class _FakeEmbedder:
     def __init__(self):
         self.seen = []             # embed_passages로 넘어온 텍스트
 
-    def embed_passages(self, texts):
+    def embed_passages(self, texts, parallel=None, batch_size=None):
         self.seen.extend(texts)
         return np.zeros((len(texts), 3), dtype=np.float32)
 

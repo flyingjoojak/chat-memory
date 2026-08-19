@@ -441,6 +441,7 @@ export function SettingsView() {
   const [reindexing, setReindexing] = useState(false)
   const [reindexMsg, setReindexMsg] = useState("")
   const [reindexProg, setReindexProg] = useState({ doneFiles: 0, totalFiles: 0, doneChunks: 0, totalChunks: 0 })
+  const [fastReindex, setFastReindex] = useState(false)   // 병렬(고RAM 기기) 빠른 재색인
   const [confirmModel, setConfirmModel] = useState<EmbedModel | null>(null)
   const [ixStatus, setIxStatus] = useState<IndexStatus | null>(null)   // 증분 색인 상태(자동/수동)
   const [enrichSt, setEnrichSt] = useState<EnrichStatus | null>(null)   // 정제 상태
@@ -565,8 +566,9 @@ export function SettingsView() {
   async function doReindex() {
     if (!confirmModel) return
     const m = confirmModel.model
+    const fast = fastReindex
     setConfirmModel(null); setReindexing(true); setReindexMsg("시작…")
-    await reindex(m); startPoll()
+    await reindex(m, { fast }); startPoll()
   }
 
   const themes: { v: ThemeMode; icon: React.ReactNode; label: string }[] = [
@@ -788,11 +790,20 @@ export function SettingsView() {
                         : <div className="text-[11px] text-muted-foreground">준비 중… (첫 배치 임베딩 시작하면 진행률이 표시됩니다)</div>}
                   </div>
                 )}
+                <div className="border-b py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+                  💡 기기가 느리거나 RAM이 부족하면 <b className="text-foreground/80">가벼운 모델(MiniLM)</b>을 권장해요 — 예상 시간·RAM이 훨씬 적습니다(품질은 약간 낮음). RAM 여유가 큰 고성능 기기라면 재색인 시 「빠른 재색인(병렬)」로 시간을 줄일 수 있어요.
+                </div>
                 {embed.map((m) => (
                   <Row key={m.model} label={
                     <span className="flex flex-col">
-                      <span className="font-mono text-[13px]">{m.model.split("/").pop()}</span>
-                      <span className="text-xs text-muted-foreground">{m.note} · 디스크 {m.size_gb}GB · <b className="text-foreground/80">임베딩 중 RAM 약 {m.ram_gb}GB</b></span>
+                      <span className="flex items-center gap-1.5 font-mono text-[13px]">
+                        {m.model.split("/").pop()}
+                        {m.ram_gb <= 1.5 && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-sans text-[10px] font-medium text-primary">저사양 추천</span>}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {m.note} · 디스크 {m.size_gb}GB · <b className="text-foreground/80">RAM 약 {m.ram_gb}GB</b>
+                        {m.est_reindex_min != null && <> · 예상 재색인 <b className="text-foreground/80 tabular-nums">약 {m.est_reindex_min}분</b></>}
+                      </span>
                     </span>
                   }>
                     {m.current
@@ -842,6 +853,15 @@ export function SettingsView() {
               임베딩 중 RAM 약 {confirmModel?.ram_gb}GB를 씁니다. 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <label className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-[12px] leading-relaxed">
+            <input type="checkbox" checked={fastReindex} onChange={(e) => setFastReindex(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0 accent-primary" />
+            <span className="text-muted-foreground">
+              <b className="text-foreground">빠른 재색인(병렬)</b> — 재파싱 없이 여러 프로세스로 나눠 <b>2~4배 빠르게</b>.
+              단, <b className="text-amber-600 dark:text-amber-500">RAM을 약 {Math.round((confirmModel?.ram_gb ?? 0) * 2)}GB까지</b> 씁니다(프로세스마다 모델 로드).
+              RAM 여유가 없으면 오히려 느려지니 <b>고성능 기기에서만</b> 켜세요. (실패 시 자동으로 일반 방식으로 전환)
+            </span>
+          </label>
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={doReindex}>재색인 시작</AlertDialogAction>

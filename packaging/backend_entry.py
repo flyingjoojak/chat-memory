@@ -4,6 +4,7 @@ Electron 메인이 이 exe를 spawn하고 포트를 넘긴다:
     chatmem-backend.exe 8765      (또는 CHATMEM_PORT 환경변수)
 """
 
+import multiprocessing
 import os
 import sys
 
@@ -35,4 +36,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # 병렬 임베딩(fastembed 멀티프로세싱)이 frozen exe에서 앱 전체를 재실행하지 않도록 필수.
+    # 워커 spawn 시 이 가드가 인자를 가로채 처리 후 종료한다(없으면 exe 무한 재기동).
+    multiprocessing.freeze_support()
     main()
