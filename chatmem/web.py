@@ -38,7 +38,8 @@ _DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
 
 # 색인 상태(자동/수동 증분 색인 진행 — UI에 노출).
 _autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기", "indexed_total": 0,
-                          "done_files": 0, "total_files": 0, "last_error": None}
+                          "done_files": 0, "total_files": 0,
+                          "done_chunks": 0, "total_chunks": 0, "last_error": None}
 # 증분색인·전체재색인 상호배제(자동 스레드/수동 트리거/재색인이 동시에 안 돌게).
 _index_lock = threading.Lock()
 
@@ -49,25 +50,45 @@ def _run_incremental() -> bool:
     if not _index_lock.acquire(blocking=False):
         return False
     try:
-        from .indexer import has_new_data, index_all, reconcile
+        from .indexer import backfill_missing, has_new_data, index_all, reconcile
         db = ArchiveDB()
         vi = make_index()
         with contextlib.suppress(Exception):
             reconcile(db, vi, log_fn=lambda m: None)   # 고아 벡터 정리(값쌈)
-        if not has_new_data(db):
+        emb = _state.get("embedder")
+        new = has_new_data(db)
+        # 활성 저장소에 빠진 청크가 있으면(백엔드 전환·유실) 새 대화가 없어도 자가복구한다.
+        chunk_count = db.conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
+        missing = len(vi) < chunk_count
+        if not new and not missing:
             _autoindex_state.update(running=False, phase="새 대화 없음")
             return True
-        emb = _state.get("embedder")
         if emb is None:
-            return False
-        _autoindex_state.update(running=True, phase="색인 중", last_error=None, done_files=0, total_files=0)
-        total = index_all(
-            db, vi, emb,
-            log_fn=lambda m: _autoindex_state.__setitem__("phase", m),
-            progress_fn=lambda d, t: _autoindex_state.update(done_files=d, total_files=t),
-        )
-        _autoindex_state["indexed_total"] += total
-        _autoindex_state.update(running=False, phase=f"최근 완료(+{total}턴)")
+            return False   # 온보딩 전(임베더 미로드) — 다음 회차에
+
+        total = 0
+        if new:
+            _autoindex_state.update(running=True, phase="색인 중", last_error=None,
+                                    done_files=0, total_files=0, done_chunks=0, total_chunks=0)
+            total = index_all(
+                db, vi, emb,
+                log_fn=lambda m: _autoindex_state.__setitem__("phase", m),
+                progress_fn=lambda d, t: _autoindex_state.update(done_files=d, total_files=t),
+            )
+            _autoindex_state["indexed_total"] += total
+
+        filled = 0
+        if missing:
+            _autoindex_state.update(running=True, phase="자가복구 중", last_error=None,
+                                    done_chunks=0, total_chunks=0)
+            filled = backfill_missing(
+                db, vi, emb,
+                log_fn=lambda m: _autoindex_state.__setitem__("phase", m),
+                progress_fn=lambda d, t: _autoindex_state.update(done_chunks=d, total_chunks=t),
+            )
+
+        done_msg = f"최근 완료(+{total}턴" + (f", 복구 {filled}청크)" if filled else ")")
+        _autoindex_state.update(running=False, phase=done_msg, done_chunks=0, total_chunks=0)
         return True
     except Exception as ex:                       # 한 번의 오류로 죽지 않게
         _autoindex_state.update(running=False, phase="오류", last_error=str(ex))
@@ -571,7 +592,8 @@ _EMBED_ALLOW = {
         "tags": ["램 부하 적음", "속도 매우 빠름", "저사양 추천"]},
 }
 
-_reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0}
+_reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0,
+                        "done_chunks": 0, "total_chunks": 0}
 
 
 # 대기 집계 캐시: 상태 폴링(3s)마다 357개 파일 stat+쿼리를 다시 돌지 않게 짧게 캐싱.
@@ -772,15 +794,19 @@ def api_reindex(payload: dict):
         if not _index_lock.acquire(blocking=False):   # 증분 색인과 상호배제
             _reindex_state["msg"] = "다른 색인 진행 중 — 잠시 후 재시도"
             return
-        _reindex_state.update(running=True, done=0, msg="시작", done_files=0, total_files=0)
+        _reindex_state.update(running=True, done=0, msg="시작", done_files=0, total_files=0,
+                              done_chunks=0, total_chunks=0)
         try:
             C.write_config({"CHATMEM_EMBED_MODEL": model})
             # 모델 교체든 현재모델 재색인이든, 기존 벡터 폐기 후 처음부터 재임베딩(백엔드 무관 reset).
             db = ArchiveDB()
+            # 진행률 분모: 벡터 폐기 전 청크 수(재파싱해도 chunk_key가 같아 개수 거의 동일).
+            total_chunks = db.conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
             db.clear_cursors()
             vi = make_index()
             vi.reset()
             emb = Embedder(model)
+            _reindex_state["total_chunks"] = total_chunks
 
             def log(msg):
                 _reindex_state["msg"] = msg
@@ -788,7 +814,10 @@ def api_reindex(payload: dict):
             def prog(done, total):
                 _reindex_state.update(done_files=done, total_files=total)
 
-            total = index_all(db, vi, emb, log_fn=log, progress_fn=prog)
+            def chunk_prog(done_c):
+                _reindex_state["done_chunks"] = done_c
+
+            total = index_all(db, vi, emb, log_fn=log, progress_fn=prog, chunk_progress_fn=chunk_prog)
             db.set_meta("embed_model", model)
             _state["embedder"] = emb  # 실행 중 검색도 새 모델로
             _reindex_state.update(done=total, msg=f"완료: {total}턴")

@@ -108,6 +108,8 @@ export interface IndexStatus {
   indexed_total: number
   done_files: number
   total_files: number
+  done_chunks: number    // 자가복구(backfill) 청크 진행
+  total_chunks: number
   last_error: string | null
   pending?: IndexPending   // 새 바이트가 있는 로그 파일(=대화) 집계
 }
@@ -206,7 +208,11 @@ export interface EmbedModel {
   tags: string[]          // 특징 라벨(예: "램 부하 적음", "품질 최상")
   current: boolean
 }
-export interface ReindexState { running: boolean; done: number; msg: string; done_files: number; total_files: number }
+export interface ReindexState {
+  running: boolean; done: number; msg: string
+  done_files: number; total_files: number
+  done_chunks: number; total_chunks: number   // 청크 단위 진행(거대 파일에도 부드럽게)
+}
 
 export const getEmbedModels = () =>
   getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)

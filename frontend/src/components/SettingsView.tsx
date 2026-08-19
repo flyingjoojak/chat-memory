@@ -340,6 +340,29 @@ function SyncthingSection() {
   )
 }
 
+// 진행률 유틸 + 진행바(청크·파일 공용). ETA는 현재 모델 cps(청크/초)로 추정.
+function pct(done: number, total: number) { return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0 }
+function etaText(done: number, total: number, cps?: number): string {
+  if (!cps || cps <= 0 || total <= 0 || done >= total) return ""
+  const sec = (total - done) / cps
+  return sec < 60 ? `약 ${Math.ceil(sec)}초 남음` : `약 ${Math.ceil(sec / 60)}분 남음`
+}
+function BarProgress({ done, total, unit, cps }: { done: number; total: number; unit: string; cps?: number }) {
+  const p = pct(done, total)
+  const eta = etaText(done, total, cps)
+  return (
+    <div>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-full origin-left rounded-full bg-primary transition-transform duration-300"
+          style={{ transform: `scaleX(${p / 100})` }} />
+      </div>
+      <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
+        {done.toLocaleString()}/{total.toLocaleString()} {unit} ({p}%){eta ? ` · ${eta}` : ""}
+      </div>
+    </div>
+  )
+}
+
 // 공유 폴더 동기 상태 한 줄. 수신(내가 받음)과 전송(상대가 받음)을 합쳐 '진짜 최신'을 판정.
 function SyncStateLine({ sync }: { sync?: SyncthingSync | null }) {
   let dot = "bg-muted-foreground/40"
@@ -386,6 +409,7 @@ function AutoIndexRow({ ix }: { ix: IndexStatus | null }) {
     }>
       <span className="text-xs text-muted-foreground tabular-nums">
         {ix.last_error ? `오류: ${ix.last_error}`
+          : ix.running && ix.total_chunks > 0 ? `자가복구 ${ix.done_chunks}/${ix.total_chunks} 청크 (${pct(ix.done_chunks, ix.total_chunks)}%)`
           : ix.running && ix.total_files > 0 ? `색인 중 ${ix.done_files}/${ix.total_files} 파일`
           : ix.phase}
       </span>
@@ -416,7 +440,7 @@ export function SettingsView() {
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
   const [reindexMsg, setReindexMsg] = useState("")
-  const [reindexFiles, setReindexFiles] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
+  const [reindexProg, setReindexProg] = useState({ doneFiles: 0, totalFiles: 0, doneChunks: 0, totalChunks: 0 })
   const [confirmModel, setConfirmModel] = useState<EmbedModel | null>(null)
   const [ixStatus, setIxStatus] = useState<IndexStatus | null>(null)   // 증분 색인 상태(자동/수동)
   const [enrichSt, setEnrichSt] = useState<EnrichStatus | null>(null)   // 정제 상태
@@ -464,7 +488,7 @@ export function SettingsView() {
   function loadEmbed() {
     getEmbedModels().then((r) => {
       setEmbed(r.models); setReindexing(r.reindex.running); setReindexMsg(r.reindex.msg)
-      setReindexFiles({ done: r.reindex.done_files, total: r.reindex.total_files })
+      setReindexProg({ doneFiles: r.reindex.done_files, totalFiles: r.reindex.total_files, doneChunks: r.reindex.done_chunks, totalChunks: r.reindex.total_chunks })
       if (r.reindex.running && !poll.current) startPoll()
     }).catch(() => {})
   }
@@ -472,7 +496,7 @@ export function SettingsView() {
     poll.current = window.setInterval(async () => {
       const r = await getEmbedModels()
       setEmbed(r.models); setReindexMsg(r.reindex.msg)
-      setReindexFiles({ done: r.reindex.done_files, total: r.reindex.total_files })
+      setReindexProg({ doneFiles: r.reindex.done_files, totalFiles: r.reindex.total_files, doneChunks: r.reindex.done_chunks, totalChunks: r.reindex.total_chunks })
       if (!r.reindex.running) {
         setReindexing(false)
         if (poll.current) { window.clearInterval(poll.current); poll.current = null }
@@ -558,6 +582,7 @@ export function SettingsView() {
         .filter(Boolean).join(" · ") + " 대기"
     : "새 대화 없음 — 모두 색인됨"
   const enrichPending = enrichSt?.pending_turns ?? 0
+  const curCps = embed.find((e) => e.current)?.cps   // 현재 모델 처리량(청크/초) — ETA 추정용
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-5">
@@ -725,16 +750,25 @@ export function SettingsView() {
                   <Button size="sm" variant="outline" onClick={saveInterval}>저장</Button>
                   {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
                 </Row>
-                {/* 지금 색인 + 대기(새 대화) 수 */}
-                <div className="flex flex-wrap items-center gap-2 border-b py-3 last:border-0">
-                  <Button variant="outline" size="sm" disabled={!!ixStatus?.running || reindexing} onClick={doRunIndex}>
-                    {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}증분 색인
-                  </Button>
-                  <span className="text-[11px] text-muted-foreground">
-                    {ixStatus?.running
-                      ? `색인 중… ${ixStatus.total_files > 0 ? `${ixStatus.done_files}/${ixStatus.total_files} 파일` : ixStatus.phase}`
-                      : <><b className="text-foreground">{idxPendingText}</b> · 새 대화만 빠르게 색인합니다.</>}
-                  </span>
+                {/* 지금 색인 + 대기(새 대화) 수 + 자가복구 진행 */}
+                <div className="border-b py-3 last:border-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={!!ixStatus?.running || reindexing} onClick={doRunIndex}>
+                      {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}증분 색인
+                    </Button>
+                    <span className="text-[11px] text-muted-foreground">
+                      {ixStatus?.running
+                        ? (ixStatus.total_chunks > 0
+                            ? `자가복구 중 — 빠졌던 벡터 채우는 중`
+                            : `색인 중… ${ixStatus.total_files > 0 ? `${ixStatus.done_files}/${ixStatus.total_files} 파일` : ixStatus.phase}`)
+                        : <><b className="text-foreground">{idxPendingText}</b> · 새 대화만 빠르게 색인합니다.</>}
+                    </span>
+                  </div>
+                  {ixStatus?.running && ixStatus.total_chunks > 0 && (
+                    <div className="mt-2">
+                      <BarProgress done={ixStatus.done_chunks} total={ixStatus.total_chunks} unit="청크" cps={curCps} />
+                    </div>
+                  )}
                 </div>
               </Section>
 
@@ -747,17 +781,11 @@ export function SettingsView() {
                     <div className="mb-1.5 flex items-center gap-2 text-sm text-primary">
                       <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
                     </div>
-                    {reindexFiles.total > 0 && (
-                      <>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                          <div className="h-full origin-left rounded-full bg-primary transition-transform duration-300"
-                            style={{ transform: `scaleX(${reindexFiles.done / reindexFiles.total})` }} />
-                        </div>
-                        <div className="mt-1 text-[11px] text-muted-foreground tabular-nums">
-                          {reindexFiles.done}/{reindexFiles.total} 파일 ({Math.round(reindexFiles.done / reindexFiles.total * 100)}%)
-                        </div>
-                      </>
-                    )}
+                    {reindexProg.totalChunks > 0
+                      ? <BarProgress done={reindexProg.doneChunks} total={reindexProg.totalChunks} unit="청크" cps={curCps} />
+                      : reindexProg.totalFiles > 0
+                        ? <BarProgress done={reindexProg.doneFiles} total={reindexProg.totalFiles} unit="파일" />
+                        : <div className="text-[11px] text-muted-foreground">준비 중… (첫 배치 임베딩 시작하면 진행률이 표시됩니다)</div>}
                   </div>
                 )}
                 {embed.map((m) => (
