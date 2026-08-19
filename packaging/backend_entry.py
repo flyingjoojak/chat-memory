@@ -28,11 +28,51 @@ def main() -> None:
         port = int(sys.argv[1])
     port = int(os.environ.get("CHATMEM_PORT", port))
 
+    if getattr(sys, "frozen", False):
+        _setup_file_logging()                # windowed(콘솔 없음) 빌드에서 print/로그가 깨지지 않게
+        _open_browser_when_ready(port)       # 더블클릭 → 준비되면 브라우저 자동 오픈
+
     import uvicorn
 
     from chatmem.web import app
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+
+def _setup_file_logging() -> None:
+    """windowed exe는 stdout/stderr가 없어 print가 깨질 수 있음 → data/app.log로 리다이렉트."""
+    try:
+        from chatmem import config as C
+        C.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        f = open(C.DATA_DIR / "app.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115
+        sys.stdout = f
+        sys.stderr = f
+    except Exception:  # noqa: BLE001 — 로그 리다이렉트 실패해도 앱은 떠야 함
+        pass
+
+
+def _open_browser_when_ready(port: int, timeout: float = 180.0) -> None:
+    """포트가 열리면(=서버 준비) 기본 브라우저로 앱을 연다. 백그라운드 스레드."""
+    import contextlib
+    import socket
+    import threading
+    import time
+    import webbrowser
+
+    def wait_open():
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=1):
+                    break
+            except OSError:
+                time.sleep(0.5)
+        else:
+            return
+        with contextlib.suppress(Exception):
+            webbrowser.open(f"http://127.0.0.1:{port}")
+
+    threading.Thread(target=wait_open, daemon=True).start()
 
 
 if __name__ == "__main__":

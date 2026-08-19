@@ -20,6 +20,7 @@ SEP=":"
 case "${OS:-}${OSTYPE:-}" in *Windows*|*msys*|*cygwin*) SEP=";" ;; esac
 
 pyinstaller --noconfirm --onedir --name chatmem-backend \
+  --noconsole \
   --paths . \
   --collect-all fastembed \
   --collect-all onnxruntime \
