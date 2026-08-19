@@ -218,6 +218,22 @@ def api_debug_index():
             "top": rows[:40]}
 
 
+@app.post("/api/quit")
+def api_quit():
+    """앱(백엔드) 종료 — windowed exe는 창·트레이가 없어 이 버튼으로 끈다.
+    새 버전으로 교체·재실행하려면 먼저 여기서 종료해야 함(중복 기동 방지 때문)."""
+    import os
+    import time
+
+    def bye():
+        time.sleep(0.3)   # 응답 flush 후
+        with contextlib.suppress(Exception):
+            _st_stop()    # 내장 Syncthing 자식 프로세스 정리
+        os._exit(0)
+    threading.Thread(target=bye, daemon=True).start()
+    return {"ok": True}
+
+
 @app.get("/api/system")
 def api_system():
     """기기 메모리 + 모델/벡터 불일치 경고(배너용)."""
