@@ -39,7 +39,7 @@ _DIST = (Path(_MEIPASS) / "frontend" / "dist") if _MEIPASS \
 # 색인 상태(자동/수동 증분 색인 진행 — UI에 노출).
 _autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기", "indexed_total": 0,
                           "done_files": 0, "total_files": 0,
-                          "done_chunks": 0, "total_chunks": 0, "last_error": None}
+                          "done_chunks": 0, "total_chunks": 0, "last_error": None, "errors": []}
 # 증분색인·전체재색인 상호배제(자동 스레드/수동 트리거/재색인이 동시에 안 돌게).
 _index_lock = threading.Lock()
 
@@ -66,13 +66,14 @@ def _run_incremental() -> bool:
         if emb is None:
             return False   # 온보딩 전(임베더 미로드) — 다음 회차에
 
+        _autoindex_state["errors"] = []   # 이번 회차 항목별 오류만 모음(스턱 항목이면 매 회차 재등장)
         total = 0
         if new:
             _autoindex_state.update(running=True, phase="색인 중", last_error=None,
                                     done_files=0, total_files=0, done_chunks=0, total_chunks=0)
             total = index_all(
                 db, vi, emb,
-                log_fn=lambda m: _autoindex_state.__setitem__("phase", m),
+                log_fn=_capture_log(_autoindex_state),
                 progress_fn=lambda d, t: _autoindex_state.update(done_files=d, total_files=t),
             )
             _autoindex_state["indexed_total"] += total
@@ -83,7 +84,7 @@ def _run_incremental() -> bool:
                                     done_chunks=0, total_chunks=0)
             filled = backfill_missing(
                 db, vi, emb,
-                log_fn=lambda m: _autoindex_state.__setitem__("phase", m),
+                log_fn=_capture_log(_autoindex_state),
                 progress_fn=lambda d, t: _autoindex_state.update(done_chunks=d, total_chunks=t),
             )
 
@@ -226,6 +227,8 @@ def api_search(
 ):
     if semantic_only:
         mode = "semantic"
+    if mode not in ("hybrid", "semantic", "keyword"):
+        mode = "hybrid"   # 알 수 없는 값은 0건이 아니라 기본(하이브리드)으로
     want_sem = mode in ("hybrid", "semantic")
     want_kw = mode in ("hybrid", "keyword")
     embedder = _state.get("embedder")
@@ -582,9 +585,14 @@ def api_config_put(payload: dict):
 
     from . import config as C
 
-    updates = {str(k): str(v) for k, v in (payload or {}).items()}
+    # 화이트리스트: CHATMEM_* 설정 + 알려진 키/경로만 허용(임의 env 주입 차단).
+    _allowed_exact = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
+                      "GOOGLE_API_KEY", "CLAUDE_PROJECTS_DIR"}
+    raw = {str(k): str(v) for k, v in (payload or {}).items()}
+    updates = {k: v for k, v in raw.items() if k.startswith("CHATMEM_") or k in _allowed_exact}
+    rejected = [k for k in raw if k not in updates]
     if not updates:
-        return {"ok": True, "changed": []}
+        return {"ok": True, "changed": [], "rejected": rejected}
 
     C.write_config(updates)                       # 1) 파일 반영
     for k, v in updates.items():                  # 2) 실행 중 os.environ 반영
@@ -605,7 +613,7 @@ def api_config_put(payload: dict):
             rescheduled = True
         except Exception:
             pass
-    return {"ok": True, "changed": list(updates), "rescheduled": rescheduled}
+    return {"ok": True, "changed": list(updates), "rejected": rejected, "rescheduled": rescheduled}
 
 
 # 임베딩 모델 카탈로그(한국어 대화용). ram_gb=임베딩 실행 중 피크 워킹셋 실측(MB→GB),
@@ -680,7 +688,19 @@ def api_verify_enrich(payload: dict):
 
 # 수동 정제 상태.
 _enrich_state: dict = {"running": False, "phase": "대기", "done_sessions": 0, "total_sessions": 0,
-                       "enriched": 0, "last_error": None}
+                       "enriched": 0, "last_error": None, "errors": []}
+
+
+def _capture_log(state: dict):
+    """log_fn 래퍼: phase를 갱신하고 'ERROR' 로그는 bounded errors 목록에 모아 UI에 노출.
+    (한 항목이 매 주기 조용히 실패하며 스턱되는 걸 사용자가 볼 수 있게)"""
+    def log(m: str):
+        state["phase"] = m
+        if isinstance(m, str) and m.startswith("ERROR"):
+            errs = state.setdefault("errors", [])
+            errs.append(m)
+            del errs[:-8]   # 최근 8건만 유지
+    return log
 
 
 @app.get("/api/enrich/status")
@@ -704,12 +724,12 @@ def api_enrich(payload: dict | None = None):
 
     def worker():
         _enrich_state.update(running=True, phase="시작", done_sessions=0, total_sessions=0,
-                             enriched=0, last_error=None)
+                             enriched=0, last_error=None, errors=[])
         try:
             db = ArchiveDB()
             total = enrich_all(
                 db, backend=backend, model=None, only_missing=only_missing,
-                log_fn=lambda m: _enrich_state.__setitem__("phase", m),
+                log_fn=_capture_log(_enrich_state),
                 progress_fn=lambda d, t: _enrich_state.update(done_sessions=d, total_sessions=t),
             )
             if total:

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Search, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -30,17 +30,23 @@ export function SearchView() {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle")
   // 선택한 결과 → 오른쪽 채팅 스레드로 표시(열고닫기 없이 클릭 전환).
   const [sel, setSel] = useState<{ session: string; turn: string } | null>(null)
+  const reqId = useRef(0)   // 최신 요청만 반영(빠른 연속 검색 시 오래된 응답이 덮어쓰기 방지)
 
   async function run(query = q, m: SearchMode = mode) {
     const term = query.trim()
     if (!term) { setState("idle"); setHits([]); setSel(null); return }
+    const myId = ++reqId.current
     setState("loading")
     try {
       const r = await search({ q: term, k, mode: m, since: since || undefined, until: until || undefined })
+      if (myId !== reqId.current) return   // 더 새 요청이 진행 중 → 이 응답 폐기
       const list = r.hits || []
       setHits(list); setState("done")
       setSel(list.length ? { session: list[0].session_full, turn: list[0].id } : null)   // 첫 결과 자동 선택
-    } catch { setHits([]); setState("error"); setSel(null) }   // 실패는 '결과 없음'과 구분
+    } catch {
+      if (myId !== reqId.current) return
+      setHits([]); setState("error"); setSel(null)   // 실패는 '결과 없음'과 구분
+    }
   }
   function pick(e: string) { setQ(e); run(e) }
 
