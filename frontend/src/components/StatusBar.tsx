@@ -14,7 +14,7 @@ function syncLabel(st: SyncthingStatus | null): { text: string; dot: string; ton
   if (s.state === "syncing" || s.need_items > 0 || s.need_bytes > 0) return { text: `받는 중 ${s.completion}%`, dot: "bg-amber-500", tone: "text-amber-600 dark:text-amber-500" }
   if (s.remote_complete != null && s.remote_complete < 100) return { text: `전송 중 ${s.remote_complete}%`, dot: "bg-amber-500", tone: "text-amber-600 dark:text-amber-500" }
   if ((s.peers_connected ?? 0) === 0) return { text: "최신(상대 미연결)", dot: "bg-muted-foreground/40", tone: g }
-  return { text: "양쪽 최신", dot: "bg-primary", tone: "text-primary" }   // 완전 동기화 = 초록
+  return { text: "양쪽 최신", dot: "bg-emerald-500", tone: "text-emerald-600 dark:text-emerald-400" }   // 완전 동기화 = 초록
 }
 
 export function StatusBar() {

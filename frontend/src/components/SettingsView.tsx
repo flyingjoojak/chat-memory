@@ -359,7 +359,7 @@ function SyncStateLine({ sync }: { sync?: SyncthingSync | null }) {
       // 이 기기는 최신이지만 상대가 연결 안 돼 있어 '양쪽 최신'은 확인 불가.
       dot = "bg-muted-foreground/40"; text = <>이 기기 최신 · <span className="text-muted-foreground">상대 기기 미연결(전송 대기)</span></>
     } else {
-      dot = "bg-primary"; text = <span className="text-primary">양쪽 최신 ✓</span>
+      dot = "bg-emerald-500"; text = <span className="text-emerald-600 dark:text-emerald-400">양쪽 최신 ✓</span>
     }
   }
   return (
