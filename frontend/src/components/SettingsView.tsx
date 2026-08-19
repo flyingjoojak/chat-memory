@@ -67,8 +67,10 @@ function McpSection() {
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [snip, setSnip] = useState<string | null>(null)
+  const [err, setErr] = useState(false)   // 로드 실패 — 빈 화면 대신 재시도 노출
 
-  const load = () => getMcp().then((r) => setTargets(r.targets)).catch(() => setTargets([]))
+  // 성공 시 목록 갱신, 실패 시 err(단, 이미 목록이 있으면 백그라운드 실패는 무시하고 유지).
+  const load = () => getMcp().then((r) => { setTargets(r.targets); setErr(false) }).catch(() => setErr(true))
   useEffect(() => { load() }, [])
 
   async function toggle(t: McpTarget) {
@@ -88,7 +90,17 @@ function McpSection() {
     load()            // 실제 상태 재확인은 백그라운드(await 안 함 → 스피너에 안 걸림)
   }
 
-  if (targets === null) return <Row label="불러오는 중…"><Loader2 className="size-4 animate-spin text-muted-foreground" /></Row>
+  if (targets === null) {
+    return err ? (
+      <div className="flex flex-col items-center gap-2 py-6 text-center text-sm">
+        <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="size-4" />불러오지 못했어요</span>
+        <span className="text-[12px] text-muted-foreground">앱이 준비 중일 수 있어요.</span>
+        <button onClick={load} className="rounded-md border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">다시 시도</button>
+      </div>
+    ) : (
+      <Row label="불러오는 중…"><Loader2 className="size-4 animate-spin text-muted-foreground" /></Row>
+    )
+  }
   const active = targets.find((t) => t.id === snip)
   return (
     <>
