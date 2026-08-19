@@ -24,10 +24,11 @@ export function StatusBar() {
 
   useEffect(() => {
     let alive = true
+    const dbg = (e: unknown) => console.debug("[statusbar]", e)   // 무음 대신 진단 로그
     const load = () => {
-      getStats().then((r) => alive && setStats(r)).catch(() => {})
-      getIndexStatus().then((r) => alive && setIx(r)).catch(() => {})
-      getSyncthingStatus().then((r) => alive && setSt(r)).catch(() => {})
+      getStats().then((r) => alive && setStats(r)).catch(dbg)
+      getIndexStatus().then((r) => alive && setIx(r)).catch(dbg)
+      getSyncthingStatus().then((r) => alive && setSt(r)).catch(dbg)
     }
     load()
     const id = window.setInterval(load, 5000)
