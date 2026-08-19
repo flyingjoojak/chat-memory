@@ -19,11 +19,11 @@
   "build": {
     "appId": "com.chatmemory.app",
     "productName": "chat-memory",
-    "files": ["main.js", "loading.html"],
+    "files": ["main.js", "loading.html", "icon.png"],
     "extraResources": [
       { "from": "../dist/chatmem-backend", "to": "backend" }
     ],
-    "win": { "target": "nsis" },
+    "win": { "target": "nsis", "icon": "icon.png" },
     "mac": { "target": "dmg", "category": "public.app-category.productivity" },
     "linux": { "target": "AppImage", "category": "Utility" },
     "publish": [

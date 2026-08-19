@@ -37,8 +37,11 @@ def main() -> None:
         port = int(sys.argv[1])
     port = int(os.environ.get("CHATMEM_PORT", port))
 
-    if getattr(sys, "frozen", False):
-        _setup_file_logging()                # windowed(콘솔 없음) 빌드에서 print/로그가 깨지지 않게
+    # managed=1: Electron 셸이 구동·감독. 셸이 창·단일인스턴스·로깅을 담당하므로 백엔드는
+    # 순수 서버로만 동작(뮤텍스·브라우저 자동열기·app.log 리다이렉트 끔 → stdout은 셸이 캡처).
+    managed = os.environ.get("CHATMEM_MANAGED") == "1"
+    if getattr(sys, "frozen", False) and not managed:
+        _setup_file_logging()                # windowed(콘솔 없음) 단독 실행에서 print/로그 보존
         # 단일 인스턴스: 프로세스 시작 즉시 네임드 뮤텍스로 판정. uvicorn은 모델 로딩(~15초) *후*에
         # 소켓을 잡으므로 포트 점유 검사로는 그 창에서 중복을 못 막아 10048 크래시가 났음(실측).
         if not _acquire_single_instance(port):
