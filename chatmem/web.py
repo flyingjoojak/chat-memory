@@ -111,6 +111,12 @@ async def _lifespan(app: FastAPI):
 
     if not _needs_onboarding:
         _state["embedder"] = Embedder()  # 이미 모델 확정됨 → 로드
+        # 저장 벡터의 모델 ≠ 현재 설정 모델이면 검색이 조용히 엉터리가 됨 → 배너로 경고(재색인 유도).
+        with contextlib.suppress(Exception):
+            from . import config as _C
+            stored = ArchiveDB().get_meta("embed_model")
+            _state["model_mismatch"] = ({"stored": stored, "current": _C.EMBED_MODEL}
+                                        if stored and stored != _C.EMBED_MODEL else None)
 
     # 자동 색인(프리즈 exe 전용): 배포된 프로그램은 외부 스케줄러가 없으므로 웹서버가 스스로 색인한다.
     # 시작 시 1회 + 주기적으로 새 대화(동기 유입 포함)를 증분 색인. 개발(python)은 스케줄러가 하므로 미가동.
@@ -161,6 +167,30 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=_lifespan, title="chat-memory")
+
+
+@app.exception_handler(Exception)
+async def _friendly_error(request, exc):  # noqa: ANN001 — FastAPI 핸들러 시그니처
+    """예상치 못한 서버 오류를 500 대신 사람이 읽는 한글 메시지로. (HTTPException은 별도 처리됨)"""
+    import sqlite3
+
+    from fastapi.responses import JSONResponse
+    if isinstance(exc, (sqlite3.Error, OSError)):
+        msg = "데이터에 접근하지 못했어요 — data 폴더의 archive.db가 손상됐을 수 있어요(삭제하면 재생성됩니다)."
+    else:
+        msg = "예상치 못한 오류가 발생했어요. 잠시 후 다시 시도해 주세요."
+    return JSONResponse(status_code=500, content={"error": msg, "detail": str(exc)[:300]})
+
+
+@app.get("/api/system")
+def api_system():
+    """기기 메모리 + 모델/벡터 불일치 경고(배너용)."""
+    from .sysmem import available_mb, total_mb
+    return {
+        "ram_total_mb": total_mb(),
+        "ram_avail_mb": available_mb(),
+        "model_mismatch": _state.get("model_mismatch"),
+    }
 
 
 def _hit_to_dict(h) -> dict:
@@ -818,11 +848,22 @@ def api_reindex(payload: dict):
 
             # fast: chunks 테이블에서 재파싱 없이 병렬 임베딩(커서 보존 → 이후 증분 정상).
             if fast and total_chunks > 0:
+                # OOM 하드 가드: 프로세스마다 모델을 로드하므로 가용 RAM/모델RAM 만큼만 허용.
+                from .sysmem import available_mb
+                ram_gb = _EMBED_ALLOW.get(model, {}).get("ram_gb") or 4.0
+                avail = available_mb()
+                if avail is not None:
+                    safe = max(1, int(avail / (ram_gb * 1024)))
+                    if parallel > safe:
+                        log(f"RAM 여유상 병렬 {parallel}→{safe}로 자동 제한")
+                        parallel = safe
+                use_parallel = parallel if parallel >= 2 else None  # 1이면 병렬 이득 없음 → 순차
                 vi.reset()
-                _reindex_state["msg"] = f"빠른 재색인(병렬 {parallel})…"
+                _reindex_state["msg"] = (f"빠른 재색인(병렬 {parallel})…" if use_parallel
+                                         else "재색인(병렬 불가 — RAM 부족, 순차 진행)…")
                 try:
                     total = backfill_missing(
-                        db, vi, emb, batch=512, parallel=parallel, log_fn=log,
+                        db, vi, emb, batch=512, parallel=use_parallel, log_fn=log,
                         progress_fn=lambda d, t: _reindex_state.update(done_chunks=d, total_chunks=t))
                 except Exception as pe:  # noqa: BLE001 — 병렬 실패 시 순차로 폴백
                     log(f"병렬 실패({pe}) → 순차 재색인으로 전환")

@@ -6,7 +6,8 @@ import { Browse3Pane } from "@/components/Browse3Pane"
 import { SettingsView } from "@/components/SettingsView"
 import { Onboarding } from "@/components/Onboarding"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
-import { getOnboarding } from "@/lib/api"
+import { AlertTriangle } from "lucide-react"
+import { getOnboarding, getSystem } from "@/lib/api"
 import { applyTheme } from "@/lib/theme"
 
 // three.js는 무거우니 3D 탭 열 때만 로드(초기 번들 경량).
@@ -31,8 +32,10 @@ export default function App() {
   }
   // 첫 실행이면(프리즈 exe·모델 미선택) 모델 선택 화면을 먼저. null=확인중.
   const [onboard, setOnboard] = useState<boolean | null>(null)
+  const [mismatch, setMismatch] = useState<{ stored: string; current: string } | null>(null)
   useEffect(() => { applyTheme() }, [])
   useEffect(() => { getOnboarding().then((r) => setOnboard(r.needed)).catch(() => setOnboard(false)) }, [])
+  useEffect(() => { getSystem().then((s) => setMismatch(s.model_mismatch)).catch(() => {}) }, [])
 
   if (onboard === null) {
     return <div className="grid h-dvh place-items-center bg-background text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
@@ -63,6 +66,16 @@ export default function App() {
 
       {/* 메인 패널 — 뷰 크래시가 앱 전체를 죽이지 않게 격리 */}
       <main className="overflow-y-auto">
+        {mismatch && (
+          <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>저장된 벡터가 <b>{mismatch.stored.split("/").pop()}</b>로 만들어졌는데 현재 설정은 <b>{mismatch.current.split("/").pop()}</b>예요 — 검색 결과가 부정확할 수 있어요.</span>
+            <button onClick={() => { setView("settings"); setJump(null) }}
+              className="ml-auto rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
+              설정에서 재색인
+            </button>
+          </div>
+        )}
         <ErrorBoundary key={view}>
           {view === "search" && <SearchView />}
           {view === "sessions" && (

@@ -148,4 +148,8 @@ def write_config(updates: dict[str, str]) -> None:
             out.append(ln)
     for k, val in remaining.items():
         out.append(f"{k}={val}" if val != "" else f"#{k}=")
-    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    # 원자적 쓰기(temp→replace): 크래시·백신 스캔 중 잘려 설정이 조용히 초기화되는 것 방지.
+    import os
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
+    os.replace(tmp, path)

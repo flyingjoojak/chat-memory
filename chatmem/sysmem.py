@@ -5,7 +5,8 @@ from __future__ import annotations
 import sys
 
 
-def available_mb() -> int | None:
+def _query():
+    """(total_mb, avail_mb) 또는 None. Windows 외/실패 시 None → 가드 비활성."""
     if sys.platform != "win32":
         return None
     try:
@@ -28,9 +29,20 @@ def available_mb() -> int | None:
         stat.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
         if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
             return None
-        return int(stat.ullAvailPhys // (1024 * 1024))
+        mb = 1024 * 1024
+        return int(stat.ullTotalPhys // mb), int(stat.ullAvailPhys // mb)
     except Exception:
         return None
+
+
+def available_mb() -> int | None:
+    q = _query()
+    return q[1] if q else None
+
+
+def total_mb() -> int | None:
+    q = _query()
+    return q[0] if q else None
 
 
 def set_low_priority() -> bool:

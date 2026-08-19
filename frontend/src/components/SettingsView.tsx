@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import {
-  AlertTriangle, Check, Copy, Database, ExternalLink, Loader2, Monitor, Moon,
+  AlertTriangle, Check, Copy, Database, Loader2, Monitor, Moon,
   Plug, RefreshCw, SlidersHorizontal, Sparkles, Sun, X,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -11,10 +11,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
-  getSyncthingStatus, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
+  getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
   syncthingPair, syncthingStart, syncthingStop, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
-  type SyncthingStatus, type SyncthingSync,
+  type SyncthingStatus, type SyncthingSync, type SystemInfo,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
@@ -118,17 +118,16 @@ function McpSection() {
   )
 }
 
-// 세션 동기화(멀티기기): Syncthing 페어링 안내 + 충돌 해소 감시 데몬 토글/상태.
+// 동기화 충돌 자동 정리: 기기 간 동기화 중 생긴 충돌 파일을 자동 정리(긴 쪽 채택, 진짜 분기만 새 세션 보존).
 function SyncSection() {
   const [st, setSt] = useState<SyncStatus | null>(null)
   const [busy, setBusy] = useState(false)
-  const [guide, setGuide] = useState(false)
   const [note, setNote] = useState<string | null>(null)
 
   const load = () => getSyncStatus().then(setSt).catch(() => setSt(null))
   useEffect(() => {
     load()
-    const id = setInterval(load, 5000)   // 상태·해소 카운트 주기 갱신
+    const id = setInterval(load, 5000)   // 상태·정리 카운트 주기 갱신
     return () => clearInterval(id)
   }, [])
 
@@ -138,93 +137,39 @@ function SyncSection() {
     try {
       const r = await toggleSync(!st.running)
       setSt(r)
-      setNote(r.running ? "✓ 시작됨 — 이제 항상 대기하며 충돌을 자동 정리해요(계속 켜두면 됨)" : "중지됨")
+      setNote(r.running ? "✓ 켜짐 — 이제 충돌을 자동으로 정리해요(계속 켜두면 됩니다)" : "꺼짐")
     } catch { setNote("실패") } finally { setBusy(false) }
   }
 
-  const [copiedPath, setCopiedPath] = useState(false)
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(() => () => { if (copyTimer.current) clearTimeout(copyTimer.current) }, [])   // unmount 시 타이머 정리
-  async function copyPath() {
-    const p = st?.projects_dir
-    if (!p || !navigator.clipboard?.writeText) return
-    try {
-      await navigator.clipboard.writeText(p)
-      setCopiedPath(true)
-      if (copyTimer.current) clearTimeout(copyTimer.current)
-      copyTimer.current = setTimeout(() => setCopiedPath(false), 1500)
-    } catch { /* noop */ }
-  }
-
+  const loading = st === null
   return (
     <>
       <Row label={
         <span className="flex items-center gap-2">
-          감시 데몬
-          {st?.running
-            ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">감시 중</span>
-            : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">중지</span>}
+          자동 정리
+          {loading
+            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">확인 중</span>
+            : st?.running
+              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">켜짐</span>
+              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">꺼짐</span>}
         </span>
       }>
-        <Button variant={st?.running ? "outline" : "default"} size="sm" disabled={busy || !st} onClick={toggle}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? "중지" : "시작"}
-        </Button>
+        {loading
+          ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          : <Button variant={st?.running ? "outline" : "default"} size="sm" disabled={busy} onClick={toggle}>
+              {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? "끄기" : "켜기"}
+            </Button>}
       </Row>
       {note && <div className="py-1 text-[11px] text-primary">{note}</div>}
       {st && (
         <div className="py-2 text-[11px] text-muted-foreground">
-          충돌 해소 누계 {st.resolved_total}건 · 간격 {st.interval}s
+          정리한 충돌 {st.resolved_total}건 · 확인 간격 {st.interval}s
           {st.last_error && <span className="text-destructive"> · 오류: {st.last_error}</span>}
         </div>
       )}
       <div className="py-2 text-xs text-muted-foreground">
-        여러 기기(집·회사 PC 등)에서 Claude Code를 쓴다면, <b>Syncthing</b>이라는 무료 프로그램으로 대화 기록을 자동으로 똑같이 맞출 수 있어요. 이 앱은 그 과정에서 생기는 충돌만 정리합니다(긴 쪽 채택, 진짜 분기만 새 세션으로 보존).
-        <button onClick={() => setGuide((v) => !v)} className="ml-1 font-medium text-primary hover:opacity-75">
-          {guide ? "설정 방법 접기" : "설정 방법 보기(비개발자용)"}
-        </button>
+        여러 기기에서 같은 대화를 동시에 이어가면 드물게 <b>충돌</b>이 생길 수 있어요. 켜두면 앱이 자동으로 정리합니다 — 더 긴 대화를 채택하고, 진짜로 갈라진 경우만 새 세션으로 보존해요. 위 <b>기기 연결</b>을 쓴다면 켜두는 걸 권합니다.
       </div>
-      {guide && (
-        <div className="mb-3 space-y-3 rounded-lg border bg-muted/30 p-3 text-[11.5px] leading-relaxed text-muted-foreground">
-          {/* 0) 동기화할 폴더 경로 — 이 앱이 아는 실제 경로를 그대로 복사 */}
-          <div>
-            <div className="mb-1 font-medium text-foreground">0. 동기화할 폴더 (아래 경로를 복사해두세요)</div>
-            <div className="flex items-center gap-1.5">
-              <code id="sync-folder-path" className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1" title={st?.projects_dir}>{st?.projects_dir ?? "…"}</code>
-              <button type="button" onClick={copyPath}
-                aria-label="세션 동기화 폴더 경로 복사" aria-describedby="sync-folder-path"
-                className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 transition-colors hover:bg-muted">
-                {copiedPath ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
-                {copiedPath ? "복사됨" : "복사"}
-              </button>
-            </div>
-          </div>
-
-          <ol className="list-decimal space-y-2 pl-5">
-            <li>
-              <b>각 기기에 Syncthing 설치.</b>{" "}
-              <a href="https://syncthing.net/downloads/" target="_blank" rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 font-medium text-primary hover:opacity-75">다운로드<ExternalLink className="size-3" /></a>
-              {" "}— 설치·실행하면 브라우저에 관리 화면(<code className="rounded bg-background px-1">http://localhost:8384</code>)이 열려요.
-            </li>
-            <li>
-              <b>두 기기를 서로 연결.</b> 기기 A 관리화면 우측 아래 <i>Actions → Show ID</i>로 A의 기기 ID를 확인하고, 기기 B 관리화면 <i>Add Remote Device</i>에 그 ID를 붙여넣어요. 그러면 기기 A에 <b>"새 기기가 연결하려 합니다" 팝업</b>이 떠요 → <b>수락</b>. (ID 수동 입력은 한쪽만 — 반대쪽은 팝업 수락이면 끝. 팝업이 안 뜨면 양쪽 다 ID를 넣어도 돼요.)
-            </li>
-            <li>
-              <b>폴더 공유 (한 번만).</b> 기기 A에서 <i>Add Folder</i> → <i>Folder Path</i>에 위 <b>0번 경로</b>를 붙여넣고, <i>Sharing</i> 탭에서 기기 B를 체크 → 저장. 기기 B에 "새 폴더 공유 요청"이 뜨면 수락. <b>반대로(B→A) 또 공유할 필요 없어요</b> — 수락하는 순간 양방향 자동 동기.
-              <div className="mt-1 rounded bg-background/70 px-2 py-1">⚠️ 경로는 기기마다 <b>달라도 됩니다</b>(사용자명·OS가 다르면 당연히 다름). 단, 기기 B에서도 반드시 <b>그 기기 자신의 <code className="rounded bg-muted px-1">.claude/projects</code> 폴더</b>로 지정하세요. 엉뚱한 폴더로 받으면 파일은 와도 Claude Code가 인식하지 못해요.</div>
-            </li>
-            <li>(권장) 폴더 설정에서 <i>File Versioning</i>을 <b>Staggered</b>로 켜 실수 삭제·덮어쓰기에 대비.</li>
-            <li>이 앱으로 돌아와 위 <b>감시 데몬 「시작」</b> → 이제 충돌이 생기면 자동 정리돼요.</li>
-            <li>(선택) 두 기기를 동시에 잘 안 켠다면, 항상 켜둔 기기(집 NAS·미니PC 등)를 하나 더 붙이면 시간이 안 겹쳐도 동기화돼요.</li>
-          </ol>
-
-          <div className="text-[11px]">
-            더 자세히:{" "}
-            <a href="https://docs.syncthing.net/intro/getting-started.html" target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-0.5 font-medium text-primary hover:opacity-75">Syncthing 공식 시작 가이드<ExternalLink className="size-3" /></a>
-          </div>
-        </div>
-      )}
     </>
   )
 }
@@ -276,7 +221,7 @@ function SyncthingSection() {
     <>
       <Row label={
         <span className="flex items-center gap-2">
-          내장 동기 엔진
+          기기 동기화
           {loading
             ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">확인 중</span>
             : running
@@ -447,6 +392,8 @@ export function SettingsView() {
   const [reindexMsg, setReindexMsg] = useState("")
   const [reindexProg, setReindexProg] = useState({ doneFiles: 0, totalFiles: 0, doneChunks: 0, totalChunks: 0 })
   const [fastReindex, setFastReindex] = useState(false)   // 병렬(고RAM 기기) 빠른 재색인
+  const [parallelN, setParallelN] = useState(2)           // 병렬 프로세스 수(사용자 지정)
+  const [sys, setSys] = useState<SystemInfo | null>(null) // 기기 메모리(병렬 권장치 계산용)
   const [confirmModel, setConfirmModel] = useState<EmbedModel | null>(null)
   const [ixStatus, setIxStatus] = useState<IndexStatus | null>(null)   // 증분 색인 상태(자동/수동)
   const [enrichSt, setEnrichSt] = useState<EnrichStatus | null>(null)   // 정제 상태
@@ -488,6 +435,7 @@ export function SettingsView() {
       setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
     }).catch(() => {})
     loadEmbed()
+    getSystem().then(setSys).catch(() => {})
     return () => { if (poll.current) window.clearInterval(poll.current) }
   }, [])
 
@@ -573,7 +521,7 @@ export function SettingsView() {
     const m = confirmModel.model
     const fast = fastReindex
     setConfirmModel(null); setReindexing(true); setReindexMsg("시작…")
-    await reindex(m, { fast }); startPoll()
+    await reindex(m, fast ? { fast, parallel: parallelN } : {}); startPoll()
   }
 
   const themes: { v: ThemeMode; icon: React.ReactNode; label: string }[] = [
@@ -833,10 +781,10 @@ export function SettingsView() {
           {/* ── 동기화: 내장 엔진 + 멀티기기 세션 동기화 ── */}
           {tab === "sync" && (
             <>
-              <Section title="기기 연결 (앱 내장 동기)">
+              <Section title="기기 연결">
                 <SyncthingSection />
               </Section>
-              <Section title="세션 동기화 (멀티기기)">
+              <Section title="동기화 충돌 정리">
                 <SyncSection />
               </Section>
             </>
@@ -865,15 +813,49 @@ export function SettingsView() {
               임베딩 중 RAM 약 {confirmModel?.ram_gb}GB를 씁니다. 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <label className="flex items-start gap-2 rounded-lg border bg-muted/30 p-3 text-[12px] leading-relaxed">
-            <input type="checkbox" checked={fastReindex} onChange={(e) => setFastReindex(e.target.checked)}
-              className="mt-0.5 size-4 shrink-0 accent-primary" />
-            <span className="text-muted-foreground">
-              <b className="text-foreground">빠른 재색인(병렬)</b> — 재파싱 없이 여러 프로세스로 나눠 <b>2~4배 빠르게</b>.
-              단, <b className="text-amber-600 dark:text-amber-500">RAM을 약 {Math.round((confirmModel?.ram_gb ?? 0) * 2)}GB까지</b> 씁니다(프로세스마다 모델 로드).
-              RAM 여유가 없으면 오히려 느려지니 <b>고성능 기기에서만</b> 켜세요. (실패 시 자동으로 일반 방식으로 전환)
-            </span>
-          </label>
+          {(() => {
+            const ramGb = confirmModel?.ram_gb ?? 0
+            const availGb = sys?.ram_avail_mb != null ? sys.ram_avail_mb / 1024 : null
+            const totalGb = sys?.ram_total_mb != null ? sys.ram_total_mb / 1024 : null
+            // 권장 최대 = 가용 RAM / 모델 RAM (최소 1). 백엔드도 같은 기준으로 하드 상한.
+            const recMax = availGb ? Math.max(1, Math.floor(availGb / Math.max(ramGb, 0.1))) : 8
+            const willUse = Math.round(ramGb * parallelN)
+            const over = availGb != null && willUse > availGb
+            return (
+              <div className="rounded-lg border bg-muted/30 p-3 text-[12px] leading-relaxed">
+                <label className="flex items-start gap-2">
+                  <input type="checkbox" checked={fastReindex} onChange={(e) => setFastReindex(e.target.checked)}
+                    className="mt-0.5 size-4 shrink-0 accent-primary" />
+                  <span className="text-muted-foreground">
+                    <b className="text-foreground">빠른 재색인(병렬)</b> — 재파싱 없이 여러 프로세스로 나눠 더 빠르게.
+                    프로세스마다 모델을 로드하므로 <b>RAM을 많이</b> 씁니다.
+                  </span>
+                </label>
+                {fastReindex && (
+                  <div className="mt-2.5 space-y-1.5 border-t pt-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-foreground">병렬 프로세스</span>
+                      <input type="number" min={1} max={16} value={parallelN}
+                        onChange={(e) => setParallelN(Math.max(1, Math.min(16, +e.target.value || 1)))}
+                        onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                        className="h-7 w-16 rounded-md border bg-background px-2 tabular-nums outline-none" />
+                      <span className="text-muted-foreground">개 · 권장 최대 <b className="text-foreground tabular-nums">{recMax}</b></span>
+                    </div>
+                    <div className="tabular-nums text-muted-foreground">
+                      이 기기 RAM {totalGb != null ? <>전체 <b className="text-foreground">{totalGb.toFixed(1)}GB</b></> : "정보 없음"}
+                      {availGb != null && <> · 가용 <b className="text-foreground">{availGb.toFixed(1)}GB</b></>}
+                      {" · "}예상 사용 <b className={over ? "text-destructive" : "text-foreground"}>{willUse}GB</b>
+                    </div>
+                    {over && (
+                      <div className="flex items-center gap-1.5 text-destructive">
+                        <AlertTriangle className="size-3.5 shrink-0" />가용 RAM을 초과해요 — 병렬 수를 {recMax} 이하로 낮추세요(초과 시 자동으로 제한됩니다).
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
           <AlertDialogFooter>
             <AlertDialogCancel>취소</AlertDialogCancel>
             <AlertDialogAction onClick={doReindex}>재색인 시작</AlertDialogAction>
