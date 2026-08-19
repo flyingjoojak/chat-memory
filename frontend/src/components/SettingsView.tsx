@@ -270,25 +270,30 @@ function SyncthingSection() {
     finally { setBusy(false) }
   }
 
+  const loading = st === null   // 첫 상태 응답 전 — '중지'로 오인해 '시작' 버튼이 깜빡이지 않게 구분
   const running = !!st?.running
   return (
     <>
       <Row label={
         <span className="flex items-center gap-2">
           내장 동기 엔진
-          {running
-            ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">실행 중</span>
-            : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">중지</span>}
+          {loading
+            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">확인 중</span>
+            : running
+              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">실행 중</span>
+              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">중지</span>}
         </span>
       }>
-        {running
-          ? <Button variant="outline" size="sm" disabled={busy} onClick={stop}>중지</Button>
-          : <Button size="sm" disabled={busy || starting} onClick={start}>
-              {busy || starting ? <Loader2 className="size-4 animate-spin" /> : "시작"}
-            </Button>}
+        {loading
+          ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          : running
+            ? <Button variant="outline" size="sm" disabled={busy} onClick={stop}>중지</Button>
+            : <Button size="sm" disabled={busy || starting} onClick={start}>
+                {busy || starting ? <Loader2 className="size-4 animate-spin" /> : "시작"}
+              </Button>}
       </Row>
 
-      {!running && (
+      {!loading && !running && (
         <div className="py-2 text-[11px] text-muted-foreground">
           {starting ? "엔진 준비 중… (첫 실행은 엔진을 내려받아 잠시 걸려요)"
             : st?.last_error ? <span className="text-destructive">오류: {st.last_error}</span>
@@ -725,18 +730,25 @@ export function SettingsView() {
                   )}
                 </div>
               )}
-              {/* 수동 정제: 아직 요약·태그 없는 턴을 지금 정제(대기 수 표시) */}
-              <div className="mb-3 flex flex-wrap items-center gap-2 border-t py-3">
-                <Button variant="outline" size="sm" disabled={backend === "off" || !!enrichSt?.running} onClick={doEnrich}>
-                  {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}지금 정제
-                </Button>
-                <span className={`text-[11px] ${enrichErr && !enrichSt?.running ? "text-destructive" : "text-muted-foreground"}`}>
-                  {enrichSt?.running
-                    ? `정제 중… ${enrichSt.total_sessions > 0 ? `${enrichSt.done_sessions}/${enrichSt.total_sessions} 세션` : enrichSt.phase}`
-                    : enrichErr
-                      ? enrichErr
-                      : <>정제 안 된 턴 <Pending n={enrichPending} unit="개" /> · 지금 누르면 요약·태그를 만듭니다(백엔드 설정·연결 필요).</>}
-                </span>
+              {/* 수동 정제: 아직 요약·태그 없는 턴을 지금 정제(대기 수·진행바 표시) */}
+              <div className="mb-3 border-t py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={backend === "off" || !!enrichSt?.running} onClick={doEnrich}>
+                    {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}지금 정제
+                  </Button>
+                  <span className={`text-[11px] ${enrichErr && !enrichSt?.running ? "text-destructive" : "text-muted-foreground"}`}>
+                    {enrichSt?.running
+                      ? `정제 중… ${enrichSt.total_sessions > 0 ? `${enrichSt.done_sessions}/${enrichSt.total_sessions} 세션` : enrichSt.phase}`
+                      : enrichErr
+                        ? enrichErr
+                        : <>정제 안 된 턴 <Pending n={enrichPending} unit="개" /> · 지금 누르면 요약·태그를 만듭니다(백엔드 설정·연결 필요).</>}
+                  </span>
+                </div>
+                {enrichSt?.running && enrichSt.total_sessions > 0 && (
+                  <div className="mt-2">
+                    <BarProgress done={enrichSt.done_sessions} total={enrichSt.total_sessions} unit="세션" />
+                  </div>
+                )}
               </div>
               <p className="mb-2 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
             </>

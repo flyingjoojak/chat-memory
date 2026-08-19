@@ -144,14 +144,21 @@ _RUN = dict(capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _cc_registered() -> bool:
-    exe = _claude()
-    if not exe:
-        return False
-    try:
-        r = subprocess.run([exe, "mcp", "list"], timeout=12, **_RUN)
-        return NAME in (r.stdout or "")
-    except Exception:  # noqa: BLE001 — 상태조회 실패는 '미등록'으로 간주
-        return False
+    """user 스코프 등록 여부를 **설정 파일을 직접 읽어** 판정.
+
+    `claude mcp list`는 각 서버에 헬스체크(핑)를 돌려 느리고(수 초~타임아웃), 타임아웃 시
+    예외가 나 '미등록'으로 오탐한다 → 등록해도 '등록'으로 보이는 버그. `claude mcp add -s user`가
+    쓰는 ~/.claude.json 의 최상위 mcpServers 를 읽으면 즉시·정확하다.
+    """
+    for p in (Path.home() / ".claude.json", Path.home() / ".claude" / "settings.json"):
+        try:
+            if p.exists():
+                d = json.loads(p.read_text(encoding="utf-8"))
+                if NAME in (d.get("mcpServers") or {}):
+                    return True
+        except Exception:  # noqa: BLE001 — 손상/부분기록 파일은 건너뜀
+            continue
+    return False
 
 
 def _cc_register() -> None:
