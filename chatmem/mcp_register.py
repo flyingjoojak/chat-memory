@@ -140,7 +140,8 @@ def _claude() -> str | None:
 
 
 # Windows 한국어 로케일(cp949)이 claude의 UTF-8/이모지 출력을 못 읽는 문제 → UTF-8 고정.
-_RUN = dict(capture_output=True, text=True, encoding="utf-8", errors="replace")
+_RUN = dict(capture_output=True, text=True, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))  # windowed exe에서 콘솔 창 억제
 
 
 def _cc_registered() -> bool:

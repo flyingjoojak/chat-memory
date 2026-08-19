@@ -593,9 +593,11 @@ export function SettingsView() {
               <Section title="Claude Code 로그 폴더">
                 <div className="py-3.5">
                   <div className="mb-2 flex items-center gap-2 text-sm">
-                    {cfg?.projects_exists
-                      ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · JSONL {cfg?.jsonl_count}개 감지</span>
-                      : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
+                    {!cfg
+                      ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-4 animate-spin" />확인 중…</span>
+                      : cfg.projects_exists
+                        ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · JSONL {cfg.jsonl_count}개 감지</span>
+                        : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)} aria-label="Claude Code 로그 폴더 경로"
@@ -738,8 +740,8 @@ export function SettingsView() {
                     <span className="text-[11px] text-muted-foreground">
                       {ixStatus?.running
                         ? (ixStatus.total_chunks > 0
-                            ? `자가복구 중 — 빠졌던 벡터 채우는 중`
-                            : `색인 중… ${ixStatus.total_files > 0 ? `${ixStatus.done_files}/${ixStatus.total_files} 파일` : ixStatus.phase}`)
+                            ? "자가복구 중 — 빠졌던 벡터 채우는 중"
+                            : ixStatus.total_files > 0 ? `색인 중… ${ixStatus.done_files}/${ixStatus.total_files} 파일` : "색인 중…")
                         : <><b className="text-foreground">{idxPendingText}</b> · 새 대화만 빠르게 색인합니다.</>}
                     </span>
                   </div>
