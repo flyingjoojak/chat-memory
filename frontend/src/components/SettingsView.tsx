@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
-  getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, quitApp, reindex, runEnrich, runIndex,
+  archiveSync, getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, quitApp, reindex, runEnrich, runIndex,
   syncthingPair, syncthingStart, syncthingStop, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
   type SyncthingStatus, type SyncthingSync, type SystemInfo,
@@ -412,6 +412,8 @@ export function SettingsView() {
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
   const [quitState, setQuitState] = useState<"idle" | "confirm" | "done">("idle")
+  const [archiveMsg, setArchiveMsg] = useState<string | null>(null)
+  const [archiving, setArchiving] = useState(false)
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
@@ -844,6 +846,32 @@ export function SettingsView() {
               </Section>
               <Section title="동기화 충돌 정리">
                 <SyncSection />
+              </Section>
+
+              <Section title="기기 간 기록 병합">
+                <div className="py-3.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button variant="outline" size="sm" disabled={archiving}
+                      onClick={async () => {
+                        setArchiving(true); setArchiveMsg(null)
+                        try {
+                          const r = await archiveSync()
+                          setArchiveMsg(r.imported > 0
+                            ? `✓ 다른 기기에서 ${r.imported.toLocaleString()}개 대화 가져옴 — 곧 색인/임베딩됩니다`
+                            : "이미 최신 — 가져올 새 기록 없음")
+                        } catch (e) { setArchiveMsg(e instanceof Error ? e.message : "병합 실패") }
+                        finally { setArchiving(false) }
+                      }}>
+                      {archiving && <Loader2 className="mr-1 size-4 animate-spin" />}지금 병합
+                    </Button>
+                    {archiveMsg && <span className="text-[11px] text-muted-foreground">{archiveMsg}</span>}
+                  </div>
+                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                    Claude Code는 오래된 로그(~30일)를 지우지만, 각 기기 chatmem은 그 이전 대화를 보존해요.
+                    이 병합으로 <b>다른 기기가 보존한 옛 대화까지 서로 가져와</b> 검색 기록을 맞춥니다(연결된 기기끼리 자동으로도 수행).
+                    원본이 삭제된 세션은 재개(resume)는 안 되지만 <b>검색·열람</b>은 됩니다.
+                  </p>
+                </div>
               </Section>
             </>
           )}

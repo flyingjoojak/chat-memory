@@ -33,8 +33,8 @@ def _resolve_projects_dir(projects_dir: str | Path | None) -> Path:
     return Path(C.PROJECTS_DIR)
 
 
-# Syncthing 버전 백업 폴더 — 원본이 아니라 이력 스냅샷이라 색인·카운트에서 제외.
-_SKIP_DIRS = {".stversions"}
+# 색인·카운트 제외 폴더: Syncthing 버전 백업(.stversions), chatmem 아카이브 스냅샷(.chatmem-archive).
+_SKIP_DIRS = {".stversions", ".chatmem-archive"}
 
 
 def iter_jsonl(root: Path):

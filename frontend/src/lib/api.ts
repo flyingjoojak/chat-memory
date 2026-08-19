@@ -162,6 +162,13 @@ export interface SystemInfo {
 }
 export const getSystem = () => getJSON<SystemInfo>(`/api/system`)
 
+// 기기 간 아카이브 병합(다른 기기가 보존한 삭제-원본 세션까지 가져오기). 벡터는 이후 색인이 채움.
+export async function archiveSync(): Promise<{ ok: boolean; imported: number; exported: number }> {
+  const r = await fetch(`/api/archive/sync`, { method: "POST" })
+  if (!r.ok) throw new Error(`병합 실패 (HTTP ${r.status})`)
+  return r.json()
+}
+
 // 앱(백엔드) 종료 — windowed exe는 창/트레이가 없어 이 버튼으로 끈다.
 export async function quitApp(): Promise<{ ok: boolean }> {
   const r = await fetch(`/api/quit`, { method: "POST" })

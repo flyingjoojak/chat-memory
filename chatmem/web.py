@@ -50,14 +50,20 @@ def _run_incremental() -> bool:
     if not _index_lock.acquire(blocking=False):
         return False
     try:
+        from . import config as C
+        from .archive_sync import device_id, export_archive, import_archives
         from .indexer import backfill_missing, has_new_data, index_all, reconcile
         db = ArchiveDB()
         vi = make_index()
         with contextlib.suppress(Exception):
             reconcile(db, vi, log_fn=lambda m: None)   # 고아 벡터 정리(값쌈)
+        # 기기 간 아카이브 병합: 다른 기기가 보존한 세션(삭제된 원본 포함)을 먼저 가져온다.
+        # 새로 들어온 청크는 아래 backfill이 활성 모델로 임베딩(chunk_count>len(vi)이 됨).
+        with contextlib.suppress(Exception):
+            import_archives(db, C.PROJECTS_DIR, device_id(db), log_fn=lambda m: None)
         emb = _state.get("embedder")
         new = has_new_data(db)
-        # 활성 저장소에 빠진 청크가 있으면(백엔드 전환·유실) 새 대화가 없어도 자가복구한다.
+        # 활성 저장소에 빠진 청크가 있으면(백엔드 전환·유실·아카이브 import) 새 대화가 없어도 자가복구한다.
         chunk_count = db.conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
         missing = len(vi) < chunk_count
         if not new and not missing:
@@ -87,6 +93,11 @@ def _run_incremental() -> bool:
                 log_fn=_capture_log(_autoindex_state),
                 progress_fn=lambda d, t: _autoindex_state.update(done_chunks=d, total_chunks=t),
             )
+
+        # 이 기기 아카이브를 공유 폴더로 export(다른 기기가 가져가게). 변경 있었을 때만.
+        if total or filled:
+            with contextlib.suppress(Exception):
+                export_archive(db, C.PROJECTS_DIR, device_id(db))
 
         done_msg = f"최근 완료(+{total}턴" + (f", 복구 {filled}청크)" if filled else ")")
         _autoindex_state.update(running=False, phase=done_msg, done_chunks=0, total_chunks=0)
@@ -737,6 +748,21 @@ def api_index_run():
         return {"ok": False, "busy": True}
     threading.Thread(target=_run_incremental, daemon=True).start()
     return {"ok": True, "started": True}
+
+
+@app.post("/api/archive/sync")
+def api_archive_sync():
+    """지금 즉시 기기 간 아카이브 병합: 다른 기기 export 가져오기 + 내 것 내보내기.
+    가져온 세션의 벡터는 이어지는 증분 색인(backfill)이 활성 모델로 채운다."""
+    from . import config as C
+    from .archive_sync import device_id, export_archive, import_archives
+    db = ArchiveDB()
+    did = device_id(db)
+    imported = import_archives(db, C.PROJECTS_DIR, did, log_fn=lambda m: None)
+    exported = export_archive(db, C.PROJECTS_DIR, did)
+    if imported and not _autoindex_state.get("running") and not _reindex_state.get("running"):
+        threading.Thread(target=_run_incremental, daemon=True).start()   # 가져온 청크 임베딩
+    return {"ok": True, "imported": imported, "exported": exported}
 
 
 @app.post("/api/verify-enrich")
