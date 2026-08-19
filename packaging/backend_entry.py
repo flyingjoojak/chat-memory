@@ -39,9 +39,9 @@ def main() -> None:
 
     if getattr(sys, "frozen", False):
         _setup_file_logging()                # windowed(콘솔 없음) 빌드에서 print/로그가 깨지지 않게
-        # 포트 점유 = 이미 인스턴스가 있음(기동 중 포함). API 응답을 기다리지 않고 소켓 연결로 감지 →
-        # 모델 로딩(~15초) 중인 첫 인스턴스도 잡아내 중복 bind(10048 크래시)를 막는다.
-        if _port_in_use(port):
+        # 단일 인스턴스: 프로세스 시작 즉시 네임드 뮤텍스로 판정. uvicorn은 모델 로딩(~15초) *후*에
+        # 소켓을 잡으므로 포트 점유 검사로는 그 창에서 중복을 못 막아 10048 크래시가 났음(실측).
+        if not _acquire_single_instance(port):
             import webbrowser
             webbrowser.open(f"http://127.0.0.1:{port}")
             return
@@ -54,16 +54,23 @@ def main() -> None:
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 
-def _port_in_use(port: int) -> bool:
-    """127.0.0.1:port에 연결되면 True(누군가 점유 중 = 기동 중이거나 서빙 중)."""
-    import socket
-    with socket.socket() as s:
-        s.settimeout(1.0)
-        try:
-            s.connect(("127.0.0.1", port))
-            return True
-        except OSError:
+_MUTEX: list = []   # 핸들 GC 방지(프로세스 생존 동안 뮤텍스 유지)
+
+
+def _acquire_single_instance(port: int) -> bool:
+    """Windows 네임드 뮤텍스로 같은 포트의 중복 웹 인스턴스를 막는다. 처음이면 True.
+    프로세스 시작 즉시 판정하므로 모델 로딩 지연과 무관. 종료 시 OS가 자동 해제."""
+    if sys.platform != "win32":
+        return True
+    try:
+        import ctypes
+        h = ctypes.windll.kernel32.CreateMutexW(None, False, f"chatmem-backend-singleton-{port}")
+        if ctypes.windll.kernel32.GetLastError() == 183:   # ERROR_ALREADY_EXISTS
             return False
+        _MUTEX.append(h)   # 핸들 유지(프로세스 종료까지 뮤텍스 살아있게)
+        return True
+    except Exception:
+        return True   # 뮤텍스 실패 시엔 그냥 진행
 
 
 def _setup_file_logging() -> None:
