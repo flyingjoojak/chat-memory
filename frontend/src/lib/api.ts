@@ -152,6 +152,14 @@ export async function toggleSync(enabled: boolean, interval?: number): Promise<S
 
 export const getStats = () => getJSON<Stats>(`/api/stats`)
 
+// 기기 메모리 + 모델/벡터 불일치(배너용).
+export interface SystemInfo {
+  ram_total_mb: number | null
+  ram_avail_mb: number | null
+  model_mismatch: { stored: string; current: string } | null
+}
+export const getSystem = () => getJSON<SystemInfo>(`/api/system`)
+
 // 의미 지도(3D). 점=임베딩 청크, 군집=주제.
 export interface GraphPoint3D { x: number; y: number; z: number; c: number; s: string; h: string; t: string }
 export interface GraphCluster3D { id: number; label: string; x: number; y: number; z: number; n: number }
