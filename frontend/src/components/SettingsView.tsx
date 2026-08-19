@@ -307,9 +307,9 @@ function Errs({ errors }: { errors?: string[] }) {
   if (!errors || errors.length === 0) return null
   return (
     <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
-      <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5" />일부 항목 실패 {errors.length}건</div>
+      <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5" />일부 항목 실패 {errors.length}건(최근)</div>
       <ul className="list-disc space-y-0.5 pl-4">
-        {errors.slice(-3).map((e, i) => <li key={i} className="truncate" title={e}>{e.replace(/^ERROR\s*/, "")}</li>)}
+        {errors.map((e, i) => <li key={i} className="truncate" title={e}>{e.replace(/^ERROR\s*/, "")}</li>)}
       </ul>
     </div>
   )

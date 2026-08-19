@@ -174,8 +174,11 @@ app = FastAPI(lifespan=_lifespan, title="chat-memory")
 async def _friendly_error(request, exc):  # noqa: ANN001 — FastAPI 핸들러 시그니처
     """예상치 못한 서버 오류를 500 대신 사람이 읽는 한글 메시지로. (HTTPException은 별도 처리됨)"""
     import sqlite3
+    import traceback
 
     from fastapi.responses import JSONResponse
+    # 관측성: 삼키기 전에 전체 트레이스백을 로그(exe면 data/app.log)로 남긴다.
+    traceback.print_exception(type(exc), exc, exc.__traceback__)
     if isinstance(exc, (sqlite3.Error, OSError)):
         msg = "데이터에 접근하지 못했어요 — data 폴더의 archive.db가 손상됐을 수 있어요(삭제하면 재생성됩니다)."
     else:

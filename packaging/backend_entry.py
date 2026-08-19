@@ -60,8 +60,8 @@ def _open_browser_when_ready(port: int, timeout: float = 180.0) -> None:
     import webbrowser
 
     def wait_open():
-        end = time.time() + timeout
-        while time.time() < end:
+        end = time.monotonic() + timeout   # 시스템 시계 변경(NTP 등)에 영향 안 받게
+        while time.monotonic() < end:
             try:
                 with socket.create_connection(("127.0.0.1", port), timeout=1):
                     break
