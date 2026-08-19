@@ -3,7 +3,8 @@ export type ThemeMode = "light" | "dark" | "system"
 const KEY = "cm-theme"
 
 export function getThemeMode(): ThemeMode {
-  return (localStorage.getItem(KEY) as ThemeMode) || "system"
+  // 저장된 선택이 없으면 기본 다크(설정에서 라이트/시스템으로 변경 가능).
+  return (localStorage.getItem(KEY) as ThemeMode) || "dark"
 }
 
 export function applyTheme(mode: ThemeMode = getThemeMode()) {
