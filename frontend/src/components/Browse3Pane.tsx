@@ -239,7 +239,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
               </div>
               <div className="flex items-center gap-1.5">
                 <code className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1 font-mono text-[11px]" title={resumeCmd}>{resumeCmd}</code>
-                <button type="button" onClick={openResume} disabled={opening} aria-label="이 PC에서 새 터미널로 재개"
+                <button type="button" onClick={openResume} disabled={opening} aria-label="열기 — 이 PC에서 새 터미널로 세션 재개"
                   className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-60">
                   {opening ? <Loader2 className="size-3.5 animate-spin" /> : <TerminalSquare className="size-3.5" />}열기
                 </button>

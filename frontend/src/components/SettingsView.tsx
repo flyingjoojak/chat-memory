@@ -582,7 +582,7 @@ export function SettingsView() {
                       : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)}
+                    <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)} aria-label="Claude Code 로그 폴더 경로"
                       className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.claude/projects" />
                     <Button size="sm" variant="outline" onClick={saveProjects}>저장</Button>
                     {projSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
@@ -609,14 +609,14 @@ export function SettingsView() {
             <>
               <Section title="정제 AI">
                 <Row label="백엔드">
-                  <select value={backend} onChange={(e) => onBackendChange(e.target.value)}
+                  <select value={backend} onChange={(e) => onBackendChange(e.target.value)} aria-label="정제 AI 백엔드"
                     className="rounded-md border bg-background px-2 py-1.5 outline-none">
                     {BACKENDS.map((b) => <option key={b.v} value={b.v}>{b.label}</option>)}
                   </select>
                 </Row>
                 {be.modelEnv && (
                   <Row label="모델">
-                    <select value={customModel ? CUSTOM : model}
+                    <select value={customModel ? CUSTOM : model} aria-label="정제 모델"
                       onChange={(e) => { if (e.target.value === CUSTOM) { setCustomModel(true) } else { setCustomModel(false); setModel(e.target.value) } }}
                       className="rounded-md border bg-background px-2 py-1.5 outline-none">
                       {be.models.map((m) => <option key={m} value={m}>{m}</option>)}
@@ -629,14 +629,14 @@ export function SettingsView() {
                 )}
                 {be.key && (
                   <Row label={`API 키 ${cfg?.keys[be.key] ? "(설정됨)" : ""}`}>
-                    <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                    <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} aria-label="API 키"
                       className="h-8 w-56" placeholder={cfg?.keys[be.key] ? "변경하려면 입력" : be.keyEx} />
                   </Row>
                 )}
                 {backend === "ollama" && (
                   <>
                     <Row label="Ollama 서버 주소">
-                      <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)}
+                      <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} aria-label="Ollama 서버 주소"
                         className="h-8 w-56" placeholder="http://localhost:11434/v1" />
                     </Row>
                     <div className="border-b py-3 text-xs text-muted-foreground last:border-0">
@@ -646,7 +646,7 @@ export function SettingsView() {
                   </>
                 )}
                 <Row label="정제 시각 (매일)">
-                  <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" />
+                  <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" aria-label="정제 시각(매일)" />
                 </Row>
               </Section>
 
@@ -707,7 +707,7 @@ export function SettingsView() {
             <>
               <Section title="증분 색인">
                 <Row label="증분 색인 간격 (분)">
-                  <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)}
+                  <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label="증분 색인 간격(분)"
                     onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
                   <Button size="sm" variant="outline" onClick={saveInterval}>저장</Button>
                   {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
