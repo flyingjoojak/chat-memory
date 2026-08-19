@@ -162,6 +162,12 @@ export interface SystemInfo {
 }
 export const getSystem = () => getJSON<SystemInfo>(`/api/system`)
 
+// 앱(백엔드) 종료 — windowed exe는 창/트레이가 없어 이 버튼으로 끈다.
+export async function quitApp(): Promise<{ ok: boolean }> {
+  const r = await fetch(`/api/quit`, { method: "POST" })
+  return r.json()
+}
+
 // 의미 지도(3D). 점=임베딩 청크, 군집=주제.
 export interface GraphPoint3D { x: number; y: number; z: number; c: number; s: string; h: string; t: string }
 export interface GraphCluster3D { id: number; label: string; x: number; y: number; z: number; n: number }

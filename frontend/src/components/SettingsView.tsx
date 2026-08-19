@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
-  getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
+  getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, quitApp, reindex, runEnrich, runIndex,
   syncthingPair, syncthingStart, syncthingStop, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
   type SyncthingStatus, type SyncthingSync, type SystemInfo,
@@ -411,6 +411,7 @@ export function SettingsView() {
   const [projSaved, setProjSaved] = useState(false)
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
+  const [quitState, setQuitState] = useState<"idle" | "confirm" | "done">("idle")
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
@@ -630,6 +631,31 @@ export function SettingsView() {
                 <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
                 <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
                 <AutoIndexRow ix={ixStatus} />
+              </Section>
+
+              <Section title="앱">
+                <div className="py-3.5">
+                  {quitState === "done" ? (
+                    <div className="text-sm text-muted-foreground">앱을 종료했어요. 이 브라우저 탭을 닫으세요. (새 버전은 exe를 다시 실행)</div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {quitState === "idle" ? (
+                        <Button variant="outline" size="sm" onClick={() => setQuitState("confirm")}>앱 종료</Button>
+                      ) : (
+                        <>
+                          <Button variant="destructive" size="sm"
+                            onClick={async () => { try { await quitApp() } catch { /* 종료되며 응답 끊길 수 있음 */ } setQuitState("done") }}>
+                            정말 종료
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => setQuitState("idle")}>취소</Button>
+                        </>
+                      )}
+                      <span className="text-[11px] text-muted-foreground">
+                        창·트레이가 없는 앱이라 여기서 종료해요. <b>새 버전 exe로 교체</b>하려면 먼저 종료 후 새 exe 실행.
+                      </span>
+                    </div>
+                  )}
+                </div>
               </Section>
             </>
           )}
