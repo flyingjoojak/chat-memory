@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react"
+import { useCallback, useEffect, useState, lazy, Suspense } from "react"
 import { Search, MessagesSquare, Layers, Box, Settings } from "lucide-react"
 import { Loader2 } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
@@ -32,11 +32,37 @@ export default function App() {
   }
   // 첫 실행이면(프리즈 exe·모델 미선택) 모델 선택 화면을 먼저. null=확인중.
   const [onboard, setOnboard] = useState<boolean | null>(null)
+  const [backendDown, setBackendDown] = useState(false)
   const [mismatch, setMismatch] = useState<{ stored: string; current: string } | null>(null)
   useEffect(() => { applyTheme() }, [])
-  useEffect(() => { getOnboarding().then((r) => setOnboard(r.needed)).catch(() => setOnboard(false)) }, [])
+  // 온보딩 상태 확인 = 백엔드 헬스체크 겸용. 실패는 '완료'가 아니라 '백엔드 미기동'으로 구분(빈 화면 방지).
+  const checkOnboard = useCallback(() => {
+    getOnboarding()
+      .then((r) => { setOnboard(r.needed); setBackendDown(false) })
+      .catch(() => { setBackendDown(true) })
+  }, [])
+  useEffect(() => { checkOnboard() }, [checkOnboard])
+  useEffect(() => {   // 미기동이면 뜰 때까지 자동 재시도(exe 기동 지연 대비)
+    if (!backendDown) return
+    const id = setInterval(checkOnboard, 2000)
+    return () => clearInterval(id)
+  }, [backendDown, checkOnboard])
   useEffect(() => { getSystem().then((s) => setMismatch(s.model_mismatch)).catch(() => {}) }, [])
 
+  if (backendDown) {
+    return (
+      <div className="grid h-dvh place-items-center bg-background px-6">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <AlertTriangle className="size-6 text-amber-500" />
+          <div className="text-sm font-medium">백엔드에 연결할 수 없어요</div>
+          <div className="text-[13px] text-muted-foreground">앱이 아직 준비 중이거나 종료됐을 수 있어요. 연결되면 자동으로 넘어갑니다.</div>
+          <button onClick={checkOnboard} className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground">
+            <Loader2 className="size-4 animate-spin" />다시 시도
+          </button>
+        </div>
+      </div>
+    )
+  }
   if (onboard === null) {
     return <div className="grid h-dvh place-items-center bg-background text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
   }

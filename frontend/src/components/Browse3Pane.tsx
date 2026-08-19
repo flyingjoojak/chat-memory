@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare } from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { AlertTriangle, ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
@@ -30,6 +30,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   kind: "sessions" | "clusters"; initialSel?: string | null; initialTurn?: { turn: string; session: string } | null
 }) {
   const [groups, setGroups] = useState<Group[] | null>(null)
+  const [groupsErr, setGroupsErr] = useState(false)   // 목록 로드 실패 — '빈 목록'과 구분
   const [pointsByCluster, setPointsByCluster] = useState<Map<number, Conv[]>>(new Map())
   const [sel, setSel] = useState<string | null>(initialSel)
   const [selTurn, setSelTurn] = useState<{ session: string; turn: string } | null>(initialTurn)
@@ -104,13 +105,14 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     setSelTurn(jumpTurn && jumpSess ? { turn: jumpTurn, session: jumpSess } : null)
   }, [initialSel, jumpTurn, jumpSess])
 
-  // 그룹 목록 로드
-  useEffect(() => {
+  // 그룹 목록 로드(실패=에러 상태로 구분, 재시도 가능)
+  const loadGroups = useCallback(() => {
+    setGroupsErr(false); setGroups(null)
     if (kind === "sessions") {
       listSessions().then((r) => setGroups((r.sessions || []).map((s) => ({
         id: s.session, label: s.headline || "(제목 없음)", count: s.count,
         sub: `${s.count}턴 · ${fmtTime(s.started)} → ${fmtTime(s.ended)}`,
-      })))).catch(() => setGroups([]))
+      })))).catch(() => setGroupsErr(true))
     } else {
       getGraph3D().then((g) => {
         const m = new Map<number, Conv[]>(); const seen = new Map<number, Set<string>>()
@@ -123,9 +125,10 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
         setGroups((g.clusters || []).map((c) => ({
           id: String(c.id), label: c.label, count: c.n, sub: `${c.n}개 대화`, color: colorOf(c.id),
         })))
-      }).catch(() => setGroups([]))
+      }).catch(() => setGroupsErr(true))
     }
   }, [kind])
+  useEffect(() => { loadGroups() }, [loadGroups])
 
   // 선택 그룹의 대화 목록
   useEffect(() => {
@@ -171,7 +174,14 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   // 그룹 목록 — 초기(가운데)는 큼직한 카드(hover 떠오름), 오른쪽 패널은 compact.
   const groupList = (compact: boolean) => (
     <div className={compact ? "min-h-0 flex-1 space-y-1 overflow-y-auto p-3" : "mx-auto w-full max-w-2xl space-y-2.5 p-4"}>
-      {!groups && <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
+      {groupsErr && (
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center text-sm">
+          <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="size-4" />목록을 불러오지 못했어요</span>
+          <span className="text-muted-foreground">앱이 준비 중일 수 있어요.</span>
+          <button onClick={loadGroups} className="rounded-md border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">다시 시도</button>
+        </div>
+      )}
+      {!groups && !groupsErr && <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
       {groups?.map((g) => compact ? (
         <button key={g.id} onClick={() => pickGroup(g.id)}
           className={`flex w-full items-center gap-2.5 rounded-lg border p-3 text-left transition-colors ${sel === g.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
