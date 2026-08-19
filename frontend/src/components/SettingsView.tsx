@@ -290,6 +290,19 @@ function SyncthingSection() {
   )
 }
 
+// 항목별 실패 목록(색인/정제) — 조용히 스턱되는 항목을 사용자가 보게.
+function Errs({ errors }: { errors?: string[] }) {
+  if (!errors || errors.length === 0) return null
+  return (
+    <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+      <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5" />일부 항목 실패 {errors.length}건</div>
+      <ul className="list-disc space-y-0.5 pl-4">
+        {errors.slice(-3).map((e, i) => <li key={i} className="truncate" title={e}>{e.replace(/^ERROR\s*/, "")}</li>)}
+      </ul>
+    </div>
+  )
+}
+
 // 진행률 유틸 + 진행바(청크·파일 공용). ETA는 현재 모델 cps(청크/초)로 추정.
 function pct(done: number, total: number) { return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0 }
 function etaText(done: number, total: number, cps?: number): string {
@@ -700,6 +713,7 @@ export function SettingsView() {
                     <BarProgress done={enrichSt.done_sessions} total={enrichSt.total_sessions} unit="세션" />
                   </div>
                 )}
+                <Errs errors={enrichSt?.errors} />
               </div>
               <p className="mb-2 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
             </>
@@ -734,6 +748,7 @@ export function SettingsView() {
                       <BarProgress done={ixStatus.done_chunks} total={ixStatus.total_chunks} unit="청크" cps={curCps} />
                     </div>
                   )}
+                  <Errs errors={ixStatus?.errors} />
                 </div>
               </Section>
 

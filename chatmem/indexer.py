@@ -19,11 +19,18 @@ from .config import (
     CONTEXT_PREV_CHARS,
     EMBED_BATCH,
     IDLE_SECS,
-    PROJECTS_DIR,
 )
 from .filters import should_embed
 from .models import Turn
 from .parser import extract_turns, is_real_user_prompt, iter_json_lines
+
+
+def _resolve_projects_dir(projects_dir: str | Path | None) -> Path:
+    """로그 폴더 경로를 런타임에 해석 — 설정 변경(CLAUDE_PROJECTS_DIR)이 재시작 없이 반영되게."""
+    if projects_dir is not None:
+        return Path(projects_dir)
+    from . import config as C
+    return Path(C.PROJECTS_DIR)
 
 
 # Syncthing 버전 백업 폴더 — 원본이 아니라 이력 스냅샷이라 색인·카운트에서 제외.
@@ -40,12 +47,12 @@ def iter_jsonl(root: Path):
             yield p
 
 
-def has_new_data(db, projects_dir: str | Path = PROJECTS_DIR) -> bool:
+def has_new_data(db, projects_dir: str | Path | None = None) -> bool:
     """커서 이후 새로 생긴 바이트가 있는 파일이 하나라도 있으면 True.
 
     모델(2.2GB) 로드 전에 값싸게 확인 → 새 대화 없으면 인덱싱 자체를 건너뛴다.
     """
-    root = Path(projects_dir)
+    root = _resolve_projects_dir(projects_dir)
     if not root.exists():
         return False
     for p in iter_jsonl(root):
@@ -60,7 +67,7 @@ def has_new_data(db, projects_dir: str | Path = PROJECTS_DIR) -> bool:
     return False
 
 
-def count_pending(db, projects_dir: str | Path = PROJECTS_DIR) -> dict:
+def count_pending(db, projects_dir: str | Path | None = None) -> dict:
     """값싼 대기 집계(모델 로드 없이 stat+커서 비교만).
 
     반환: {"new_sessions": 아직 한 번도 색인 안 된 로그 파일 수,
@@ -68,7 +75,7 @@ def count_pending(db, projects_dir: str | Path = PROJECTS_DIR) -> dict:
            "files": 새 바이트가 있는 파일 총수}
     JSONL 파일 1개 = Claude Code 세션(대화) 1개라 파일 수를 대화 수로 본다.
     """
-    root = Path(projects_dir)
+    root = _resolve_projects_dir(projects_dir)
     if not root.exists():
         return {"new_sessions": 0, "updated_sessions": 0, "files": 0}
     new = updated = 0
@@ -87,8 +94,8 @@ def count_pending(db, projects_dir: str | Path = PROJECTS_DIR) -> dict:
     return {"new_sessions": new, "updated_sessions": updated, "files": new + updated}
 
 
-def discover_files(projects_dir: str | Path = PROJECTS_DIR, recent_first: bool = True) -> list[str]:
-    root = Path(projects_dir)
+def discover_files(projects_dir: str | Path | None = None, recent_first: bool = True) -> list[str]:
+    root = _resolve_projects_dir(projects_dir)
     if not root.exists():
         return []
     files = [str(p) for p in iter_jsonl(root)]

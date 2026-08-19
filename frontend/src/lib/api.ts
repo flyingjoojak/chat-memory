@@ -111,6 +111,7 @@ export interface IndexStatus {
   done_chunks: number    // 자가복구(backfill) 청크 진행
   total_chunks: number
   last_error: string | null
+  errors?: string[]      // 이번 회차 항목별(파일) 실패 — 조용한 스턱 방지
   pending?: IndexPending   // 새 바이트가 있는 로그 파일(=대화) 집계
 }
 export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
@@ -130,6 +131,7 @@ export interface EnrichStatus {
   total_sessions: number
   enriched: number
   last_error: string | null
+  errors?: string[]        // 이번 회차 세션별 정제 실패
   pending_turns?: number   // 아직 요약·태그 없는 턴 수(summary IS NULL)
 }
 export const getEnrichStatus = () => getJSON<EnrichStatus>(`/api/enrich/status`)
