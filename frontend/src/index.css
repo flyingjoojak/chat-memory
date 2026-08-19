@@ -143,6 +143,23 @@
   font-family: ui-monospace, Consolas, monospace; font-size: .88em;
   background: var(--muted); padding: 1px 5px; border-radius: 4px;
 }
+
+/* 테마 전환 순간에만(.theme-transition, theme.ts가 ~250ms 부여) 색을 페이드.
+   네이티브 타이틀바 페이드와 속도를 맞춰 통일감을 준다. 평상시엔 걸리지 않아
+   hover/focus 등에 잔상이 남지 않는다. */
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition: background-color 250ms ease, border-color 250ms ease,
+    color 250ms ease, fill 250ms ease, stroke 250ms ease !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-transition,
+  .theme-transition *,
+  .theme-transition *::before,
+  .theme-transition *::after { transition: none !important; }
+}
 .cm-md .cm-h { display: block; font-weight: 650; margin: 9px 0 2px; }
 .cm-md strong { font-weight: 650; }
 .cm-md em { font-style: italic; }

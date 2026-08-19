@@ -19,7 +19,7 @@
   "build": {
     "appId": "com.chatmemory.app",
     "productName": "chat-memory",
-    "files": ["main.js", "loading.html", "icon.png"],
+    "files": ["main.js", "preload.js", "loading.html", "icon.png"],
     "extraResources": [
       { "from": "../dist/chatmem-backend", "to": "backend" }
     ],
