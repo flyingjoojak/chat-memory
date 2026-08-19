@@ -28,8 +28,15 @@ export default function App() {
   const [view, setView] = useState<View>("search")
   // 지도에서 대화(턴)를 클릭하면 그 탭(3분할·왼쪽 검색창)으로 이동해 그 대화를 연다(진입 경로만 다르고 화면 동일).
   const [jump, setJump] = useState<{ kind: "sessions" | "clusters"; id: string; turn: string; session: string } | null>(null)
+  // 같은 탭을 다시 클릭하면 그 화면을 처음 상태로 리셋(nonce를 올려 key를 바꿔 remount).
+  const [nonce, setNonce] = useState(0)
+  const onNav = (v: View) => {
+    if (v === view) setNonce((k) => k + 1)   // 활성 탭 재클릭 → 리셋
+    else setView(v)
+    setJump(null)
+  }
   const openTurn = (kind: "sessions" | "clusters", id: string, turn: string, session: string) => {
-    setJump({ kind, id, turn, session }); setView(kind)
+    setJump({ kind, id, turn, session }); setView(kind); setNonce((k) => k + 1)
   }
   // 첫 실행이면(프리즈 exe·모델 미선택) 모델 선택 화면을 먼저. null=확인중.
   const [onboard, setOnboard] = useState<boolean | null>(null)
@@ -79,7 +86,7 @@ export default function App() {
         {NAV.map((n) => (
           <button
             key={n.v}
-            onClick={() => { setView(n.v); setJump(null) }}
+            onClick={() => onNav(n.v)}
             title={n.label}
             aria-label={n.label}
             className={`grid size-10 place-items-center rounded-lg transition-colors ${
@@ -103,7 +110,7 @@ export default function App() {
             </button>
           </div>
         )}
-        <ErrorBoundary key={view}>
+        <ErrorBoundary key={`${view}:${nonce}`}>
           {view === "search" && <SearchView />}
           {view === "sessions" && (
             <Browse3Pane kind="sessions" initialSel={jump?.kind === "sessions" ? jump.id : null}
