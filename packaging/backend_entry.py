@@ -39,7 +39,9 @@ def main() -> None:
 
     if getattr(sys, "frozen", False):
         _setup_file_logging()                # windowed(콘솔 없음) 빌드에서 print/로그가 깨지지 않게
-        if _already_serving(port):           # 이미 다른 인스턴스가 실행 중 → 중복 기동 말고 브라우저만
+        # 포트 점유 = 이미 인스턴스가 있음(기동 중 포함). API 응답을 기다리지 않고 소켓 연결로 감지 →
+        # 모델 로딩(~15초) 중인 첫 인스턴스도 잡아내 중복 bind(10048 크래시)를 막는다.
+        if _port_in_use(port):
             import webbrowser
             webbrowser.open(f"http://127.0.0.1:{port}")
             return
@@ -52,15 +54,16 @@ def main() -> None:
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 
-def _already_serving(port: int) -> bool:
-    """이 포트에서 chat-memory API가 이미 응답하면 True → 중복 기동 방지(브라우저만 열기)."""
-    import json
-    import urllib.request
-    try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/system", timeout=1.5) as r:  # noqa: S310
-            return "ram_total_mb" in json.loads(r.read().decode())
-    except Exception:
-        return False
+def _port_in_use(port: int) -> bool:
+    """127.0.0.1:port에 연결되면 True(누군가 점유 중 = 기동 중이거나 서빙 중)."""
+    import socket
+    with socket.socket() as s:
+        s.settimeout(1.0)
+        try:
+            s.connect(("127.0.0.1", port))
+            return True
+        except OSError:
+            return False
 
 
 def _setup_file_logging() -> None:
