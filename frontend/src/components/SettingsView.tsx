@@ -850,7 +850,7 @@ export function SettingsView() {
             const availGb = sys?.ram_avail_mb != null ? sys.ram_avail_mb / 1024 : null
             const totalGb = sys?.ram_total_mb != null ? sys.ram_total_mb / 1024 : null
             // 권장 최대 = 가용 RAM / 모델 RAM (최소 1). 백엔드도 같은 기준으로 하드 상한.
-            const recMax = availGb ? Math.max(1, Math.floor(availGb / Math.max(ramGb, 0.1))) : 8
+            const recMax = availGb != null ? Math.max(1, Math.floor(availGb / Math.max(ramGb, 0.1))) : 8
             const willUse = Math.round(ramGb * parallelN)
             const over = availGb != null && willUse > availGb
             return (

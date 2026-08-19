@@ -552,7 +552,6 @@ def api_config():
     import os
 
     from . import config as C
-    from .indexer import iter_jsonl
     return {
         "enrich_backend": C.ENRICH_BACKEND,
         "models": {
@@ -570,9 +569,8 @@ def api_config():
         # Claude Code 로그 소스 — 각 사용자 홈 기준 자동 해석, 필요 시 직접 지정.
         "projects_dir": str(C.PROJECTS_DIR),
         "projects_exists": C.PROJECTS_DIR.exists(),
-        # .stversions(Syncthing 버전 백업) 제외 — 색인 대상과 같은 기준으로 카운트.
-        "jsonl_count": (sum(1 for _ in iter_jsonl(C.PROJECTS_DIR))
-                        if C.PROJECTS_DIR.exists() else 0),
+        # .stversions 제외 카운트 — 3s 폴링 대비 TTL 캐시(매번 전체 walk 방지).
+        "jsonl_count": _jsonl_count_cached(),
     }
 
 
@@ -658,6 +656,24 @@ def _pending_snapshot() -> dict:
         return _pending_cache
     _pending_cache.update(at=now, index=idx, enrich_turns=enr)
     return _pending_cache
+
+
+# JSONL 총개수 캐시 — /api/config가 3s 폴링돼도 매번 전체 폴더 walk 안 하게(TTL 공유).
+_jsonl_cache: dict = {"at": 0.0, "n": 0}
+
+
+def _jsonl_count_cached() -> int:
+    from . import config as C
+    from .indexer import iter_jsonl
+    now = time.time()
+    if now - _jsonl_cache["at"] < _PENDING_TTL:
+        return _jsonl_cache["n"]
+    try:
+        n = sum(1 for _ in iter_jsonl(C.PROJECTS_DIR)) if C.PROJECTS_DIR.exists() else 0
+    except Exception:  # noqa: BLE001 — 실패 시 이전 값 유지
+        return _jsonl_cache["n"]
+    _jsonl_cache.update(at=now, n=n)
+    return n
 
 
 @app.get("/api/index/status")
@@ -903,6 +919,7 @@ def api_reindex(payload: dict):
                     chunk_progress_fn=lambda d: _reindex_state.__setitem__("done_chunks", d))
             db.set_meta("embed_model", model)
             _state["embedder"] = emb  # 실행 중 검색도 새 모델로
+            _state["model_mismatch"] = None  # 재색인으로 해소 → 불일치 배너 즉시 내림
             _reindex_state.update(done=total, msg=f"완료: {total}")
         except Exception as e:  # noqa: BLE001
             _reindex_state["msg"] = f"오류: {e}"

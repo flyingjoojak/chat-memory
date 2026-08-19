@@ -12,6 +12,15 @@ import sys
 # 개발(python) 실행은 npy 기본 유지. chatmem import 전에 설정해야 config가 반영.
 if getattr(sys, "frozen", False):
     os.environ.setdefault("CHATMEM_VECTOR_BACKEND", "sqlite-vec")
+    # windowed(--noconsole) exe는 stdout/stderr가 None → 병렬 임베딩 멀티프로세싱 워커가 출력 시
+    # 크래시(→ '빠른 재색인'이 매번 조용히 순차로 전락). import 시점에 devnull로 돌려 자식도 안전하게.
+    # (웹 프로세스는 main()에서 app.log로 다시 지정. --mcp는 stdout이 파이프라 None이 아님 → 건드리지 않음)
+    if sys.stdout is None or sys.stderr is None:
+        _dn = open(os.devnull, "w")  # noqa: SIM115
+        if sys.stdout is None:
+            sys.stdout = _dn
+        if sys.stderr is None:
+            sys.stderr = _dn
 
 
 def main() -> None:
@@ -30,6 +39,10 @@ def main() -> None:
 
     if getattr(sys, "frozen", False):
         _setup_file_logging()                # windowed(콘솔 없음) 빌드에서 print/로그가 깨지지 않게
+        if _already_serving(port):           # 이미 다른 인스턴스가 실행 중 → 중복 기동 말고 브라우저만
+            import webbrowser
+            webbrowser.open(f"http://127.0.0.1:{port}")
+            return
         _open_browser_when_ready(port)       # 더블클릭 → 준비되면 브라우저 자동 오픈
 
     import uvicorn
@@ -37,6 +50,17 @@ def main() -> None:
     from chatmem.web import app
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+
+def _already_serving(port: int) -> bool:
+    """이 포트에서 chat-memory API가 이미 응답하면 True → 중복 기동 방지(브라우저만 열기)."""
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/system", timeout=1.5) as r:  # noqa: S310
+            return "ram_total_mb" in json.loads(r.read().decode())
+    except Exception:
+        return False
 
 
 def _setup_file_logging() -> None:
