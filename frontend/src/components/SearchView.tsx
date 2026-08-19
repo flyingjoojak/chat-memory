@@ -89,6 +89,10 @@ export function SearchView() {
           {state === "done" && (
             <div className="mt-2 text-xs text-muted-foreground tabular-nums">결과 <b className="text-foreground">{hits.length}</b>개</div>
           )}
+          {/* 스크린리더용 상태 안내(비시각 사용자에 검색 진행/결과 알림) */}
+          <div className="sr-only" role="status" aria-live="polite">
+            {state === "loading" ? "검색 중" : state === "done" ? `검색 결과 ${hits.length}건` : state === "error" ? "검색 실패" : ""}
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">

@@ -544,6 +544,8 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                 {clusters.slice(0, 18).map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
                     onClick={() => openCluster(c.id)} title={`${c.label}로 이동`}
+                    role="button" tabIndex={0} aria-label={`${c.label} 군집으로 이동`}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openCluster(c.id) } }}
                     className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
                     style={{
                       display: "none", color: colorOf(c.id),
