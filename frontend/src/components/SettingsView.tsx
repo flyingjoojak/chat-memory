@@ -406,6 +406,9 @@ export function SettingsView() {
     const load = () => {
       getIndexStatus().then((r) => alive && setIxStatus(r)).catch(() => {})
       getEnrichStatus().then((r) => alive && setEnrichSt(r)).catch(() => {})
+      // 저장소 현황·JSONL 개수를 실시간 갱신(새로고침 없이). cfg는 setCfg만 → 폼 입력값은 안 건드림.
+      getStats().then((r) => alive && setStats(r)).catch(() => {})
+      getConfig().then((c) => alive && setCfg(c)).catch(() => {})
     }
     load()
     const id = window.setInterval(load, 3000)
