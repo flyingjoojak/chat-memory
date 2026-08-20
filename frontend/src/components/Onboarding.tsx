@@ -42,9 +42,14 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           )}
           {models?.map((m) => (
             <button key={m.model} type="button" disabled={!!picking} onClick={() => pick(m)}
-              className="group flex w-full items-center gap-4 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/50 hover:shadow-md disabled:opacity-60">
+              className={`group flex w-full items-center gap-4 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/50 hover:shadow-md disabled:opacity-60 ${
+                m.default ? "border-primary/60 ring-1 ring-primary/30" : ""
+              }`}>
               <div className="min-w-0 flex-1">
-                <div className="font-mono text-sm font-semibold">{m.model.split("/").pop()}</div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-semibold">{m.model.split("/").pop()}</span>
+                  {m.default && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">권장</span>}
+                </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {m.tags.map((t) => (
                     <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80">{t}</span>
@@ -62,7 +67,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </div>
 
         <p className="mt-5 text-[11.5px] text-muted-foreground">
-          고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. <b>저사양 기기라면 「저사양 추천」 라벨</b>이 붙은 모델을 권장합니다.
+          고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. 잘 모르겠으면 <b>「권장」 배지</b>가 붙은 기본 모델을 고르면 됩니다(가볍고 대부분 기기에서 렉 없음).
         </p>
       </div>
     </div>

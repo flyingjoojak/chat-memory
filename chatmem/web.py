@@ -1,6 +1,6 @@
 """로컬 웹 검색 UI (FastAPI). 자체 앱 이전에 브라우저에서 검색을 테스트하는 용도.
 
-- 임베딩 모델은 서버 시작 시 1회 로드 → 이후 검색 즉시(재로드 없음).
+- 임베딩 모델은 **지연 로드**(첫 검색/색인 때) + 유휴 시 언로드 → 평소 상주 RAM 최소화.
 - DB·벡터 인덱스는 요청마다 새로 열어 최신 데이터 반영 + 스레드 안전.
 - 코어 라이브러리(search/store/vectorindex/embedder)를 그대로 재사용.
 
@@ -43,6 +43,45 @@ _autoindex_state: dict = {"enabled": False, "running": False, "phase": "대기",
 # 증분색인·전체재색인 상호배제(자동 스레드/수동 트리거/재색인이 동시에 안 돌게).
 _index_lock = threading.Lock()
 
+# ── 임베더 지연 로드 + 유휴 언로드 ──
+# 상시 앱(백엔드가 계속 떠 있음)에서 모델을 계속 물고 있으면 RAM이 잡혀 렉이 난다.
+# 그래서 검색/색인할 때만 로드하고, 마지막 사용 후 IDLE_SECS 지나면 내려 RAM을 반환한다.
+_embedder_lock = threading.Lock()
+_embedder_last_used = [0.0]   # time.monotonic() 기준 마지막 사용 시각
+
+
+def get_embedder():
+    """임베더 지연 로드(현재 확정 모델 기준) + 마지막 사용 시각 갱신. 스레드 안전."""
+    with _embedder_lock:
+        emb = _state.get("embedder")
+        if emb is None:
+            from . import config as C
+            from .embedder import Embedder
+            # 저장 벡터가 만들어진 모델(meta)이 진실원본 — 그걸로 로드해야 검색/색인이 호환된다.
+            model = None
+            with contextlib.suppress(Exception):
+                model = ArchiveDB().get_meta("embed_model")
+            emb = Embedder(model) if model else Embedder(C.EMBED_MODEL)
+            _state["embedder"] = emb
+        _embedder_last_used[0] = time.monotonic()
+        return emb
+
+
+def _maybe_unload_embedder() -> None:
+    """마지막 사용 후 IDLE_SECS 초과 + 색인/재색인 중이 아니면 모델을 내려 RAM 반환.
+    진행 중인 검색/색인은 각자 로컬 참조를 들고 있어 참조카운트로 살아있으므로 안전."""
+    from . import config as C
+    with _embedder_lock:
+        if _state.get("embedder") is None:
+            return
+        if _autoindex_state.get("running") or _reindex_state.get("running"):
+            return
+        if time.monotonic() - _embedder_last_used[0] < getattr(C, "IDLE_SECS", 120):
+            return
+        _state.pop("embedder", None)
+    import gc
+    gc.collect()   # onnxruntime 세션·텐서 해제 유도
+
 
 def _run_incremental() -> bool:
     """새 대화만 증분 색인(현재 임베더 재사용, 벡터 유지). 자동 스레드·수동 트리거 공용.
@@ -61,7 +100,6 @@ def _run_incremental() -> bool:
         # 새로 들어온 청크는 아래 backfill이 활성 모델로 임베딩(chunk_count>len(vi)이 됨).
         with contextlib.suppress(Exception):
             import_archives(db, C.PROJECTS_DIR, device_id(db), log_fn=lambda m: None)
-        emb = _state.get("embedder")
         new = has_new_data(db)
         # 활성 저장소에 빠진 청크가 있으면(백엔드 전환·유실·아카이브 import) 새 대화가 없어도 자가복구한다.
         chunk_count = db.conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
@@ -69,8 +107,9 @@ def _run_incremental() -> bool:
         if not new and not missing:
             _autoindex_state.update(running=False, phase="새 대화 없음")
             return True
-        if emb is None:
-            return False   # 온보딩 전(임베더 미로드) — 다음 회차에
+        if _state.get("needs_onboarding"):
+            return False   # 모델 미선택(온보딩 전) — 이후 회차에
+        emb = get_embedder()   # 할 일이 있을 때만 지연 로드(유휴 언로드와 짝)
 
         _autoindex_state["errors"] = []   # 이번 회차 항목별 오류만 모음(스턱 항목이면 매 회차 재등장)
         total = 0
@@ -111,8 +150,6 @@ def _run_incremental() -> bool:
 
 @contextlib.asynccontextmanager
 async def _lifespan(app: FastAPI):
-    from .embedder import Embedder
-
     # 첫 실행 온보딩(프리즈 exe 전용): 아직 모델을 고른 적 없으면(=색인 이력 없음) 무거운 기본 모델을
     # 미리 로드하지 않는다. 저사양 기기가 6GB짜리 e5-large를 자동으로 물지 않게, 사용자가 먼저 고른다.
     _needs_onboarding = False
@@ -122,7 +159,7 @@ async def _lifespan(app: FastAPI):
     _state["needs_onboarding"] = _needs_onboarding
 
     if not _needs_onboarding:
-        _state["embedder"] = Embedder()  # 이미 모델 확정됨 → 로드
+        # 임베더는 지연 로드(get_embedder) — 시작 시 미리 물지 않아 유휴 RAM 최소화.
         # 저장 벡터의 모델 ≠ 현재 설정 모델이면 검색이 조용히 엉터리가 됨 → 배너로 경고(재색인 유도).
         with contextlib.suppress(Exception):
             from . import config as _C
@@ -145,6 +182,14 @@ async def _lifespan(app: FastAPI):
 
     if getattr(_sys, "frozen", False):
         threading.Thread(target=_autoindex, daemon=True).start()
+
+    # 유휴 언로더: 마지막 사용 후 IDLE_SECS 지나면 임베더를 내려 RAM 반환(상시 앱 렉 방지).
+    def _idle_unloader():
+        while True:
+            time.sleep(30)
+            with contextlib.suppress(Exception):
+                _maybe_unload_embedder()
+    threading.Thread(target=_idle_unloader, daemon=True).start()
 
     # 의미 지도(3D)를 백그라운드에서 예열 + 주기적으로 갱신 → 사용자는 항상 즉시·최신.
     # 오래 사는 웹 서버에서 하므로 UMAP numba JIT은 1회만(짧은 인덱스 프로세스와 대조).
@@ -293,9 +338,11 @@ def api_search(
         mode = "hybrid"   # 알 수 없는 값은 0건이 아니라 기본(하이브리드)으로
     want_sem = mode in ("hybrid", "semantic")
     want_kw = mode in ("hybrid", "keyword")
-    embedder = _state.get("embedder")
-    if want_sem and embedder is None:
-        return {"error": "모델 로딩 중", "hits": []}
+    embedder = None
+    if want_sem:
+        if _state.get("needs_onboarding"):
+            return {"error": "먼저 임베딩 모델을 선택하세요", "hits": []}
+        embedder = get_embedder()   # 지연 로드 — 유휴 후 첫 검색은 로딩에 몇 초 걸릴 수 있음
     db = ArchiveDB()
     vi = make_index()
     hits = run_search(q, db, vi, embedder, k=k, session=session or None,
@@ -678,16 +725,18 @@ def api_config_put(payload: dict):
 
 # 임베딩 모델 카탈로그(한국어 대화용). ram_gb=임베딩 실행 중 피크 워킹셋 실측(MB→GB),
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
+# 순서 = 화면 표기 순서(첫 번째가 권장 기본). 기본은 경량 다국어(저사양 안전).
 _EMBED_ALLOW = {
-    "intfloat/multilingual-e5-large": {
-        "note": "최고 품질. 고사양 기기용.", "ram_gb": 6.4, "cps": 0.8,
-        "tags": ["품질 최상", "램 부하 높음", "속도 느림"]},
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+        "note": "권장 기본 — 가볍고 빠름(저사양도 렉 없음).", "ram_gb": 1.2, "cps": 31.0,
+        "default": True,
+        "tags": ["권장 기본", "램 부하 적음", "속도 매우 빠름"]},
     "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": {
         "note": "품질·부하 중간. 균형형.", "ram_gb": 4.5, "cps": 2.1,
         "tags": ["품질 좋음", "램 부하 보통", "속도 보통"]},
-    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "가벼움. 저사양 기기 추천.", "ram_gb": 1.2, "cps": 31.0,
-        "tags": ["램 부하 적음", "속도 매우 빠름", "저사양 추천"]},
+    "intfloat/multilingual-e5-large": {
+        "note": "최고 품질. 고사양 전용(RAM 큼·느림·전체 재색인).", "ram_gb": 6.4, "cps": 0.8,
+        "tags": ["품질 최상", "램 부하 높음", "속도 느림"]},
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0,
@@ -888,6 +937,7 @@ def api_embed_models():
             "cps": cps,
             "est_reindex_min": round(total_chunks / cps / 60, 1) if cps else None,
             "note": meta["note"], "tags": meta.get("tags", []), "current": name == C.EMBED_MODEL,
+            "default": bool(meta.get("default")),   # 권장 기본(프론트 미리 선택용)
         })
     return {"models": out, "current": C.EMBED_MODEL,
             "total_chunks": total_chunks, "reindex": _reindex_state}
@@ -909,11 +959,10 @@ def api_onboarding_choose(payload: dict):
     C.write_config({"CHATMEM_EMBED_MODEL": model})
 
     def _load():
-        from .embedder import Embedder
         with contextlib.suppress(Exception):
-            _state["embedder"] = Embedder(model)   # 다운로드/로드(가벼운 모델이면 빠름)
+            ArchiveDB().set_meta("embed_model", model)   # 확정 표시(먼저) → get_embedder가 이 모델로 로드
         with contextlib.suppress(Exception):
-            ArchiveDB().set_meta("embed_model", model)   # 확정 표시 → 다음 실행부터 온보딩 안 함
+            get_embedder()   # 다운로드/로드(가벼운 모델이면 빠름) + last_used 갱신
 
     _state["needs_onboarding"] = False
     threading.Thread(target=_load, daemon=True).start()   # 자동 색인 스레드가 임베더 로드되면 색인 시작
@@ -993,6 +1042,7 @@ def api_reindex(payload: dict):
                     chunk_progress_fn=lambda d: _reindex_state.__setitem__("done_chunks", d))
             db.set_meta("embed_model", model)
             _state["embedder"] = emb  # 실행 중 검색도 새 모델로
+            _embedder_last_used[0] = time.monotonic()  # 유휴 언로드 타이머 리셋
             _state["model_mismatch"] = None  # 재색인으로 해소 → 불일치 배너 즉시 내림
             _reindex_state.update(done=total, msg=f"완료: {total}")
         except Exception as e:  # noqa: BLE001
