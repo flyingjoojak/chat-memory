@@ -24,7 +24,7 @@ function hueOf(s: string): number {
 export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
-  const [showLines, setShowLines] = useState(true)
+  const [showLines, setShowLines] = useState(false)   // 기본 OFF — 연결선은 사용자가 켤 때만 표시
   const [err, setErr] = useState<string | null>(null)   // 로드 실패를 '데이터 없음'과 구분
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())

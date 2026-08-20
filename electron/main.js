@@ -1,9 +1,9 @@
-// chat-memory 데스크탑 셸 (Electron)
+// Engram 데스크탑 셸 (Electron)
 // 파이썬 백엔드(FastAPI+fastembed) 사이드카를 spawn·감독 → 준비되면 창에 로드.
 // 백엔드가 React 프론트를 / 에서 서빙하므로 창은 http://127.0.0.1:<port>/ 만 로드.
 // 셸이 담당: 단일 인스턴스 · 동적 포트 · 크래시 자동 재시작 · 트레이 · 로그 캡처 · 자동 업데이트.
 
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage } = require("electron")
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, nativeTheme, ipcMain } = require("electron")
 const { spawn } = require("child_process")
 const net = require("net")
 const http = require("http")
@@ -25,6 +25,14 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", showWindow)
   app.whenReady().then(start)
 }
+
+// 상단 애플리케이션 메뉴(File/Edit/View…) 완전 제거 → 흰 메뉴 줄 사라짐.
+Menu.setApplicationMenu(null)
+
+// 렌더러가 preload로 보낸 테마값에 맞춰 네이티브 창(타이틀바 등) 색을 동기화.
+ipcMain.on("cm-theme", (_e, mode) => {
+  nativeTheme.themeSource = mode === "light" || mode === "dark" ? mode : "system"
+})
 
 function findFreePort() {
   return new Promise((resolve, reject) => {
@@ -117,12 +125,18 @@ async function bootAndLoad() {
 }
 
 function createWindow() {
+  // SPA가 테마를 보고할 때까지의 첫 프레임 흰색 방지 → 기본 다크로 시작(theme.ts 기본과 일치).
+  nativeTheme.themeSource = "dark"
   win = new BrowserWindow({
     width: 1200, height: 820, minWidth: 820, minHeight: 560,
-    backgroundColor: "#0c0d10", title: "chat-memory", show: false,
-    icon: path.join(__dirname, "icon.png"),
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    backgroundColor: "#0c0d10", title: "Engram", show: false,
+    autoHideMenuBar: true, icon: path.join(__dirname, "icon.png"),
+    webPreferences: {
+      contextIsolation: true, nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
+    },
   })
+  win.setMenuBarVisibility(false)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" } })
   win.loadFile(path.join(__dirname, "loading.html"))
   win.show()
@@ -143,7 +157,7 @@ function createTray() {
   try {
     const img = nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 16, height: 16 })
     tray = new Tray(img)
-    tray.setToolTip("chat-memory")
+    tray.setToolTip("Engram")
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: "열기", click: showWindow },
       { label: "백엔드 재시작", click: () => { killBackend(); restarts = 0; bootAndLoad() } },

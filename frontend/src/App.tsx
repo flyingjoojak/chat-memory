@@ -88,7 +88,27 @@ export default function App() {
     <div className="grid h-dvh grid-cols-[60px_1fr] grid-rows-[1fr_auto] overflow-hidden">
       {/* 옵시디언식 좌측 아이콘 리본 */}
       <nav className="row-span-2 flex flex-col items-center gap-1 border-r bg-sidebar py-3">
-        <div className="mb-2 grid size-8 place-items-center rounded-lg bg-primary text-sm font-extrabold text-primary-foreground">C</div>
+        <svg viewBox="0 0 32 32" className="mb-2 size-8" role="img" aria-label="Engram">
+          <title>Engram</title>
+          <rect width="32" height="32" rx="7" fill="#0b0d11" />
+          <g stroke="#34d399" strokeWidth="1" strokeOpacity="0.5" strokeLinecap="round">
+            <line x1="16" y1="7.5" x2="9.1" y2="14.6" />
+            <line x1="16" y1="7.5" x2="22.9" y2="15" />
+            <line x1="9.1" y1="14.6" x2="16" y2="18.7" />
+            <line x1="22.9" y1="15" x2="16" y2="18.7" />
+            <line x1="16" y1="18.7" x2="12" y2="24.8" />
+            <line x1="16" y1="18.7" x2="21.3" y2="24.3" />
+            <line x1="12" y1="24.8" x2="21.3" y2="24.3" />
+          </g>
+          <g fill="#34d399">
+            <circle cx="9.1" cy="14.6" r="1.7" />
+            <circle cx="22.9" cy="15" r="1.7" />
+            <circle cx="16" cy="18.7" r="1.5" />
+            <circle cx="12" cy="24.8" r="1.8" />
+            <circle cx="21.3" cy="24.3" r="1.4" />
+          </g>
+          <circle cx="16" cy="7.5" r="2.4" fill="#6ee7b7" />
+        </svg>
         {NAV.map((n) => (
           <button
             key={n.v}
