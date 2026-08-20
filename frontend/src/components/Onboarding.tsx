@@ -68,7 +68,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </div>
 
         <p className="mt-5 text-[11.5px] text-muted-foreground">
-          고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. 잘 모르겠으면 <b>「이 기기 권장」 배지</b> 모델을 고르면 됩니다{ramGb ? ` (이 기기 RAM ${ramGb}GB)` : ""}. RAM <b>32GB 이상</b>은 품질 최상(e5-large), <b>그 미만</b>은 경량(MiniLM)을 권장해요.
+          고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. 잘 모르겠으면 <b>「이 기기 권장」 배지</b> 모델을 고르면 됩니다{ramGb ? ` (이 기기 RAM ${ramGb}GB)` : ""}. RAM <b>32GB 이상</b>은 int8 e5-large(품질↑·설치본 동봉), <b>그 미만</b>은 경량(MiniLM)을 권장해요.
         </p>
       </div>
     </div>

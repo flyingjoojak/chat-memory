@@ -23,6 +23,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from .int8_model import INT8_MODEL_ID
 from .search import search as run_search
 from .store import ArchiveDB, _actions_from_json
 from .vectorindex import make_index
@@ -726,18 +727,23 @@ def api_config_put(payload: dict):
 # 임베딩 모델 카탈로그(한국어 대화용). ram_gb=임베딩 실행 중 피크 워킹셋 실측(MB→GB),
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
 # 순서 = 화면 표기 순서(첫 번째가 권장 기본).
-# 실측(요약→청크 known-item 검색, R@1): e5-large 0.95 ≫ MiniLM 0.59 > mpnet 0.52.
-# e5-large가 검색 품질 압도(retrieval 특화) → 권장 기본. 유휴 언로드로 상주 부담은 없음.
-# mpnet은 MiniLM보다 무겁고(RAM 4배)·느린데(속도 1/10) 품질도 낮아(열등) 카탈로그에서 제외.
+# 실측 요약: int8 e5-large = fp32와 검색 품질 사실상 동일(공정벤치 R@1 동일·MRR −0.4%)이면서
+#   색인 ~2x 빠름·다운로드 0.52GB·설치본 동봉. → 기본·권장.
+# fp32 e5-large = 원본(최고 품질, int8과 미세차) 이나 RAM·속도 부담 큼·2.24GB. → '최고 품질' 옵션.
+# MiniLM = 경량(RAM ~1.2GB)이나 품질 낮음. → 저사양(32GB 미만) 옵션.
 _EMBED_ALLOW = {
+    INT8_MODEL_ID: {
+        "note": "권장 기본 — e5-large 품질에 색인 ~2x 빠름·0.52GB, 설치본에 동봉(오프라인 즉시).",
+        "ram_gb": 5.0, "cps": 1.6,
+        "tags": ["권장 기본", "품질 최상", "빠름"]},
     "intfloat/multilingual-e5-large": {
-        "note": "검색 품질 최상(다국어). 유휴 시 언로드로 상주 부담 없음. RAM 32GB↑ 권장.",
+        "note": "최고 품질(원본 fp32). int8과 미세차. RAM·속도 부담 큼, 2.24GB 다운로드.",
         "ram_gb": 6.4, "cps": 0.8,
-        "tags": ["품질 최상", "색인 중 RAM 큼"]},
+        "tags": ["최고 품질", "무거움", "느림"]},
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "경량 — RAM 적은 기기(32GB 미만) 권장. 빠르지만 검색 품질은 e5-large보다 낮음.",
+        "note": "경량 — RAM 적은 기기(32GB 미만) 권장. 빠르지만 검색 품질은 낮음. 0.22GB.",
         "ram_gb": 1.2, "cps": 31.0,
-        "tags": ["램 부하 적음", "속도 매우 빠름"]},
+        "tags": ["저사양 추천", "램 부하 적음", "속도 매우 빠름"]},
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0,
@@ -918,12 +924,14 @@ def api_mcp_unregister(payload: dict):
         return {"ok": False, "error": str(e)}
 
 
-# 기기 RAM 기반 권장 임계치. 이 GB 이상이면 품질(e5-large), 미만이면 경량(MiniLM).
+# 기기 RAM 기반 권장 임계치. 이 GB 이상이면 int8 e5-large(품질), 미만이면 경량(MiniLM).
 # 30으로 두는 이유: 명목 32GB 기기도 OS/하드웨어 예약분 때문에 실측 총량이 ~31.6GB로 보고됨
-# → 32로 두면 실제 32GB 기기가 걸러짐. 30이면 명목 32GB=e5-large, 명목 16/24GB=MiniLM로 의도대로.
+# → 32로 두면 실제 32GB 기기가 걸러짐. 30이면 명목 32GB=int8, 명목 16/24GB=MiniLM로 의도대로.
 _RECO_RAM_GB = 30
-_MODEL_E5 = "intfloat/multilingual-e5-large"
+_MODEL_INT8 = INT8_MODEL_ID            # 기본·권장(설치본 동봉)
 _MODEL_MINI = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+# fastembed 카탈로그에 없는 커스텀(번들) 모델의 dim/size 수동 지정.
+_CUSTOM_META = {INT8_MODEL_ID: {"dim": 1024, "size_gb": 0.52}}
 
 
 @app.get("/api/embed-models")
@@ -934,25 +942,28 @@ def api_embed_models():
     from .sysmem import total_mb
     cat = {m["model"]: m for m in TextEmbedding.list_supported_models()}
     total_chunks = ArchiveDB().conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
-    # 기기 RAM 보고 권장: 32GB↑ → 품질(e5-large), 그 미만(≤16GB 등) → 경량(MiniLM).
-    # RAM 미상이면 품질(e5-large)로(데스크탑에서 감지 실패는 드묾).
+    # 기기 RAM 보고 권장: 32GB↑ → int8 e5-large(품질), 그 미만(≤16/24GB) → 경량(MiniLM).
+    # RAM 미상이면 품질(int8)로(데스크탑에서 감지 실패는 드묾).
     tmb = total_mb()
     total_gb = round(tmb / 1024, 1) if tmb else None
-    rec_model = _MODEL_MINI if (total_gb is not None and total_gb < _RECO_RAM_GB) else _MODEL_E5
+    rec_model = _MODEL_MINI if (total_gb is not None and total_gb < _RECO_RAM_GB) else _MODEL_INT8
     out = []
     for name, meta in _EMBED_ALLOW.items():
         m = cat.get(name)
-        if not m:
+        if m:
+            dim, size_gb = m.get("dim"), round(m.get("size_in_GB", 0), 2)
+        elif name in _CUSTOM_META:      # 커스텀(번들) 모델 — fastembed 카탈로그에 없음
+            dim, size_gb = _CUSTOM_META[name]["dim"], _CUSTOM_META[name]["size_gb"]
+        else:
             continue
         cps = meta["cps"]
         out.append({
-            "model": name, "dim": m.get("dim"),
-            "size_gb": round(m.get("size_in_GB", 0), 2),
-            "ram_gb": meta["ram_gb"],                 # 임베딩 중 실사용 피크(실측)
+            "model": name, "dim": dim, "size_gb": size_gb,
+            "ram_gb": meta["ram_gb"],                 # 임베딩 중 실사용 피크(실측/추정)
             "cps": cps,
             "est_reindex_min": round(total_chunks / cps / 60, 1) if cps else None,
             "note": meta["note"], "tags": meta.get("tags", []), "current": name == C.EMBED_MODEL,
-            "recommended": name == rec_model,   # 기기 RAM 기반 권장(≥32GB→e5-large, 그 미만→MiniLM)
+            "recommended": name == rec_model,   # 기기 RAM 기반 권장(≥32GB→int8, 그 미만→MiniLM)
         })
     return {"models": out, "current": C.EMBED_MODEL, "recommended": rec_model,
             "ram_total_gb": total_gb, "total_chunks": total_chunks, "reindex": _reindex_state}

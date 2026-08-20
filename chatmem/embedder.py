@@ -21,11 +21,16 @@ class Embedder:
     """색인·검색 공통 임베더. 같은 모델을 써야 벡터가 호환된다."""
 
     def __init__(self, model_name: str = EMBED_MODEL):
-        from fastembed import TextEmbedding  # 무거운 임포트 → 지연
-
         self.model_name = model_name
-        self._is_e5 = "e5" in model_name.lower()
-        self._model = TextEmbedding(model_name=model_name)
+        self._is_e5 = "e5" in model_name.lower()   # int8 id도 'e5' 포함 → 프리픽스 적용
+        from .int8_model import INT8_MODEL_ID
+        if model_name == INT8_MODEL_ID:
+            # int8 커스텀 모델: 번들(배포)/캐시(개발)에서 로컬 로드. fastembed는 프리픽스 미적용 → _prefix가 담당.
+            from .int8_model import make_text_embedding
+            self._model = make_text_embedding()
+        else:
+            from fastembed import TextEmbedding  # 무거운 임포트 → 지연
+            self._model = TextEmbedding(model_name=model_name)
 
     def _prefix(self, texts: list[str], prefix: str) -> list[str]:
         return [prefix + t for t in texts] if self._is_e5 else list(texts)
