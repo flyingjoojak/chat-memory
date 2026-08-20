@@ -725,18 +725,19 @@ def api_config_put(payload: dict):
 
 # 임베딩 모델 카탈로그(한국어 대화용). ram_gb=임베딩 실행 중 피크 워킹셋 실측(MB→GB),
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
-# 순서 = 화면 표기 순서(첫 번째가 권장 기본). 기본은 경량 다국어(저사양 안전).
+# 순서 = 화면 표기 순서(첫 번째가 권장 기본).
+# 실측(요약→청크 known-item 검색, R@1): e5-large 0.95 ≫ MiniLM 0.59 > mpnet 0.52.
+# e5-large가 검색 품질 압도(retrieval 특화) → 권장 기본. 유휴 언로드로 상주 부담은 없음.
+# mpnet은 MiniLM보다 무겁고(RAM 4배)·느린데(속도 1/10) 품질도 낮아(열등) 카탈로그에서 제외.
 _EMBED_ALLOW = {
-    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "권장 기본 — 가볍고 빠름(저사양도 렉 없음).", "ram_gb": 1.2, "cps": 31.0,
-        "default": True,
-        "tags": ["권장 기본", "램 부하 적음", "속도 매우 빠름"]},
-    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": {
-        "note": "품질·부하 중간. 균형형.", "ram_gb": 4.5, "cps": 2.1,
-        "tags": ["품질 좋음", "램 부하 보통", "속도 보통"]},
     "intfloat/multilingual-e5-large": {
-        "note": "최고 품질. 고사양 전용(RAM 큼·느림·전체 재색인).", "ram_gb": 6.4, "cps": 0.8,
-        "tags": ["품질 최상", "램 부하 높음", "속도 느림"]},
+        "note": "권장 기본 — 검색 품질 최상(다국어). 유휴 시 언로드로 상주 부담 없음.",
+        "ram_gb": 6.4, "cps": 0.8, "default": True,
+        "tags": ["권장 기본", "품질 최상", "색인 중 RAM 큼"]},
+    "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
+        "note": "경량 — RAM 적은 기기(≤8GB)용. 빠르지만 검색 품질은 e5-large보다 낮음.",
+        "ram_gb": 1.2, "cps": 31.0,
+        "tags": ["저사양 추천", "램 부하 적음", "속도 매우 빠름"]},
 }
 
 _reindex_state: dict = {"running": False, "done": 0, "msg": "", "done_files": 0, "total_files": 0,
