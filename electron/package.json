@@ -1,7 +1,7 @@
 {
-  "name": "chat-memory-desktop",
+  "name": "engram-desktop",
   "version": "0.1.0",
-  "description": "chat-memory 데스크탑 앱 (Electron 셸 + 파이썬 사이드카)",
+  "description": "Engram 데스크탑 앱 (Electron 셸 + 파이썬 사이드카)",
   "main": "main.js",
   "author": "flyingjoojak",
   "license": "MIT",
@@ -17,8 +17,8 @@
     "electron-updater": "^6.3.0"
   },
   "build": {
-    "appId": "com.chatmemory.app",
-    "productName": "chat-memory",
+    "appId": "com.engram.app",
+    "productName": "Engram",
     "files": ["main.js", "preload.js", "loading.html", "icon.png"],
     "extraResources": [
       { "from": "../dist/chatmem-backend", "to": "backend" }

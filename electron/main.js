@@ -1,4 +1,4 @@
-// chat-memory 데스크탑 셸 (Electron)
+// Engram 데스크탑 셸 (Electron)
 // 파이썬 백엔드(FastAPI+fastembed) 사이드카를 spawn·감독 → 준비되면 창에 로드.
 // 백엔드가 React 프론트를 / 에서 서빙하므로 창은 http://127.0.0.1:<port>/ 만 로드.
 // 셸이 담당: 단일 인스턴스 · 동적 포트 · 크래시 자동 재시작 · 트레이 · 로그 캡처 · 자동 업데이트.
@@ -129,7 +129,7 @@ function createWindow() {
   nativeTheme.themeSource = "dark"
   win = new BrowserWindow({
     width: 1200, height: 820, minWidth: 820, minHeight: 560,
-    backgroundColor: "#0c0d10", title: "chat-memory", show: false,
+    backgroundColor: "#0c0d10", title: "Engram", show: false,
     autoHideMenuBar: true, icon: path.join(__dirname, "icon.png"),
     webPreferences: {
       contextIsolation: true, nodeIntegration: false,
@@ -157,7 +157,7 @@ function createTray() {
   try {
     const img = nativeImage.createFromPath(path.join(__dirname, "icon.png")).resize({ width: 16, height: 16 })
     tray = new Tray(img)
-    tray.setToolTip("chat-memory")
+    tray.setToolTip("Engram")
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: "열기", click: showWindow },
       { label: "백엔드 재시작", click: () => { killBackend(); restarts = 0; bootAndLoad() } },

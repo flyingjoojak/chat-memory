@@ -867,7 +867,7 @@ export function SettingsView() {
                     {archiveMsg && <span className="text-[11px] text-muted-foreground">{archiveMsg}</span>}
                   </div>
                   <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                    Claude Code는 오래된 로그(~30일)를 지우지만, 각 기기 chatmem은 그 이전 대화를 보존해요.
+                    Claude Code는 오래된 로그(~30일)를 지우지만, 각 기기 Engram은 그 이전 대화를 보존해요.
                     이 병합으로 <b>다른 기기가 보존한 옛 대화까지 서로 가져와</b> 검색 기록을 맞춥니다(연결된 기기끼리 자동으로도 수행).
                     원본이 삭제된 세션은 재개(resume)는 안 되지만 <b>검색·열람</b>은 됩니다.
                   </p>
