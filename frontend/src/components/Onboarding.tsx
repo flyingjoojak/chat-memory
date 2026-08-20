@@ -5,12 +5,13 @@ import { chooseModel, getEmbedModels, type EmbedModel } from "@/lib/api"
 // 첫 실행 화면: 기기 성능에 맞는 임베딩 모델을 고르게 한다(저사양 기기가 기본 최대모델을 자동으로 물지 않게).
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const [models, setModels] = useState<EmbedModel[] | null>(null)
+  const [ramGb, setRamGb] = useState<number | null>(null)   // 기기 총 RAM(권장 근거 표시)
   const [picking, setPicking] = useState<string | null>(null)
   const [err, setErr] = useState(false)   // 목록 로드 실패(백엔드 미기동 등) — 막다른 길 대신 재시도 노출
 
   function load() {
     setErr(false); setModels(null)
-    getEmbedModels().then((r) => setModels(r.models)).catch(() => setErr(true))
+    getEmbedModels().then((r) => { setModels(r.models); setRamGb(r.ram_total_gb) }).catch(() => setErr(true))
   }
   useEffect(() => { load() }, [])
 
@@ -43,12 +44,12 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           {models?.map((m) => (
             <button key={m.model} type="button" disabled={!!picking} onClick={() => pick(m)}
               className={`group flex w-full items-center gap-4 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/50 hover:shadow-md disabled:opacity-60 ${
-                m.default ? "border-primary/60 ring-1 ring-primary/30" : ""
+                m.recommended ? "border-primary/60 ring-1 ring-primary/30" : ""
               }`}>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-semibold">{m.model.split("/").pop()}</span>
-                  {m.default && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">권장</span>}
+                  {m.recommended && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">이 기기 권장</span>}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {m.tags.map((t) => (
@@ -67,7 +68,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </div>
 
         <p className="mt-5 text-[11.5px] text-muted-foreground">
-          고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. 잘 모르겠으면 <b>「권장」 배지</b> 모델(검색 품질 최상)을 고르면 됩니다. 기기 RAM이 8GB 이하로 적으면 <b>「저사양 추천」</b> 모델을 고르세요.
+          고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. 잘 모르겠으면 <b>「이 기기 권장」 배지</b> 모델을 고르면 됩니다{ramGb ? ` (이 기기 RAM ${ramGb}GB)` : ""}. RAM <b>32GB 이상</b>은 품질 최상(e5-large), <b>그 미만</b>은 경량(MiniLM)을 권장해요.
         </p>
       </div>
     </div>
