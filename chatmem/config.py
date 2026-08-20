@@ -48,6 +48,8 @@ CONFIG_TEMPLATE = """# chat-memory 설정 파일 (KEY=VALUE, 환경변수가 우
 #CLAUDE_PROJECTS_DIR=~/.claude/projects
 
 # ── 임베딩 모델 (변경 시 전체 재색인 필요) ──
+# 기본=품질 최상 다국어(e5-large). 유휴 시 언로드하므로 상주 RAM 부담 없음.
+# RAM 적은 기기(≤8GB)면 온보딩/설정에서 경량(MiniLM-L12) 선택 가능.
 #CHATMEM_EMBED_MODEL=intfloat/multilingual-e5-large
 """
 
@@ -71,6 +73,9 @@ VECTOR_BACKEND = os.environ.get("CHATMEM_VECTOR_BACKEND", "npy")
 
 # --- 임베딩 -------------------------------------------------------------
 # 색인·검색 공통. 변경 시 전체 재색인 필요(벡터 비호환).
+# 색인·검색 공통. 변경 시 전체 재색인 필요(벡터 비호환).
+# 기본=e5-large(검색 품질 최상·다국어). 상주 부담은 유휴 언로드(web.py)로 해소.
+# RAM 적은 기기는 온보딩/설정에서 경량 모델 선택.
 EMBED_MODEL = os.environ.get("CHATMEM_EMBED_MODEL", "intfloat/multilingual-e5-large")
 # e5 계열은 프리픽스가 성능에 중요.
 E5_QUERY_PREFIX = "query: "

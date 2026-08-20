@@ -230,6 +230,7 @@ export interface EmbedModel {
   note: string
   tags: string[]          // 특징 라벨(예: "램 부하 적음", "품질 최상")
   current: boolean
+  default?: boolean       // 권장 기본 모델(미리 강조)
 }
 export interface ReindexState {
   running: boolean; done: number; msg: string
