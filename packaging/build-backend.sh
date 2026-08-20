@@ -19,9 +19,15 @@ fi
 SEP=":"
 case "${OS:-}${OSTYPE:-}" in *Windows*|*msys*|*cygwin*) SEP=";" ;; esac
 
+# 기본·권장 모델(int8 e5-large, 0.52GB)을 생성해 동봉 → 설치 즉시 오프라인 동작(첫 실행 다운로드 없음).
+if [ ! -f packaging/build/e5int8/model.onnx ]; then
+  echo "int8 e5-large 생성 중…"; python packaging/make_int8.py packaging/build/e5int8
+fi
+
 pyinstaller --noconfirm --onedir --name chatmem-backend \
   --noconsole \
   --paths . \
+  --add-data "packaging/build/e5int8${SEP}e5int8" \
   --collect-all fastembed \
   --collect-all onnxruntime \
   --collect-all tokenizers \
