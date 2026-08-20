@@ -230,7 +230,7 @@ export interface EmbedModel {
   note: string
   tags: string[]          // 특징 라벨(예: "램 부하 적음", "품질 최상")
   current: boolean
-  default?: boolean       // 권장 기본 모델(미리 강조)
+  recommended?: boolean   // 기기 RAM 기반 권장 모델(미리 강조)
 }
 export interface ReindexState {
   running: boolean; done: number; msg: string
@@ -239,7 +239,7 @@ export interface ReindexState {
 }
 
 export const getEmbedModels = () =>
-  getJSON<{ models: EmbedModel[]; current: string; reindex: ReindexState }>(`/api/embed-models`)
+  getJSON<{ models: EmbedModel[]; current: string; recommended: string; ram_total_gb: number | null; reindex: ReindexState }>(`/api/embed-models`)
 
 // 첫 실행 온보딩(임베딩 모델 선택)
 export const getOnboarding = () => getJSON<{ needed: boolean }>(`/api/onboarding`)
