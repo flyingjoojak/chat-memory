@@ -196,6 +196,14 @@ export interface Config {
   projects_dir: string
   projects_exists: boolean
   jsonl_count: number
+  sources?: SourceInfo[]
+}
+export interface SourceInfo {
+  name: string
+  root: string | null
+  exists: boolean
+  active: boolean
+  count: number
 }
 
 export const getConfig = () => getJSON<Config>(`/api/config`)

@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Iterator
 
 from .chunker import chunk_turn
 from .config import (
@@ -22,55 +23,58 @@ from .config import (
 )
 from .filters import should_embed
 from .models import Turn
-from .sources import default_adapter
+from .sources import active_sources, default_adapter
 
-
-def _resolve_projects_dir(projects_dir: str | Path | None) -> Path:
-    """로그 폴더 경로를 런타임에 해석 — 설정 변경(CLAUDE_PROJECTS_DIR)이 재시작 없이 반영되게."""
-    if projects_dir is not None:
-        return Path(projects_dir)
-    from . import config as C
-    return Path(C.PROJECTS_DIR)
+if TYPE_CHECKING:
+    from .sources.base import SourceAdapter
 
 
 def iter_jsonl(root: Path):
-    """활성 소스 어댑터가 정의한 세션 파일들을 순회(기본=Claude Code jsonl, 백업/아카이브 제외)."""
+    """(하위호환) 기본 어댑터(Claude Code)로 root 안 세션 파일 순회. 특정 폴더 카운트용."""
     return default_adapter().discover(root)
 
 
-def has_new_data(db, projects_dir: str | Path | None = None) -> bool:
-    """커서 이후 새로 생긴 바이트가 있는 파일이 하나라도 있으면 True.
+def _source_pairs(projects_dir: str | Path | None) -> list[tuple[SourceAdapter, Path]]:
+    """색인할 (어댑터, 루트) 쌍.
 
-    모델(2.2GB) 로드 전에 값싸게 확인 → 새 대화 없으면 인덱싱 자체를 건너뛴다.
+    projects_dir 명시 → 그 Claude Code 루트만(하위호환·테스트).
+    None → active_sources()(claude-code + codex + …, 루트 존재하는 것만).
     """
-    root = _resolve_projects_dir(projects_dir)
-    if not root.exists():
-        return False
-    for p in iter_jsonl(root):
-        f = str(p)
+    if projects_dir is not None:
+        return [(default_adapter(), Path(projects_dir))]
+    return [(adapter, root) for _n, adapter, root in active_sources()]
+
+
+def _iter_all(projects_dir: str | Path | None) -> Iterator[tuple[SourceAdapter, Path]]:
+    """활성 소스들의 세션 파일 전부를 (어댑터, path)로 산출."""
+    for adapter, root in _source_pairs(projects_dir):
+        if not root.exists():
+            continue
+        for p in adapter.discover(root):
+            yield adapter, p
+
+
+def has_new_data(db, projects_dir: str | Path | None = None) -> bool:
+    """커서 이후 새 바이트가 있는 파일이 하나라도 있으면 True(모델 로드 전 값싼 확인)."""
+    for _adapter, p in _iter_all(projects_dir):
         try:
             size = p.stat().st_size
         except OSError:
             continue
-        offset, _, _ = db.get_cursor(f)
+        offset, _, _ = db.get_cursor(str(p))
         if size > offset:
             return True
     return False
 
 
 def count_pending(db, projects_dir: str | Path | None = None) -> dict:
-    """값싼 대기 집계(모델 로드 없이 stat+커서 비교만).
+    """값싼 대기 집계(모델 로드 없이 stat+커서 비교만). 활성 소스 전체 합산.
 
-    반환: {"new_sessions": 아직 한 번도 색인 안 된 로그 파일 수,
-           "updated_sessions": 이어져 새 내용이 생긴 파일 수,
-           "files": 새 바이트가 있는 파일 총수}
-    JSONL 파일 1개 = Claude Code 세션(대화) 1개라 파일 수를 대화 수로 본다.
+    반환: {"new_sessions": 아직 한 번도 색인 안 된 파일 수, "updated_sessions": 이어져 새
+    내용이 생긴 파일 수, "files": 새 바이트가 있는 파일 총수}. JSONL 파일 1개 = 세션(대화) 1개.
     """
-    root = _resolve_projects_dir(projects_dir)
-    if not root.exists():
-        return {"new_sessions": 0, "updated_sessions": 0, "files": 0}
     new = updated = 0
-    for p in iter_jsonl(root):
+    for _adapter, p in _iter_all(projects_dir):
         try:
             size = p.stat().st_size
         except OSError:
@@ -85,13 +89,13 @@ def count_pending(db, projects_dir: str | Path | None = None) -> dict:
     return {"new_sessions": new, "updated_sessions": updated, "files": new + updated}
 
 
-def discover_files(projects_dir: str | Path | None = None, recent_first: bool = True) -> list[str]:
-    root = _resolve_projects_dir(projects_dir)
-    if not root.exists():
-        return []
-    files = [str(p) for p in iter_jsonl(root)]
-    files.sort(key=lambda f: os.path.getmtime(f), reverse=recent_first)
-    return files
+def discover_files(
+    projects_dir: str | Path | None = None, recent_first: bool = True,
+) -> list[tuple[str, SourceAdapter]]:
+    """활성 소스 전체(또는 명시 루트)의 (path, 어댑터) 쌍을 mtime 순으로."""
+    pairs = [(str(p), adapter) for adapter, p in _iter_all(projects_dir)]
+    pairs.sort(key=lambda t: os.path.getmtime(t[0]), reverse=recent_first)
+    return pairs
 
 
 def _contextual(ctx: str, chunk_text: str, project: str) -> str:
@@ -105,7 +109,7 @@ def _contextual(ctx: str, chunk_text: str, project: str) -> str:
     return f"{head}\n{chunk_text}" if head else chunk_text
 
 
-def _group_with_offsets(proc: list[tuple], final_offset: int, adapter) -> list[tuple[Turn, int]]:
+def _group_with_offsets(proc: list[tuple], final_offset: int, adapter: SourceAdapter) -> list[tuple[Turn, int]]:
     """처리 대상 레코드를 (턴, resume_offset) 목록으로. resume=다음 턴 시작(=재개 지점)."""
     starts = [i for i, (o, _s, _e) in enumerate(proc) if adapter.is_turn_start(o)]
     out: list[tuple[Turn, int]] = []
@@ -120,16 +124,18 @@ def _group_with_offsets(proc: list[tuple], final_offset: int, adapter) -> list[t
 
 
 def index_file(
-    path: str | Path, db, vi, embedder,
+    path: str | Path, db, vi, embedder, *, adapter: SourceAdapter | None = None,
     idle_secs: int = IDLE_SECS, batch: int = EMBED_BATCH,
     checkpoint_turns: int = CHECKPOINT_TURNS, on_flush=None,
 ) -> int:
     """한 JSONL 파일을 커서 이후부터 증분 처리. 처리한 턴 수 반환.
 
-    턴 경계마다 resume offset을 알고, checkpoint_turns 턴마다 커서 전진 + 벡터 저장.
-    → 대형 파일도 중간에서 재개 가능(작업이 kill 돼도 최대 checkpoint_turns 턴만 재처리).
+    adapter 등은 키워드 전용(순서 실수로 idle_secs가 adapter에 바인딩되는 것 방지).
+    adapter 미지정 시 기본 소스(Claude Code) — 하위호환. 멀티소스에선 index_all 이 파일별
+    올바른 어댑터를 넘긴다. 턴 경계마다 resume offset을 알고, checkpoint_turns 턴마다 커서
+    전진 + 벡터 저장 → 대형 파일도 중간 재개 가능(kill 돼도 최대 checkpoint_turns 턴만 재처리).
     """
-    adapter = default_adapter()
+    adapter = adapter or default_adapter()
     path = str(path)
     size = os.path.getsize(path)
     mtime = os.path.getmtime(path)
@@ -236,7 +242,10 @@ def reconcile(db, vi, log_fn=print) -> int:
 
 def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
               progress_fn=None, chunk_progress_fn=None) -> int:
-    """모든 세션 파일을 최근순(기본)으로 증분 인덱싱.
+    """모든 활성 소스(claude-code + codex …)의 세션 파일을 최근순으로 증분 인덱싱.
+
+    참고: 여러 소스가 한 turns 테이블을 공유한다(PK=`session_id:uuid`). 두 도구의
+    session_id 는 독립 생성된 128비트 UUID라 교차 충돌은 사실상 불가능(YAGNI로 소스 접두 미부여).
 
     progress_fn(done_files, total_files): 파일 단위 진행 콜백.
     chunk_progress_fn(done_chunks): 임베딩된 청크 누계 콜백(전체 재색인 진행바용 — 거대 파일
@@ -256,9 +265,9 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
             except Exception:  # noqa: BLE001 — 진행 콜백 오류가 색인을 막지 않게
                 pass
 
-    for i, f in enumerate(files):
+    for i, (f, adapter) in enumerate(files):
         try:
-            n = index_file(f, db, vi, embedder, on_flush=_on_flush)
+            n = index_file(f, db, vi, embedder, adapter=adapter, on_flush=_on_flush)
             if n:
                 log_fn(f"indexed {n} turns  {os.path.basename(f)}")
                 total += n

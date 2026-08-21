@@ -60,6 +60,23 @@ PROJECTS_DIR = Path(
     os.environ.get("CLAUDE_PROJECTS_DIR", Path.home() / ".claude" / "projects")
 )
 
+
+def _codex_sessions_dir() -> Path:
+    """Codex CLI rollout 루트. CODEX_SESSIONS_DIR > $CODEX_HOME/sessions > ~/.codex/sessions."""
+    explicit = os.environ.get("CODEX_SESSIONS_DIR")
+    if explicit:
+        return Path(explicit)
+    home = os.environ.get("CODEX_HOME")
+    return Path(home) / "sessions" if home else Path.home() / ".codex" / "sessions"
+
+
+# Codex CLI가 세션을 저장하는 루트(멀티소스 색인용).
+CODEX_SESSIONS_DIR = _codex_sessions_dir()
+
+# 색인할 소스 목록(쉼표). 비우면 등록된 전부. 루트가 없는 소스는 자동 제외.
+# 예: CHATMEM_SOURCES=claude-code  (Codex 색인을 끄고 싶을 때)
+SOURCES_ENV = os.environ.get("CHATMEM_SOURCES", "").strip()
+
 # 우리 데이터(아카이브 SQLite + 벡터 npy + 커서)를 두는 곳.
 DATA_DIR = Path(os.environ.get("CHATMEM_DATA_DIR", Path.home() / "chat-memory" / "data"))
 DB_PATH = DATA_DIR / "archive.db"

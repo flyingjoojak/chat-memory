@@ -636,6 +636,26 @@ export function SettingsView() {
                 <AutoIndexRow ix={ixStatus} />
               </Section>
 
+              <Section title="색인 소스">
+                <div className="space-y-1.5 py-2">
+                  {(cfg?.sources ?? []).map((s) => (
+                    <div key={s.name} className="flex flex-wrap items-center gap-2 text-sm">
+                      <span className="font-medium">
+                        {s.name === "codex" ? "Codex CLI" : s.name === "claude-code" ? "Claude Code" : s.name}
+                      </span>
+                      {s.active
+                        ? <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">색인 중 · {s.count}개</span>
+                        : <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{s.exists ? "꺼짐" : "폴더 없음"}</span>}
+                      <code className="cm-inline min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{s.root ?? "—"}</code>
+                    </div>
+                  ))}
+                  <p className="text-xs text-muted-foreground">
+                    Codex CLI 로그(<code className="cm-inline">~/.codex/sessions</code>)가 있으면 자동으로 함께 색인돼요.
+                    특정 소스만 쓰려면 <code className="cm-inline">CHATMEM_SOURCES</code> 환경변수로 지정하세요.
+                  </p>
+                </div>
+              </Section>
+
               <Section title="앱">
                 <div className="py-3.5">
                   {quitState === "done" ? (

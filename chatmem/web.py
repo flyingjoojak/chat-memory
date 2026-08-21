@@ -688,6 +688,8 @@ def api_config():
         "projects_exists": C.PROJECTS_DIR.exists(),
         # .stversions 제외 카운트 — 3s 폴링 대비 TTL 캐시(매번 전체 walk 방지).
         "jsonl_count": _jsonl_count_cached(),
+        # 멀티소스 색인 현황(claude-code + codex …). 루트 없는 소스는 active=false.
+        "sources": _sources_info_cached(),
     }
 
 
@@ -771,11 +773,10 @@ def _pending_snapshot() -> dict:
     now = time.time()
     if now - _pending_cache["at"] < _PENDING_TTL:
         return _pending_cache
-    from . import config as C
     from .indexer import count_pending
     try:
         db = ArchiveDB()
-        idx = count_pending(db, C.PROJECTS_DIR)
+        idx = count_pending(db)   # 활성 소스 전체(claude-code + codex …) 합산
         enr = db.conn.execute("SELECT COUNT(*) c FROM turns WHERE summary IS NULL").fetchone()["c"]
     except Exception:  # noqa: BLE001 — 대기 조회 실패해도 UI가 죽지 않게 이전 값 유지
         return _pending_cache
@@ -799,6 +800,34 @@ def _jsonl_count_cached() -> int:
         return _jsonl_cache["n"]
     _jsonl_cache.update(at=now, n=n)
     return n
+
+
+# 색인 소스 현황 캐시 — /api/config 폴링 대비(소스별 파일 walk를 매번 안 하게).
+_sources_cache: dict = {"at": 0.0, "list": []}
+
+
+def _sources_info_cached() -> list:
+    """등록된 소스별 {name, root, exists, active, count}. active=현재 색인 대상인지."""
+    now = time.time()
+    if now - _sources_cache["at"] < _PENDING_TTL and _sources_cache["list"]:
+        return _sources_cache["list"]
+    from .sources import ADAPTERS, active_sources, source_roots
+    active = {n for n, _a, _r in active_sources()}
+    roots = source_roots()
+    out = []
+    for name, adapter in ADAPTERS.items():
+        root = roots.get(name)
+        exists = bool(root and root.exists())
+        try:
+            count = sum(1 for _ in adapter.discover(root)) if exists else 0
+        except Exception as e:  # noqa: BLE001 — walk 실패해도 UI 안 죽게(로그만)
+            import logging
+            logging.getLogger(__name__).warning("소스 %s 파일 카운트 실패: %s", name, e)
+            count = 0
+        out.append({"name": name, "root": str(root) if root else None,
+                    "exists": exists, "active": name in active, "count": count})
+    _sources_cache.update(at=now, list=out)
+    return out
 
 
 @app.get("/api/index/status")
