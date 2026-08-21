@@ -5,6 +5,7 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { SchemaReportSection } from "@/components/SchemaReportSection"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -659,6 +660,8 @@ export function SettingsView() {
                   )}
                 </div>
               </Section>
+
+              <SchemaReportSection />
             </>
           )}
 

@@ -302,6 +302,16 @@ def api_system():
     }
 
 
+@app.get("/api/report/schema")
+def api_report_schema(source: str = "codex"):
+    """'원클릭 형식 신고'용 리댁트 스키마 지문(대화 내용 없음). 소스 로그 포맷 변경 신고에 사용."""
+    from .schema_report import build_report
+    try:
+        return build_report(source)
+    except Exception as e:  # noqa: BLE001 — 신고 기능이라 어떤 파일 문제도 500 대신 JSON 오류로.
+        return {"source": source, "error": str(e)}
+
+
 def _hit_to_dict(h) -> dict:
     t = h.turn
     return {
