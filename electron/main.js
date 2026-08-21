@@ -172,17 +172,105 @@ function killBackend() {
   if (backend && !backend.killed) { try { backend.kill() } catch (_) {} backend = null }
 }
 
+// electron-updater releaseNotes 는 문자열 또는 [{version, note}] 배열 → 하나의 문자열로 정규화.
+function normalizeNotes(notes) {
+  if (!notes) return ""
+  if (typeof notes === "string") return notes
+  if (Array.isArray(notes)) {
+    return notes.map((n) => (n && typeof n === "object" ? (n.note || "") : String(n))).join("\n\n")
+  }
+  return String(notes)
+}
+
+// 업데이트 상태 캐시 → 렌더러가 늦게 뜨거나(백엔드 크래시 재시작 등) 재요청하면 현재 단계를 재전송(레이스 방지).
+let updInfo = null       // { version, releaseName, releaseNotes, releaseDate }
+let updPhase = "idle"    // "available" | "downloading" | "downloaded"
+let updPercent = 0
+let downloading = false  // 다운로드 재진입 방지(중복 downloadUpdate 차단)
+
+function sendToWin(channel, payload) {
+  if (win && !win.isDestroyed() && win.webContents) {
+    try { win.webContents.send(channel, payload) } catch (_) { /* 창 정리 중 — 무시 */ }
+  }
+}
+
+// 현재 단계를 렌더러에 (재)전송. 렌더러가 마운트 직후 requestPending() 으로 이걸 부른다.
+function replayUpdate() {
+  if (updPhase === "available") sendToWin("cm-update-available", updInfo)
+  else if (updPhase === "downloading") sendToWin("cm-update-progress", { percent: updPercent })
+  else if (updPhase === "downloaded") sendToWin("cm-update-downloaded", { version: updInfo && updInfo.version })
+}
+
+function onAvailable(info) { updInfo = info; updPhase = "available"; downloading = false; replayUpdate() }
+function onProgress(pct) { updPhase = "downloading"; downloading = true; updPercent = pct; sendToWin("cm-update-progress", { percent: pct }) }
+function onDownloaded(version) { updPhase = "downloaded"; downloading = false; sendToWin("cm-update-downloaded", { version }) }
+function onUpdError(message) {
+  downloading = false
+  if (updPhase === "downloading") updPhase = "available"   // 실패 시 재시도 가능 상태로 되돌림
+  sendToWin("cm-update-error", { message: String(message) })
+}
+
+// 자동 업데이트: 자동 다운로드는 끄고(사용자 선택), 새 버전과 릴리스 노트를 렌더러에 알려 배너로 표시.
+function setupAutoUpdate() {
+  ipcMain.on("cm-update-request", replayUpdate)
+
+  // 개발 미리보기: ENGRAM_FAKE_UPDATE=1 이면 가짜 흐름으로 배너 UI를 확인.
+  if (!app.isPackaged) {
+    if (!process.env.ENGRAM_FAKE_UPDATE) return
+    onAvailable({
+      version: process.env.ENGRAM_FAKE_UPDATE_VERSION || "9.9.9",
+      releaseName: "미리보기 릴리스",
+      releaseNotes: "새로운 기능\n- 업데이트 알림 배너 추가\n\nNew\n- Update notification banner",
+      releaseDate: new Date().toISOString(),
+    })
+    ipcMain.on("cm-update-download", () => {
+      if (downloading || updPhase === "downloaded") return
+      let p = 0
+      const timer = setInterval(() => {
+        p += 25
+        if (p >= 100) { clearInterval(timer); onProgress(100); onDownloaded(updInfo && updInfo.version) }
+        else onProgress(p)
+      }, 250)
+    })
+    ipcMain.on("cm-update-install", () => { /* 개발: 실제 설치 없음 */ })
+    return
+  }
+
+  let au
+  try { au = require("electron-updater").autoUpdater } catch (_) { return } // 피드/모듈 없음 — 조용히 미동작
+  au.autoDownload = false           // 사용자가 [지금 업데이트] 누를 때만 받음(업데이트는 선택)
+  au.autoInstallOnAppQuit = true    // 받아뒀으면 종료 시 설치
+
+  au.on("update-available", (info) => onAvailable({
+    version: info.version,
+    releaseName: info.releaseName || "",
+    releaseNotes: normalizeNotes(info.releaseNotes),
+    releaseDate: info.releaseDate || "",
+  }))
+  au.on("download-progress", (p) => onProgress(Math.round(p.percent || 0)))
+  au.on("update-downloaded", (info) => onDownloaded(info.version))
+  au.on("error", (err) => onUpdError((err && err.message) || err))
+
+  ipcMain.on("cm-update-download", () => {
+    if (downloading || updPhase === "downloaded") return   // 재진입 방지
+    downloading = true
+    updPhase = "downloading"; updPercent = 0
+    Promise.resolve().then(() => au.downloadUpdate()).catch((e) => onUpdError((e && e.message) || e))
+  })
+  ipcMain.on("cm-update-install", () => {
+    quitting = true
+    try { au.quitAndInstall() } catch (e) { quitting = false; onUpdError((e && e.message) || e) }
+  })
+
+  au.checkForUpdates().catch(() => { /* 오프라인·피드 없음 — 조용히 */ })
+}
+
 async function start() {
   port = await findFreePort()
   createWindow()
   createTray()
   bootAndLoad()
-  if (app.isPackaged) {
-    try {
-      const { autoUpdater } = require("electron-updater")
-      autoUpdater.checkForUpdatesAndNotify()
-    } catch (_) { /* 업데이트 피드 없거나 오류 — 무시 */ }
-  }
+  setupAutoUpdate()
   app.on("activate", showWindow)
 }
 

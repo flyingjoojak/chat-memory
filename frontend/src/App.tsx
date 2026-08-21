@@ -7,6 +7,7 @@ import { SettingsView } from "@/components/SettingsView"
 import { Onboarding } from "@/components/Onboarding"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { StatusBar } from "@/components/StatusBar"
+import { UpdateBanner } from "@/components/UpdateBanner"
 import { AlertTriangle } from "lucide-react"
 import { getOnboarding, getSystem } from "@/lib/api"
 import { applyTheme } from "@/lib/theme"
@@ -126,6 +127,7 @@ export default function App() {
 
       {/* 메인 패널 — 뷰 크래시가 앱 전체를 죽이지 않게 격리 */}
       <main className="min-h-0 overflow-y-auto">
+        <UpdateBanner />
         {mismatch && (
           <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
             <AlertTriangle className="size-4 shrink-0" />
