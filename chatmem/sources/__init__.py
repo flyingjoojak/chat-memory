@@ -7,10 +7,12 @@ from __future__ import annotations
 
 from .base import SourceAdapter
 from .claude_code import ClaudeCodeAdapter
+from .codex import CodexAdapter
 
-# 등록된 어댑터들(이름 → 인스턴스). 나중에: {"claude-code":…, "cline":…, "codex":…}
+# 등록된 어댑터들(이름 → 인스턴스). 새 도구를 지원하려면 여기에 인스턴스를 추가.
 ADAPTERS: dict[str, SourceAdapter] = {
     ClaudeCodeAdapter.name: ClaudeCodeAdapter(),
+    CodexAdapter.name: CodexAdapter(),
 }
 
 
@@ -19,4 +21,4 @@ def default_adapter() -> SourceAdapter:
     return ADAPTERS["claude-code"]
 
 
-__all__ = ["SourceAdapter", "ClaudeCodeAdapter", "ADAPTERS", "default_adapter"]
+__all__ = ["SourceAdapter", "ClaudeCodeAdapter", "CodexAdapter", "ADAPTERS", "default_adapter"]
