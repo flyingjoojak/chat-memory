@@ -1,0 +1,79 @@
+name: codex-canary
+
+# Codex rollout 포맷 드리프트 조기 감지.
+# - adapter-tests: 어댑터/소스/카나리 회귀 테스트(경량, 무거운 모델 의존 없음).
+# - version-watch: 스케줄/수동 실행 시 최신 codex 버전을 확인해 검증본보다 새로우면 이슈 자동 생성.
+
+on:
+  push:
+    paths:
+      - "chatmem/sources/**"
+      - "tests/test_codex_source.py"
+      - "tests/test_sources.py"
+      - "tests/test_codex_canary.py"
+      - "scripts/codex_canary.py"
+      - ".github/workflows/codex-canary.yml"
+  pull_request:
+    paths:
+      - "chatmem/sources/**"
+      - "tests/test_codex_source.py"
+      - "tests/test_sources.py"
+      - "tests/test_codex_canary.py"
+      - "scripts/codex_canary.py"
+      - ".github/workflows/codex-canary.yml"
+  schedule:
+    - cron: "0 0 * * 1" # 매주 월요일 00:00 UTC
+  workflow_dispatch:
+
+jobs:
+  adapter-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip pytest
+      - name: Run adapter + canary tests
+        run: PYTHONPATH="$PWD" python -m pytest tests/test_codex_source.py tests/test_sources.py tests/test_codex_canary.py -q
+
+  version-watch:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - id: check
+        name: Check latest codex version
+        run: python scripts/codex_canary.py
+      - name: Open issue if a newer codex version exists
+        if: steps.check.outputs.new_version == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          TESTED: ${{ steps.check.outputs.tested }}
+        run: |
+          title="Codex ${LATEST} 릴리스 — CodexAdapter 포맷 확인 필요"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title Codex ${LATEST}" --json number --jq 'length')
+          if [ "$existing" != "0" ]; then
+            echo "이미 열린 이슈가 있음 → 건너뜀"
+            exit 0
+          fi
+          body=$(printf '%s\n' \
+            "새 Codex 버전 **${LATEST}** 감지 (검증본 ${TESTED})." \
+            "" \
+            "CodexAdapter 가 이 버전의 rollout 포맷을 아직 검증하지 않았습니다. 새 버전이 반드시 포맷 변경은 아니지만, rollout 스키마가 조용히 바뀌면 대화를 놓칠 수 있으니 확인이 필요합니다." \
+            "" \
+            "확인 절차:" \
+            "1. codex 를 ${LATEST} 로 업데이트하고 짧은 세션 하나 실행" \
+            "2. python scripts/codex_canary.py --local 로 드리프트 의심 여부 확인 (event_msg 는 있는데 턴 0개면 포맷 변경)" \
+            "3. 포맷이 바뀌었으면 chatmem/sources/codex.py 에 케이스 추가 + tests/test_codex_source.py 에 그 버전 골든 픽스처 추가" \
+            "4. 문제 없으면(또는 반영 후) scripts/codex_canary.py 의 TESTED_VERSION 을 ${LATEST} 로 올려 이 알림을 멈춤" \
+            "" \
+            "자동 생성: codex-canary 워크플로.")
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
