@@ -11,6 +11,7 @@ export interface Hit {
   tags: string[]
   cosine: number | null
   sources: string[]
+  source?: SessionSource   // 출처 도구(claude-code/codex)
   thread: { question: string; answer: string }[]
 }
 
@@ -31,11 +32,16 @@ export interface SessionTurn {
   tags: string[]
 }
 
+export type SessionSource = "claude-code" | "codex"
+
 export interface SessionDetail {
   session: string
   project: string
   count: number
   turns: SessionTurn[]
+  source?: SessionSource       // 재개 명령이 달라짐
+  resume_cmd?: string          // 출처별 재개 커맨드(예: "codex resume <id>")
+  source_file_exists?: boolean // 원문 로그가 남아있는지(없으면 재개 불가)
 }
 
 export interface SessionRow {
@@ -44,6 +50,7 @@ export interface SessionRow {
   started: string
   ended: string
   headline: string
+  source?: SessionSource
 }
 
 export interface Stats {

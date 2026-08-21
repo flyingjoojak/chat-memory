@@ -1,4 +1,4 @@
-import type { SearchResult, SessionDetail, SessionRow, Stats } from "./types"
+import type { SearchResult, SessionDetail, SessionRow, SessionSource, Stats } from "./types"
 
 async function getJSON<T>(url: string): Promise<T> {
   const r = await fetch(url)
@@ -14,6 +14,7 @@ export interface SearchParams {
   since?: string
   until?: string
   session?: string
+  sources?: string[]   // 비거나 전체면 생략(=모든 출처). 부분집합일 때만 전달
 }
 
 export function search(p: SearchParams): Promise<SearchResult> {
@@ -22,8 +23,13 @@ export function search(p: SearchParams): Promise<SearchResult> {
   if (p.since) usp.set("since", p.since)
   if (p.until) usp.set("until", p.until)
   if (p.session) usp.set("session", p.session)
+  if (p.sources && p.sources.length) usp.set("sources", p.sources.join(","))
   return getJSON<SearchResult>(`/api/search?${usp}`)
 }
+
+export interface SourceOption { source: string; count: number }
+export const getSources = () =>
+  getJSON<{ sources: SourceOption[] }>(`/api/sources`)
 
 export const getSession = (id: string) =>
   getJSON<SessionDetail>(`/api/session?id=${encodeURIComponent(id)}`)
@@ -39,6 +45,8 @@ export interface ResumeResult {
   active?: boolean
   seconds_since?: number
   warning?: string
+  missing?: boolean            // 원문 로그가 없어 재개 불가
+  source?: SessionSource
 }
 export async function resumeSession(id: string, force = false): Promise<ResumeResult> {
   const r = await fetch(`/api/resume?session=${encodeURIComponent(id)}&force=${force}`, { method: "POST" })
