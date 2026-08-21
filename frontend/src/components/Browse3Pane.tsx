@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
 import { getGraph3D, getSession, listSessions, resumeSession, search, type SearchMode } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
-import type { Hit } from "@/lib/types"
+import type { Hit, SessionDetail } from "@/lib/types"
 
 const PALETTE = [
   "#6ea8fe", "#f4845f", "#5cc8a8", "#c78be0", "#e6b34a", "#7ed957", "#ef6f9b",
@@ -44,6 +44,8 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   const [copied, setCopied] = useState(false)
   const [opening, setOpening] = useState(false)
   const [resumeMsg, setResumeMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [detail, setDetail] = useState<SessionDetail | null>(null)   // 선택 세션 상세(출처·재개커맨드·원문존재)
+  const [detailErr, setDetailErr] = useState(false)                  // 세션 상세 로드 실패
 
   // 타이머 정리(unmount 후 setState 방지). copied 되돌림 / resumeMsg 자동 해제용.
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -58,8 +60,11 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     msgTimer.current = setTimeout(() => setResumeMsg(null), 4000)
   }
 
-  // 세션 재개 커맨드(claude --resume <id>) 클립보드 복사.
-  const resumeCmd = sel ? `claude --resume ${sel}` : ""
+  // 세션 재개 커맨드(출처별: claude --resume / codex resume). 상세 로드 전엔 판단 보류.
+  const ready = detail != null                              // 상세(출처·원문존재) 로드 완료
+  const resumeCmd = detail?.resume_cmd || (sel ? `claude --resume ${sel}` : "")
+  const fileExists = detail?.source_file_exists !== false   // 로드 후에만 의미(로드 전엔 버튼 비활성)
+  const sourceLabel = detail?.source === "codex" ? "Codex" : detail?.source === "claude-code" ? "Claude Code" : ""
   async function copyResume() {
     if (!resumeCmd) return
     // clipboard API는 비보안 컨텍스트(평문 http 비-localhost 등)에서 없을 수 있음 → 가드 + 폴백 안내.
@@ -83,13 +88,15 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     if (!sel || opening) return
     setOpening(true); setResumeMsg(null)
     try {
-      const r = await resumeSession(sel)
-      if (!r.ok && r.active) {
+      let r = await resumeSession(sel)
+      if (!r.ok && r.active) {   // 최근 수정됨 → 확인 후 강제 재개
         const go = window.confirm(`${r.warning ?? "다른 기기에서 진행 중일 수 있어요."}\n\n그래도 재개할까요? (분기될 수 있음)`)
         if (!go) return
-        await resumeSession(sel, true)
+        r = await resumeSession(sel, true)
       }
-      flashMsg({ ok: true, text: "새 터미널에서 재개 실행됨" })
+      // 성공 여부는 r.ok 로만 판단(missing·실행실패 등은 경고로). '거짓 성공' 방지.
+      if (r.ok) flashMsg({ ok: true, text: "새 터미널에서 재개 실행됨" })
+      else flashMsg({ ok: false, text: r.warning ?? "세션을 열 수 없어요" })
     } catch (e) {
       flashMsg({ ok: false, text: e instanceof Error ? e.message : "실행 실패" })
     } finally {
@@ -132,14 +139,18 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
 
   // 선택 그룹의 대화 목록
   useEffect(() => {
-    setConvs(null); setHits(null); setQ("")
+    setConvs(null); setHits(null); setQ(""); setDetail(null); setDetailErr(false)
     if (sel == null) return
     if (kind === "sessions") {
-      getSession(sel).then((d) => setConvs(d.turns.map((t) => ({ t: t.id, s: sel, h: t.summary || t.question || "" }))))
-        .catch(() => setConvs([]))
-    } else {
-      setConvs(pointsByCluster.get(Number(sel)) ?? [])
+      let cancelled = false   // 다른 세션으로 빠르게 전환 시, 늦게 온 응답이 덮어쓰지 않게
+      getSession(sel).then((d) => {
+        if (cancelled) return
+        setConvs(d.turns.map((t) => ({ t: t.id, s: sel, h: t.summary || t.question || "" })))
+        setDetail(d)
+      }).catch(() => { if (!cancelled) { setConvs([]); setDetailErr(true) } })
+      return () => { cancelled = true }
     }
+    setConvs(pointsByCluster.get(Number(sel)) ?? [])
   }, [sel, kind, pointsByCluster])
 
   const convSet = useMemo(() => new Set((convs ?? []).map((c) => c.t)), [convs])
@@ -236,21 +247,33 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
             <div className="mb-2 rounded-lg border bg-muted/40 p-2">
               <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
                 <RotateCcw className="size-3.5" />해당 세션 재개하기
+                {sourceLabel && (
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">{sourceLabel}</span>
+                )}
               </div>
               <div className="flex items-center gap-1.5">
                 <code className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1 font-mono text-[11px]" title={resumeCmd}>{resumeCmd}</code>
-                <button type="button" onClick={openResume} disabled={opening} aria-label="열기 — 이 PC에서 새 터미널로 세션 재개"
+                <button type="button" onClick={openResume} disabled={opening || !ready || !fileExists}
+                  title={ready && !fileExists ? "원문 로그가 없어 열 수 없어요" : undefined}
+                  aria-label={ready && !fileExists ? "열기 — 원문 로그가 없어 열 수 없음" : "열기 — 이 PC에서 새 터미널로 세션 재개"}
+                  aria-describedby={ready && !fileExists ? "resume-missing-note" : undefined}
                   className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-60">
                   {opening ? <Loader2 className="size-3.5 animate-spin" /> : <TerminalSquare className="size-3.5" />}열기
                 </button>
-                <button type="button" onClick={copyResume} aria-label="재개 커맨드 복사"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] transition-colors hover:bg-muted">
+                <button type="button" onClick={copyResume} disabled={!ready} aria-label="재개 커맨드 복사"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] transition-colors hover:bg-muted disabled:opacity-60">
                   {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
                   {copied ? "복사됨" : "복사"}
                 </button>
               </div>
               {resumeMsg && (
                 <div className={`mt-1 text-[10.5px] ${resumeMsg.ok ? "text-muted-foreground" : "text-destructive"}`}>{resumeMsg.text}</div>
+              )}
+              {detailErr && !resumeMsg && (
+                <div className="mt-1 text-[10.5px] text-destructive">세션 정보를 불러오지 못했어요 — 재개 가능 여부를 확인할 수 없어요.</div>
+              )}
+              {ready && !fileExists && !resumeMsg && (
+                <div id="resume-missing-note" className="mt-1 text-[10.5px] text-destructive">원문 로그가 없어 이 세션은 열 수 없어요 (검색·조회는 그대로 가능).</div>
               )}
             </div>
           )}

@@ -81,6 +81,7 @@ def search(
     window: int = 2,
     keyword: bool = True,
     semantic: bool = True,
+    tool_sources: set[str] | None = None,   # None=전체, 아니면 이 출처(claude-code/codex)만
 ) -> list[SearchHit]:
     # 세션 스코프면 후보를 크게 잡아 그 세션 턴이 전역 상위 밖이어도 표면화되게 함.
     depth = max(k * 8, 1000) if session else k * 8
@@ -109,6 +110,8 @@ def search(
     for tid in ranked:
         turn = db.get_turn(tid)
         if turn is None:
+            continue
+        if tool_sources and (turn.source or "claude-code") not in tool_sources:
             continue
         if session and not (turn.session_id.startswith(session) or session in turn.project):
             continue

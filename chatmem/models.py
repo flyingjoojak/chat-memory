@@ -32,6 +32,7 @@ class Turn:
     question: str
     answer: str
     actions: tuple[Action, ...]
+    source: str = "claude-code"   # 출처 도구(claude-code / codex …). DB에서 읽을 때 채워짐.
 
     def action_summary(self) -> str:
         return "; ".join(a.render() for a in self.actions)

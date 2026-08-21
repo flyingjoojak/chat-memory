@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import sqlite3
 import time
@@ -14,6 +15,8 @@ from pathlib import Path
 from .config import DB_PATH
 from .models import Action, Turn
 
+logger = logging.getLogger(__name__)
+
 # FTS MATCH 용 토큰: ASCII 영숫자 런 + 한글 런. '_'는 제외(FTS unicode61이 _로 분리하므로).
 _FTS_TOKEN = re.compile(r"[A-Za-z0-9]+|[가-힣]+")
 
@@ -21,7 +24,7 @@ _SCHEMA = """
 CREATE TABLE IF NOT EXISTS turns(
   id TEXT PRIMARY KEY, session_id TEXT, uuid TEXT, parent_uuid TEXT,
   timestamp TEXT, project TEXT, question TEXT, answer TEXT, actions TEXT,
-  summary TEXT, tags TEXT
+  summary TEXT, tags TEXT, source TEXT, source_file TEXT
 );
 CREATE TABLE IF NOT EXISTS chunks(
   chunk_key TEXT PRIMARY KEY, turn_id TEXT, idx INTEGER, text TEXT
@@ -47,10 +50,13 @@ def _actions_from_json(s: str | None) -> tuple[Action, ...]:
 
 
 def _row_to_turn(row: sqlite3.Row) -> Turn:
+    keys = row.keys()
+    source = (row["source"] if "source" in keys else None) or "claude-code"
     return Turn(
         id=row["id"], session_id=row["session_id"], uuid=row["uuid"],
         parent_uuid=row["parent_uuid"], timestamp=row["timestamp"], project=row["project"],
         question=row["question"], answer=row["answer"], actions=_actions_from_json(row["actions"]),
+        source=source,
     )
 
 
@@ -68,7 +74,20 @@ class ArchiveDB:
         # 스키마 생성(쓰기)은 없을 때만 → 읽기전용 명령이 쓰기락과 충돌하지 않도록.
         if not self._has_schema():
             self.conn.executescript(_SCHEMA)
+        self._ensure_columns()          # 기존 DB에 source/source_file 추가(멀티소스 재개용)
         self.fts_enabled = self._ensure_fts()
+
+    def _ensure_columns(self) -> None:
+        """기존 turns 테이블에 없는 컬럼을 추가(경량 마이그레이션). 이미 있으면 쓰기 없음."""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(turns)")}
+        for col in ("source", "source_file"):
+            if col not in cols:
+                try:
+                    self.conn.execute(f"ALTER TABLE turns ADD COLUMN {col} TEXT")
+                except sqlite3.OperationalError as e:
+                    # 쓰기 락이면 다음 기회에 적용됨(무해). 영속적 실패면 이후 upsert가
+                    # 'no such column'으로 터지므로 원인 추적용 경고를 남긴다.
+                    logger.warning("turns.%s 컬럼 추가 실패(다음 열기 때 재시도): %s", col, e)
 
     def _has_schema(self) -> bool:
         row = self.conn.execute(
@@ -132,15 +151,18 @@ class ArchiveDB:
         self.conn.close()
 
     # --- 턴 -------------------------------------------------------------
-    def upsert_turn(self, turn: Turn) -> None:
+    def upsert_turn(self, turn: Turn, source: str = "claude-code",
+                    source_file: str | None = None) -> None:
         self.conn.execute(
             """INSERT INTO turns(id,session_id,uuid,parent_uuid,timestamp,project,
-                 question,answer,actions)
-               VALUES(?,?,?,?,?,?,?,?,?)
+                 question,answer,actions,source,source_file)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(id) DO UPDATE SET
-                 question=excluded.question, answer=excluded.answer, actions=excluded.actions""",
+                 question=excluded.question, answer=excluded.answer, actions=excluded.actions,
+                 source=excluded.source, source_file=excluded.source_file""",
             (turn.id, turn.session_id, turn.uuid, turn.parent_uuid, turn.timestamp,
-             turn.project, turn.question, turn.answer, _actions_to_json(turn.actions)),
+             turn.project, turn.question, turn.answer, _actions_to_json(turn.actions),
+             source, source_file),
         )
         if self.fts_enabled:  # 키워드 인덱스 동기화(멱등)
             self.conn.execute("DELETE FROM turns_fts WHERE turn_id=?", (turn.id,))
@@ -165,6 +187,25 @@ class ArchiveDB:
     def get_turn(self, turn_id: str) -> Turn | None:
         row = self.conn.execute("SELECT * FROM turns WHERE id=?", (turn_id,)).fetchone()
         return _row_to_turn(row) if row else None
+
+    def distinct_sources(self) -> list[tuple[str, int]]:
+        """색인된 턴이 있는 출처와 개수(검색 필터 옵션용). NULL(레거시)은 claude-code로 취급."""
+        rows = self.conn.execute(
+            "SELECT COALESCE(source, 'claude-code') AS s, COUNT(*) AS n "
+            "FROM turns GROUP BY s ORDER BY n DESC"
+        ).fetchall()
+        return [(r["s"], r["n"]) for r in rows]
+
+    def session_source(self, session_id: str) -> tuple[str, str | None, str | None] | None:
+        """세션의 (source, source_file, project). 재개 명령·원문 존재 확인용.
+        source_file 있는 행을 우선(재색인 전 레거시 행은 NULL). 세션 없으면 None."""
+        row = self.conn.execute(
+            "SELECT source, source_file, project FROM turns WHERE session_id=? "
+            "ORDER BY (source_file IS NULL), timestamp, id LIMIT 1", (session_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return (row["source"] or "claude-code", row["source_file"], row["project"])
 
     def get_enrichment(self, turn_id: str) -> tuple[str | None, list[str]]:
         row = self.conn.execute("SELECT summary,tags FROM turns WHERE id=?", (turn_id,)).fetchone()

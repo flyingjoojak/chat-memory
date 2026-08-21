@@ -1,9 +1,10 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Search, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
-import { search, type SearchMode } from "@/lib/api"
+import { SourceFilter } from "./SourceFilter"
+import { getSources, search, type SearchMode, type SourceOption } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
 import type { Hit } from "@/lib/types"
 
@@ -30,15 +31,37 @@ export function SearchView() {
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle")
   // 선택한 결과 → 오른쪽 채팅 스레드로 표시(열고닫기 없이 클릭 전환).
   const [sel, setSel] = useState<{ session: string; turn: string } | null>(null)
+  // 검색 소스 필터: 데이터 있는 출처만 목록에 뜬다(1종뿐이면 필터 자체를 숨김).
+  const [srcOpts, setSrcOpts] = useState<SourceOption[]>([])
+  const [srcSel, setSrcSel] = useState<Set<string>>(new Set())
   const reqId = useRef(0)   // 최신 요청만 반영(빠른 연속 검색 시 오래된 응답이 덮어쓰기 방지)
 
-  async function run(query = q, m: SearchMode = mode) {
+  useEffect(() => {
+    let alive = true
+    getSources().then((r) => {
+      if (!alive) return
+      setSrcOpts(r.sources)
+      setSrcSel(new Set(r.sources.map((s) => s.source)))   // 기본=전체 선택
+    }).catch(() => { /* 소스 목록 실패 시 필터만 숨김(검색은 전체로 동작) */ })
+    return () => { alive = false }
+  }, [])
+
+  const hasMultipleSources = srcOpts.length > 1
+
+  // 선택이 전체(또는 비었으면)면 undefined(=모든 출처), 부분집합일 때만 목록 전달.
+  function sourcesParam(selSet: Set<string>): string[] | undefined {
+    if (!hasMultipleSources) return undefined
+    if (selSet.size === 0 || selSet.size >= srcOpts.length) return undefined
+    return [...selSet]
+  }
+
+  async function run(query = q, m: SearchMode = mode, selSet: Set<string> = srcSel) {
     const term = query.trim()
     if (!term) { reqId.current++; setState("idle"); setHits([]); setSel(null); return }   // 진행 중 요청 무효화
     const myId = ++reqId.current
     setState("loading")
     try {
-      const r = await search({ q: term, k, mode: m, since: since || undefined, until: until || undefined })
+      const r = await search({ q: term, k, mode: m, since: since || undefined, until: until || undefined, sources: sourcesParam(selSet) })
       if (myId !== reqId.current) return   // 더 새 요청이 진행 중 → 이 응답 폐기
       const list = r.hits || []
       setHits(list); setState("done")
@@ -78,6 +101,10 @@ export function SearchView() {
                 {[8, 15, 30].map((n) => <option key={n}>{n}</option>)}
               </select>
             </label>
+            {hasMultipleSources && (
+              <SourceFilter available={srcOpts} selected={srcSel}
+                onChange={(next) => { setSrcSel(next); run(q, mode, next) }} />
+            )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <label className="inline-flex items-center gap-1">이후

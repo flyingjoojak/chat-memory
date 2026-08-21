@@ -325,6 +325,7 @@ def _hit_to_dict(h) -> dict:
         "actions": [a.render() for a in t.actions],
         "cosine": h.cosine,
         "sources": list(h.sources),
+        "source": t.source,   # 출처 도구(claude-code/codex) — 결과 배지·필터용
         "summary": h.summary,
         "tags": list(h.tags),
         "thread": [
@@ -341,6 +342,7 @@ def api_search(
     since: str | None = None,
     until: str | None = None,
     mode: str = "hybrid",          # hybrid | semantic | keyword
+    sources: str | None = None,    # 쉼표 목록(claude-code,codex). 비면 전체 소스
     semantic_only: bool = False,   # (구버전 호환)
 ):
     if semantic_only:
@@ -349,6 +351,7 @@ def api_search(
         mode = "hybrid"   # 알 수 없는 값은 0건이 아니라 기본(하이브리드)으로
     want_sem = mode in ("hybrid", "semantic")
     want_kw = mode in ("hybrid", "keyword")
+    tool_sources = {s.strip() for s in sources.split(",") if s.strip()} if sources else None
     embedder = None
     if want_sem:
         if _state.get("needs_onboarding"):
@@ -358,8 +361,15 @@ def api_search(
     vi = make_index()
     hits = run_search(q, db, vi, embedder, k=k, session=session or None,
                       since=since or None, until=until or None,
-                      keyword=want_kw, semantic=want_sem)
+                      keyword=want_kw, semantic=want_sem, tool_sources=tool_sources)
     return {"query": q, "count": len(hits), "hits": [_hit_to_dict(h) for h in hits]}
+
+
+@app.get("/api/sources")
+def api_sources():
+    """색인된 턴이 있는 출처 목록(검색 필터 옵션). 데이터가 있는 소스만 나온다."""
+    db = ArchiveDB()
+    return {"sources": [{"source": s, "count": n} for s, n in db.distinct_sources()]}
 
 
 @app.get("/api/session")
@@ -379,8 +389,17 @@ def api_session(id: str = Query(...), limit: int = 2000):
             "summary": r["summary"],
             "tags": json.loads(r["tags"]) if r["tags"] else [],
         })
-    proj = db.conn.execute("SELECT project FROM turns WHERE session_id=? LIMIT 1", (id,)).fetchone()
-    return {"session": id, "project": proj["project"] if proj else "", "count": len(turns), "turns": turns}
+    info = db.session_source(id)
+    source = info[0] if info else "claude-code"
+    stored = info[1] if info else None
+    project = (info[2] if info else "") or ""
+    src_file = _find_source_file(source, id, stored)
+    return {
+        "session": id, "project": project, "count": len(turns), "turns": turns,
+        "source": source,
+        "resume_cmd": _resume_cmd_str(source, id) if _SID_RE.fullmatch(id) else "",
+        "source_file_exists": src_file is not None,
+    }
 
 
 @app.get("/api/sessions")
@@ -394,40 +413,81 @@ def api_sessions(limit: int = 500):
     out = []
     for r in rows:
         head = db.conn.execute(
-            "SELECT summary, question FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
+            "SELECT summary, question, source FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
             (r["session_id"],)).fetchone()
         out.append({
             "session": r["session_id"], "count": r["n"],
             "started": r["started"], "ended": r["ended"],
             "headline": (head["summary"] or head["question"] or "") if head else "",
+            "source": (head["source"] if head else None) or "claude-code",
         })
     return {"sessions": out}
 
 
-_SID_RE = re.compile(r"^[A-Za-z0-9._-]+$")   # 세션 id 화이트리스트(명령 주입 방지)
+# 세션 id 화이트리스트. 선두 '-' 금지 → 재개 CLI(claude/codex)로의 인자(플래그) 주입 차단.
+# (session_id 는 로그 파일 내용에서 오므로, 심어진 로그가 "--flag" 같은 값을 넣어도 거부된다.)
+_SID_RE = re.compile(r"^[A-Za-z0-9._][A-Za-z0-9._-]*$")
+
+
+def _resume_argv(source: str, sid: str) -> list[str]:
+    """출처별 세션 재개 명령 argv. sid는 호출 전 _SID_RE 로 검증됨."""
+    if source == "codex":
+        return ["codex", "resume", sid]
+    return ["claude", "--resume", sid]   # claude-code(기본)
+
+
+def _resume_cmd_str(source: str, sid: str) -> str:
+    return " ".join(_resume_argv(source, sid))
+
+
+def _find_source_file(source: str, sid: str, stored: str | None) -> Path | None:
+    """세션 원문 로그 파일 경로. 저장된 경로 우선, 없으면 출처별 탐색. 못 찾으면 None."""
+    if not _SID_RE.fullmatch(sid):
+        return None
+    if stored:
+        p = Path(stored)
+        if p.is_file():
+            return p
+    from . import config as C
+    if source == "codex":
+        root = Path(C.CODEX_SESSIONS_DIR)
+        if root.exists():
+            for p in root.rglob(f"rollout-*-{sid}.jsonl"):
+                if p.is_file():
+                    return p
+        return None
+    from . import session_sync
+    return session_sync.find_session_file(sid)   # claude: PROJECTS_DIR/**/<sid>.jsonl
 
 
 @app.post("/api/resume")
 def api_resume(session: str = Query(...), force: bool = False):
-    """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 `claude --resume <id>` 실행.
-    로컬 전용(브라우저와 백엔드가 같은 PC일 때만 의미). id는 화이트리스트 + DB 존재 검증.
+    """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 출처별 재개 명령 실행
+    (claude-code=`claude --resume`, codex=`codex resume`). 로컬 전용. id는 화이트리스트+DB 검증.
 
-    활성 가드(M3): 세션이 최근 수정됐으면(다른 기기에서 진행 중일 수 있음) force=false일 때
-    실행하지 않고 경고만 반환 → 프론트가 확인받고 force=true로 재요청."""
+    원문 로그가 없으면(삭제·이동) 실행하지 않고 missing 반환.
+    활성 가드(M3): 세션이 최근 수정됐으면(다른 기기 진행 가능) force=false일 때 경고만 반환."""
     sid = session.strip()
     if not _SID_RE.fullmatch(sid):
         raise HTTPException(status_code=400, detail="잘못된 세션 id")
     db = ArchiveDB()
-    row = db.conn.execute("SELECT project FROM turns WHERE session_id=? LIMIT 1", (sid,)).fetchone()
-    if not row:
+    info = db.session_source(sid)
+    if info is None:
         raise HTTPException(status_code=404, detail="세션을 찾을 수 없음")
-    cwd = (row["project"] or "").strip() or None
+    source, stored, project = info
+    cwd = (project or "").strip() or None
     if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
         cwd = None
 
+    # 원문 존재 확인: 로그 파일이 없어졌으면 재개 불가(세션을 열 수 없음).
+    src_file = _find_source_file(source, sid, stored)
+    if src_file is None:
+        return {"ok": False, "missing": True,
+                "warning": "원문 로그 파일이 없어 세션을 열 수 없어요 (삭제·이동됐을 수 있어요)."}
+
     # 활성 가드: 최근 수정된 세션이면 이중 재개(분기) 위험을 경고(실행은 보류).
     from . import session_sync
-    act = session_sync.session_activity(session_sync.find_session_file(sid))
+    act = session_sync.session_activity(src_file)
     if act.active and not force:
         secs = int(act.seconds_since or 0)
         return {
@@ -437,10 +497,10 @@ def api_resume(session: str = Query(...), force: bool = False):
         }
 
     try:
-        _launch_resume(sid, cwd)
+        _launch_resume(sid, cwd, source)
     except Exception as e:               # 실행 실패를 사용자에게 그대로 전달
         raise HTTPException(status_code=500, detail=f"터미널 실행 실패: {e}")
-    return {"ok": True, "cwd": cwd}
+    return {"ok": True, "cwd": cwd, "source": source}
 
 
 def _resume_env() -> dict:
@@ -458,23 +518,29 @@ def _resume_env() -> dict:
     return env
 
 
-def _launch_resume(sid: str, cwd: str | None) -> None:
-    """플랫폼별로 새 터미널 창을 열어 claude --resume 실행(종료 후에도 창 유지)."""
+def _launch_resume(sid: str, cwd: str | None, source: str = "claude-code") -> None:
+    """플랫폼별로 새 터미널 창을 열어 출처별 재개 명령 실행(종료 후에도 창 유지)."""
     # 방어심층: 호출자(api_resume)가 이미 검증하지만, 이 함수 단독 오용에도 안전하도록 재검증.
     if not _SID_RE.fullmatch(sid):
         raise ValueError(f"안전하지 않은 세션 id: {sid!r}")
+    argv = _resume_argv(source, sid)   # 고정 토큰 + 검증된 sid(주입 불가)
     plat = _sys.platform
     env = _resume_env()
     if plat == "win32":
-        # 새 콘솔 창에서 실행 + 창 유지(/k). sid는 위에서 화이트리스트 검증됨.
-        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", "claude", "--resume", sid], cwd=cwd, env=env)
+        # 새 콘솔 창에서 실행 + 창 유지(/k).
+        subprocess.Popen(["cmd", "/c", "start", "", "cmd", "/k", *argv], cwd=cwd, env=env)
         return
+    # mac/linux: 새 탭의 셸이 런처가 아니라 (싱글턴) 터미널 서버에서 spawn될 수 있어 env= 가
+    # 안 먹을 수 있음 → 마커 정리를 inner 셸 안에서 직접 수행(확실). cwd 없으면 홈으로(~ 리터럴 금지).
+    target = shlex.quote(cwd or str(Path.home()))
+    prefix = ("unset CLAUDE_CODE_CHILD_SESSION CLAUDECODE CLAUDE_CODE_ENTRYPOINT NO_COLOR; "
+              "export CLAUDE_CODE_FORCE_SESSION_PERSISTENCE=1; ")
     if plat == "darwin":
-        inner = f'cd {shlex.quote(cwd or "~")} && claude --resume {shlex.quote(sid)}'
+        inner = f'{prefix}cd {target} && {shlex.join(argv)}'
         subprocess.Popen(["osascript", "-e", f"tell application \"Terminal\" to do script {json.dumps(inner)}"], env=env)
         return
     # linux: 흔한 터미널 emulator 순차 시도
-    inner = f'cd {shlex.quote(cwd or "~")} && claude --resume {shlex.quote(sid)}; exec bash'
+    inner = f'{prefix}cd {target} && {shlex.join(argv)}; exec bash'
     for term in (["x-terminal-emulator", "-e"], ["gnome-terminal", "--"], ["konsole", "-e"], ["xterm", "-e"]):
         try:
             subprocess.Popen(term + ["bash", "-lc", inner], env=env)
