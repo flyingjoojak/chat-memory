@@ -293,3 +293,27 @@ export async function reindex(
   })
   return r.json()
 }
+
+// 원클릭 형식 신고: 대화 내용 없는 리댁트 스키마 지문(소스 로그 포맷 변경 신고용).
+export type SchemaSource = "codex" | "claude-code"
+export interface SchemaReport {
+  source: string
+  engram_version: string
+  repo: string
+  error?: string
+  root?: string | null
+  root_exists?: boolean
+  files?: number
+  files_scanned?: number
+  files_with_turns?: number
+  unreadable_files?: number
+  cli_versions?: string[]
+  drift_suspected?: boolean
+  suspect_files?: number
+  type_counts?: Record<string, number>
+  payload_type_counts?: Record<string, number>
+  item_type_counts?: Record<string, number>
+  redacted_samples?: unknown[]
+}
+export const getSchemaReport = (source: SchemaSource) =>
+  getJSON<SchemaReport>(`/api/report/schema?source=${encodeURIComponent(source)}`)
