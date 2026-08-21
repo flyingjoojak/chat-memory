@@ -22,7 +22,7 @@ from .config import (
 )
 from .filters import should_embed
 from .models import Turn
-from .parser import extract_turns, is_real_user_prompt, iter_json_lines
+from .sources import default_adapter
 
 
 def _resolve_projects_dir(projects_dir: str | Path | None) -> Path:
@@ -33,18 +33,9 @@ def _resolve_projects_dir(projects_dir: str | Path | None) -> Path:
     return Path(C.PROJECTS_DIR)
 
 
-# 색인·카운트 제외 폴더: Syncthing 버전 백업(.stversions), chatmem 아카이브 스냅샷(.chatmem-archive).
-_SKIP_DIRS = {".stversions", ".chatmem-archive"}
-
-
 def iter_jsonl(root: Path):
-    """프로젝트 폴더의 실제 세션 jsonl만 순회. Syncthing 버전 백업(.stversions) 등 제외.
-
-    버전 백업본은 기기마다 달라 개수·세션 수를 부풀리고 중복 세션을 만든다 → 걸러낸다.
-    """
-    for p in root.rglob("*.jsonl"):
-        if _SKIP_DIRS.isdisjoint(p.parts):
-            yield p
+    """활성 소스 어댑터가 정의한 세션 파일들을 순회(기본=Claude Code jsonl, 백업/아카이브 제외)."""
+    return default_adapter().discover(root)
 
 
 def has_new_data(db, projects_dir: str | Path | None = None) -> bool:
@@ -114,13 +105,13 @@ def _contextual(ctx: str, chunk_text: str, project: str) -> str:
     return f"{head}\n{chunk_text}" if head else chunk_text
 
 
-def _group_with_offsets(proc: list[tuple], final_offset: int) -> list[tuple[Turn, int]]:
+def _group_with_offsets(proc: list[tuple], final_offset: int, adapter) -> list[tuple[Turn, int]]:
     """처리 대상 레코드를 (턴, resume_offset) 목록으로. resume=다음 턴 시작(=재개 지점)."""
-    starts = [i for i, (o, _s, _e) in enumerate(proc) if is_real_user_prompt(o)]
+    starts = [i for i, (o, _s, _e) in enumerate(proc) if adapter.is_turn_start(o)]
     out: list[tuple[Turn, int]] = []
     for k, si in enumerate(starts):
         sj = starts[k + 1] if k + 1 < len(starts) else len(proc)
-        turns = extract_turns([proc[t][0] for t in range(si, sj)])
+        turns = adapter.extract_turns([proc[t][0] for t in range(si, sj)])
         if not turns:
             continue
         resume = proc[sj][1] if sj < len(proc) else final_offset
@@ -138,6 +129,7 @@ def index_file(
     턴 경계마다 resume offset을 알고, checkpoint_turns 턴마다 커서 전진 + 벡터 저장.
     → 대형 파일도 중간에서 재개 가능(작업이 kill 돼도 최대 checkpoint_turns 턴만 재처리).
     """
+    adapter = default_adapter()
     path = str(path)
     size = os.path.getsize(path)
     mtime = os.path.getmtime(path)
@@ -149,7 +141,7 @@ def index_file(
 
     records = []  # (obj, start, end)
     prev = offset
-    for obj, end in iter_json_lines(path, offset):
+    for obj, end in adapter.read_records(path, offset):
         records.append((obj, prev, end))
         prev = end
     if not records:
@@ -157,7 +149,7 @@ def index_file(
 
     last_up = None
     for i, (obj, _s, _e) in enumerate(records):
-        if is_real_user_prompt(obj):
+        if adapter.is_turn_start(obj):
             last_up = i
 
     idle = (time.time() - mtime) > idle_secs
@@ -169,7 +161,7 @@ def index_file(
     if not proc:
         return 0
 
-    turns = _group_with_offsets(proc, final_offset)
+    turns = _group_with_offsets(proc, final_offset, adapter)
     if not turns:  # 노이즈만 있었으면 커서만 전진
         db.set_cursor(path, final_offset, size, mtime)
         db.commit()

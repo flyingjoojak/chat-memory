@@ -1,0 +1,34 @@
+"""Claude Code 소스 어댑터: ~/.claude/projects/**/*.jsonl 세션 로그.
+
+기존 parser.py 로직을 그대로 위임한다 — 동작 100% 동일(파일 이동/경계선 긋기일 뿐).
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Iterable, Iterator
+
+from ..models import Turn
+from ..parser import extract_turns as _extract_turns
+from ..parser import is_real_user_prompt, iter_json_lines
+
+# 색인·카운트 제외 폴더: Syncthing 버전 백업(.stversions), chatmem 아카이브 스냅샷(.chatmem-archive).
+# 버전 백업본은 기기마다 달라 세션 수를 부풀리고 중복을 만든다 → 걸러낸다.
+_SKIP_DIRS = {".stversions", ".chatmem-archive"}
+
+
+class ClaudeCodeAdapter:
+    name = "claude-code"
+
+    def discover(self, root: Path) -> Iterator[Path]:
+        for p in root.rglob("*.jsonl"):
+            if _SKIP_DIRS.isdisjoint(p.parts):
+                yield p
+
+    def read_records(self, path: str | Path, start_offset: int = 0) -> Iterator[tuple[dict, int]]:
+        return iter_json_lines(path, start_offset)
+
+    def is_turn_start(self, obj: dict) -> bool:
+        return is_real_user_prompt(obj)
+
+    def extract_turns(self, objs: Iterable[dict]) -> list[Turn]:
+        return _extract_turns(objs)
