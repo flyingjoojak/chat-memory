@@ -1,9 +1,7 @@
 import { useId, useRef, useState } from "react"
 import { ChevronDown, Check } from "lucide-react"
 import type { SourceOption } from "@/lib/api"
-
-const LABEL: Record<string, string> = { "claude-code": "Claude Code", codex: "Codex" }
-const label = (s: string): string => LABEL[s] ?? s
+import { sourceLabel as label } from "@/lib/source"
 
 type Props = {
   available: SourceOption[]

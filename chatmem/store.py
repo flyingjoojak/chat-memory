@@ -61,8 +61,8 @@ def _row_to_turn(row: sqlite3.Row) -> Turn:
 
 
 class ArchiveDB:
-    def __init__(self, path: str | Path = DB_PATH):
-        path = Path(path)
+    def __init__(self, path: str | Path | None = None):
+        path = Path(path) if path is not None else DB_PATH   # 호출 시점에 DB_PATH 조회(설정/테스트 반영)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(path), timeout=30.0)
         self.conn.row_factory = sqlite3.Row
