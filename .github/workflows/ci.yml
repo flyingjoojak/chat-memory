@@ -1,0 +1,38 @@
+# CI: main 푸시·모든 PR 마다 백엔드 테스트 + 프론트 린트/빌드를 자동 검증.
+# (설치본까지 만드는 릴리스 빌드는 release.yml 참고 — 태그를 올릴 때만 동작)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: 백엔드 테스트 (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+      # 테스트는 FakeEmbedder/더미 경로를 써서 실제 임베딩 모델·네트워크가 필요 없다.
+      - name: 의존성 설치
+        run: pip install ".[all]" pytest
+      - name: 테스트
+        run: python -m pytest -q
+
+  frontend:
+    name: 프론트 린트·빌드
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run lint
+      - run: npm --prefix frontend run build
