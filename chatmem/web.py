@@ -747,9 +747,13 @@ def _st_start_bg(persist: bool = True) -> None:
                     with contextlib.suppress(Exception):
                         db = ArchiveDB(); db.set_meta("syncthing_enabled", "1"); db.commit()
             else:
+                # 실패 원인을 syncthing.log에서 뽑아 사용자에게 그대로 전달(락 충돌 등).
+                reason = None
+                with contextlib.suppress(Exception):
+                    reason = syncthing.log_error(inst.home)
                 with _st_lock:
                     _st_state.update(running=False, starting=False, phase="시작 실패",
-                                     last_error="Syncthing이 준비되지 않음")
+                                     last_error=reason or "Syncthing이 준비되지 않음")
         except Exception as ex:  # noqa: BLE001
             with _st_lock:
                 _st_state.update(running=False, starting=False, phase="오류", last_error=str(ex))
