@@ -19,8 +19,8 @@ import threading
 import time
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from .int8_model import INT8_MODEL_ID
@@ -225,6 +225,64 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=_lifespan, title="chat-memory")
+
+
+# ── CSRF 보호(Fetch Metadata resource isolation) ──────────────────────────
+# 서버가 127.0.0.1 에만 바인딩돼도, 사용자가 브라우저에서 연 악성 페이지가 이 서버로 폼/fetch를
+# 자동 전송할 수 있다(CSRF). 특히 /api/resume 는 OS 프로세스를 띄우므로 방어가 필요.
+# 정책: 상태변경 메서드에서 Sec-Fetch-Site == "cross-site" 면 차단.
+#   허용 = same-origin(앱 자신) · none(직접 네비게이션) · same-site(dev 프록시 등) · 헤더 없음
+#         (비브라우저 클라이언트: CLI·테스트·Electron 사이드카). 브라우저만 이 헤더를 보낸다.
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+_ALLOWED_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})   # 루프백만 정상
+_BLOCKED_SITES = frozenset({"cross-site", "same-site"})         # 앱 자신(same-origin)만 허용
+
+
+def _host_of(value: str | None) -> str | None:
+    """Host/Origin 값에서 호스트명만 추출(스킴·경로·포트 제거, [::1] 처리), 소문자."""
+    if not value:
+        return None
+    v = value.strip()
+    if "://" in v:
+        v = v.split("://", 1)[1]
+    v = v.split("/", 1)[0]
+    if v.startswith("["):          # [::1]:port
+        return v[1:].split("]", 1)[0].lower()
+    if ":" in v:
+        v = v.rsplit(":", 1)[0]
+    return v.lower()
+
+
+def _csrf_blocked(method: str, sec_fetch_site: str | None,
+                  host: str | None = None, origin: str | None = None) -> bool:
+    """차단 대상이면 True.
+
+    - Host 검증(모든 메서드): Host 가 루프백이 아니면 차단 → DNS 리바인딩(evil.com→127.0.0.1)으로
+      same-origin 을 위조하는 우회를 봉쇄.
+    - 상태변경 메서드: Sec-Fetch-Site 가 cross-site/same-site 면 차단(앱 자신 same-origin만 허용).
+      헤더가 없으면(구형 브라우저) Origin 으로 폴백 — 오리진이 루프백이 아니면 차단.
+      Sec-Fetch-Site·Origin 둘 다 없으면 허용 = 비브라우저 클라(CLI·테스트·사이드카).
+    """
+    if host is not None and _host_of(host) not in _ALLOWED_HOSTS:
+        return True
+    if method.upper() in _SAFE_METHODS:
+        return False
+    if sec_fetch_site is not None:
+        return sec_fetch_site in _BLOCKED_SITES
+    if origin:
+        return _host_of(origin) not in _ALLOWED_HOSTS
+    return False
+
+
+@app.middleware("http")
+async def _csrf_guard(request: Request, call_next):  # noqa: ANN001,ANN201 — Starlette 미들웨어 시그니처
+    h = request.headers
+    if _csrf_blocked(request.method, h.get("sec-fetch-site"), h.get("host"), h.get("origin")):
+        return JSONResponse(
+            status_code=403,
+            content={"error": "허용되지 않은 출처의 요청이에요(CSRF 보호). 앱 안에서 실행해 주세요."},
+        )
+    return await call_next(request)
 
 
 @app.exception_handler(Exception)
