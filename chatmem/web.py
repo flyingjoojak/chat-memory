@@ -430,6 +430,24 @@ def api_sources():
     return {"sources": [{"source": s, "count": n} for s, n in db.distinct_sources()]}
 
 
+@app.post("/api/sources/toggle")
+def api_sources_toggle(payload: dict):
+    """색인 소스 켜기/끄기(비파괴). enabled=false면 다음 색인부터 그 소스를 건너뛴다.
+    기존에 색인된 데이터는 그대로 남아 검색된다(삭제하지 않음)."""
+    from .sources import ADAPTERS, disabled_sources
+    name = str((payload or {}).get("source", "")).strip()
+    enabled = bool((payload or {}).get("enabled", True))
+    if name not in ADAPTERS:
+        raise HTTPException(status_code=400, detail="알 수 없는 소스")
+    cur = disabled_sources()
+    cur.discard(name) if enabled else cur.add(name)
+    db = ArchiveDB()
+    db.set_meta("sources_disabled", ",".join(sorted(cur)))
+    db.commit()
+    _sources_cache["at"] = 0.0   # /api/config 소스 현황 캐시 무효화 → 즉시 반영
+    return {"ok": True, "disabled": sorted(cur)}
+
+
 @app.get("/api/session")
 def api_session(id: str = Query(...), limit: int = 2000):
     """한 세션의 모든 턴을 시간순으로 → 그 대화 전체 작업 내역."""
@@ -935,8 +953,9 @@ def _sources_info_cached() -> list:
     now = time.time()
     if now - _sources_cache["at"] < _PENDING_TTL and _sources_cache["list"]:
         return _sources_cache["list"]
-    from .sources import ADAPTERS, active_sources, source_roots
+    from .sources import ADAPTERS, active_sources, disabled_sources, source_roots
     active = {n for n, _a, _r in active_sources()}
+    disabled = disabled_sources()
     roots = source_roots()
     out = []
     for name, adapter in ADAPTERS.items():
@@ -948,8 +967,8 @@ def _sources_info_cached() -> list:
             import logging
             logging.getLogger(__name__).warning("소스 %s 파일 카운트 실패: %s", name, e)
             count = 0
-        out.append({"name": name, "root": str(root) if root else None,
-                    "exists": exists, "active": name in active, "count": count})
+        out.append({"name": name, "root": str(root) if root else None, "exists": exists,
+                    "active": name in active, "disabled": name in disabled, "count": count})
     _sources_cache.update(at=now, list=out)
     return out
 

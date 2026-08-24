@@ -13,7 +13,7 @@ import {
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
   archiveSync, getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, quitApp, reindex, runEnrich, runIndex,
-  syncthingPair, syncthingStart, syncthingStop, toggleSync, verifyEnrich,
+  syncthingPair, syncthingStart, syncthingStop, toggleSource, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
   type SyncthingStatus, type SyncthingSync, type SystemInfo,
 } from "@/lib/api"
@@ -638,20 +638,28 @@ export function SettingsView() {
 
               <Section title="색인 소스">
                 <div className="space-y-1.5 py-2">
-                  {(cfg?.sources ?? []).map((s) => (
-                    <div key={s.name} className="flex flex-wrap items-center gap-2 text-sm">
-                      <span className="font-medium">
-                        {s.name === "codex" ? "Codex CLI" : s.name === "claude-code" ? "Claude Code" : s.name}
-                      </span>
-                      {s.active
-                        ? <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary">색인 중 · {s.count}개</span>
-                        : <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">{s.exists ? "꺼짐" : "폴더 없음"}</span>}
-                      <code className="cm-inline min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{s.root ?? "—"}</code>
-                    </div>
-                  ))}
+                  {(cfg?.sources ?? []).map((s) => {
+                    const enabled = !s.disabled
+                    const status = !s.exists ? "폴더 없음" : s.disabled ? "꺼짐" : `색인 중 · ${s.count}개`
+                    return (
+                      <div key={s.name} className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-medium">
+                          {s.name === "codex" ? "Codex CLI" : s.name === "claude-code" ? "Claude Code" : s.name}
+                        </span>
+                        <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${s.active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{status}</span>
+                        <code className="cm-inline min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{s.root ?? "—"}</code>
+                        <button type="button" role="switch" aria-checked={enabled} disabled={!s.exists}
+                          aria-label={`${s.name} 색인 ${enabled ? "끄기" : "켜기"}`}
+                          onClick={async () => { await toggleSource(s.name, !enabled); getConfig().then(setCfg).catch(() => {}) }}
+                          className={`ml-auto shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${enabled ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                          {enabled ? "켜짐" : "꺼짐"}
+                        </button>
+                      </div>
+                    )
+                  })}
                   <p className="text-xs text-muted-foreground">
-                    Codex CLI 로그(<code className="cm-inline">~/.codex/sessions</code>)가 있으면 자동으로 함께 색인돼요.
-                    특정 소스만 쓰려면 <code className="cm-inline">CHATMEM_SOURCES</code> 환경변수로 지정하세요.
+                    끄면 그 소스는 <b>다음 색인부터 건너뜁니다</b>(색인만 중단, 이미 색인된 데이터는 검색에 남아요).
+                    환경변수 <code className="cm-inline">CHATMEM_SOURCES</code>로도 지정할 수 있어요.
                   </p>
                 </div>
               </Section>

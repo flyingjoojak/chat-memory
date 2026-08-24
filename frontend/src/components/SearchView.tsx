@@ -6,6 +6,7 @@ import { ChatThread } from "./ChatThread"
 import { SourceFilter } from "./SourceFilter"
 import { getSources, search, type SearchMode, type SourceOption } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
+import { sourceLabel } from "@/lib/source"
 import type { Hit } from "@/lib/types"
 
 const EXAMPLES = ["어제 뭐 했지", "에러 해결", "어떻게 구현했더라", "설정 방법", "결정한 내용"]
@@ -173,6 +174,9 @@ export function SearchView() {
               <button key={h.id} onClick={() => setSel({ session: h.session_full, turn: h.id })}
                 className={`w-full rounded-lg border p-3 text-left transition-colors ${active ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
                 <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground tabular-nums">
+                  {hasMultipleSources && h.source && (
+                    <span className="rounded bg-muted px-1 py-0.5 text-[9.5px] font-medium text-foreground/70">{sourceLabel(h.source)}</span>
+                  )}
                   {h.sources.map((s) => (
                     <Badge key={s} variant={s === "키워드" ? "secondary" : "default"} className="h-4 px-1.5 text-[9.5px]">{s}</Badge>
                   ))}

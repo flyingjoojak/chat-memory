@@ -211,10 +211,20 @@ export interface SourceInfo {
   root: string | null
   exists: boolean
   active: boolean
+  disabled?: boolean   // UI 토글로 껐는지(색인만 중단, 기존 데이터 유지)
   count: number
 }
 
 export const getConfig = () => getJSON<Config>(`/api/config`)
+
+// 색인 소스 켜기/끄기(비파괴). 끄면 다음 색인부터 그 소스를 건너뜀, 기존 데이터는 유지.
+export async function toggleSource(source: string, enabled: boolean): Promise<{ ok: boolean; disabled: string[] }> {
+  const r = await fetch(`/api/sources/toggle`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, enabled }),
+  })
+  return r.json()
+}
 
 export async function putConfig(updates: Record<string, string>): Promise<{ ok: boolean; rescheduled?: boolean }> {
   const r = await fetch(`/api/config`, {
