@@ -78,6 +78,12 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
     renderer.setPixelRatio(window.devicePixelRatio)
     renderer.setSize(w, h)
     renderer.domElement.style.borderRadius = "12px"
+    // 캔버스를 컨테이너에 CSS로 꽉 채운다(px 아님) → 창 리사이즈 중엔 브라우저가 마지막 프레임을
+    // 늘려 즉시 채우고(값싼 스케일), 무거운 드로잉 버퍼 재할당은 아래 ResizeObserver 디바운스로
+    // 리사이즈가 멈춘 뒤 한 번만 수행. 리사이즈 중 캔버스가 안 따라오거나 찢기는 현상을 줄인다.
+    renderer.domElement.style.display = "block"
+    renderer.domElement.style.width = "100%"
+    renderer.domElement.style.height = "100%"
     // 접근성: 캔버스가 무엇인지 스크린리더에 알림(상세는 우측 '주제 군집' 패널이 텍스트로 제공).
     renderer.domElement.setAttribute("role", "img")
     renderer.domElement.setAttribute(
@@ -431,14 +437,25 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
     }
     loop()
 
-    const ro = new ResizeObserver(() => {
+    // 리사이즈 디바운스: 라이브 리사이즈 매 틱마다 setSize(=드로잉 버퍼 재할당)를 부르면 무거워
+    // 화면이 밀리거나 찢긴다. 리사이즈가 ~120ms 멈춘 뒤 한 번만 버퍼를 실제 크기로 재할당한다.
+    // setSize의 세 번째 인자 false → three.js가 캔버스 CSS 크기(100%)를 건드리지 않게 유지.
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
+    const applyResize = () => {
       w = wrap.clientWidth; h = wrap.clientHeight
-      camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h)
+      if (w === 0 || h === 0) return
+      camera.aspect = w / h; camera.updateProjectionMatrix()
+      renderer.setSize(w, h, false)
+    }
+    const ro = new ResizeObserver(() => {
+      if (resizeTimer) clearTimeout(resizeTimer)
+      resizeTimer = setTimeout(applyResize, 120)
     })
     ro.observe(wrap)
 
     return () => {
       cancelAnimationFrame(raf); ro.disconnect()
+      if (resizeTimer) clearTimeout(resizeTimer)
       renderer.domElement.removeEventListener("wheel", onWheel)
       renderer.domElement.removeEventListener("pointerdown", onDown)
       renderer.domElement.removeEventListener("pointermove", onMove)

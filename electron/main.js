@@ -30,8 +30,14 @@ if (!app.requestSingleInstanceLock()) {
 Menu.setApplicationMenu(null)
 
 // 렌더러가 preload로 보낸 테마값에 맞춰 네이티브 창(타이틀바 등) 색을 동기화.
+// 창 backgroundColor 도 테마에 맞춘다 → 라이브 리사이즈 중 Chromium이 새 프레임 전에 잠깐
+// 드러내는 여백/찢긴 영역이 테마색이라 '색 튐'이 사라진다(라이트=흰색, 다크=앱 배경).
 ipcMain.on("cm-theme", (_e, mode) => {
-  nativeTheme.themeSource = mode === "light" || mode === "dark" ? mode : "system"
+  const m = mode === "light" || mode === "dark" ? mode : "system"
+  nativeTheme.themeSource = m
+  if (win && !win.isDestroyed()) {
+    try { win.setBackgroundColor(m === "light" ? "#ffffff" : "#0c0d10") } catch (_) { /* 창 정리 중 — 무시 */ }
+  }
 })
 
 function findFreePort() {

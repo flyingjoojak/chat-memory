@@ -22,7 +22,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div className="h-dvh overflow-y-auto bg-background">
+    <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-2xl px-6 py-10">
         <h1 className="text-balance text-2xl font-bold">임베딩 모델 선택</h1>
         <p className="mt-2 text-pretty text-sm text-muted-foreground">
