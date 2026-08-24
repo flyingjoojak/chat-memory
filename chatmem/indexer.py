@@ -271,8 +271,9 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
         had_new = False
         try:
             off, _s, _m = db.get_cursor(f)
-            had_new = os.path.getsize(f) > off
-        except OSError:
+            # size != off = 새 바이트 or 회전/절단(index_file이 처음부터 재처리) — 둘 다 '새 데이터'로 본다.
+            had_new = os.path.getsize(f) != off
+        except Exception:  # noqa: BLE001 — 커서/스탯 실패가 색인 회차를 중단시키지 않게(파일별 격리와 동일)
             pass
         try:
             n = index_file(f, db, vi, embedder, adapter=adapter, on_flush=_on_flush)
@@ -289,11 +290,11 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
                 progress_fn(i + 1, total_files)
             except Exception:  # noqa: BLE001
                 pass
-    _update_drift(db, turns_by_src, newdata_by_src)
+    _update_drift(db, turns_by_src, newdata_by_src, log_fn=log_fn)
     return total
 
 
-def _update_drift(db, turns_by_src: dict[str, int], newdata_by_src: dict[str, int]) -> None:
+def _update_drift(db, turns_by_src: dict[str, int], newdata_by_src: dict[str, int], log_fn=print) -> None:
     """소스 로그 형식 변경(어댑터가 못 읽음) 자동 감지 → meta 'drift_sources'.
 
     신호: 이번 회차 그 소스에 새 바이트가 있었는데 턴을 0개 뽑았다 → build_report 로 확정
@@ -302,7 +303,8 @@ def _update_drift(db, turns_by_src: dict[str, int], newdata_by_src: dict[str, in
     """
     try:
         cur = {s.strip() for s in (db.get_meta("drift_sources") or "").split(",") if s.strip()}
-    except Exception:  # noqa: BLE001 — 감지 실패가 색인을 막지 않게
+    except Exception as e:  # noqa: BLE001 — 감지 실패가 색인을 막지 않게(가시성 위해 로그만)
+        log_fn(f"drift 감지 스킵(meta 읽기 실패): {e}")
         return
     changed = False
     for name, t in turns_by_src.items():
@@ -317,8 +319,9 @@ def _update_drift(db, turns_by_src: dict[str, int], newdata_by_src: dict[str, in
                 if build_report(name).get("drift_suspected"):
                     cur.add(name)
                     changed = True
-            except Exception:  # noqa: BLE001
-                pass
+                    log_fn(f"⚠️ drift 감지: '{name}' 로그를 못 읽음(형식 변경 의심)")
+            except Exception as e:  # noqa: BLE001
+                log_fn(f"drift 확인 실패({name}): {e}")
     if changed:
         db.set_meta("drift_sources", ",".join(sorted(cur)))
         db.commit()
