@@ -151,8 +151,14 @@ def write_config(updates: dict[str, str]) -> None:
 
     값이 빈 문자열이면 해당 키를 주석 처리(비활성).
     """
-    # 개행 주입 차단: 값에 \n/\r 이 있으면 config.env 에 임의 키가 추가되어 화이트리스트가 무력화됨.
+    # 주입 차단: 키/값 모두 검증.
+    # - 키는 env 이름 형식만 허용(영문·숫자·밑줄, 숫자 선두 금지) → '='·개행·임의 키 주입 차단.
+    # - 값에 \n/\r 이 있으면 config.env 에 임의 키가 추가돼 화이트리스트가 무력화됨.
+    import re as _re
+    _key_re = _re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
     for k, v in updates.items():
+        if not _key_re.fullmatch(k):
+            raise ValueError(f"허용되지 않은 설정 키 형식입니다: {k!r}")
         if "\n" in v or "\r" in v:
             raise ValueError(f"설정 값에 줄바꿈은 허용되지 않습니다: {k}")
     path = CONFIG_PATH
