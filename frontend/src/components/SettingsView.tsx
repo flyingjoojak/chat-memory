@@ -62,6 +62,44 @@ function Row({ label, children }: { label: React.ReactNode; children: React.Reac
   )
 }
 
+// 상태 알약(초록=정상/주황=주의/회색=해당없음·확인중). 비개발자도 한눈에 상태만 보게.
+function StatusChip({ tone, children }: { tone: "ok" | "warn" | "muted"; children: React.ReactNode }) {
+  const cls = tone === "ok" ? "bg-primary/10 text-primary"
+    : tone === "warn" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+    : "bg-muted text-muted-foreground"
+  return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>
+}
+
+// 로그 폴더 지정: 평소엔 한 줄(이름 + 상태 + 「변경」)만. 「변경」을 눌러야 입력칸이 펼쳐진다
+// → 화면 공간을 거의 안 쓰면서, 대부분(자동 감지된) 사용자는 상태만 확인하면 된다.
+function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder, help }: {
+  label: string; chip: React.ReactNode; path: string; onPathChange: (v: string) => void
+  onSave: () => void; saved: boolean; placeholder: string; help: React.ReactNode
+}) {
+  const [editing, setEditing] = useState(false)
+  return (
+    <div className="border-b py-3 last:border-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-sm"><span className="font-medium">{label}</span>{chip}</span>
+        <span className="flex items-center gap-2">
+          {saved && <span className="inline-flex items-center gap-1 text-[12px] text-primary"><Check className="size-3.5" />저장됨</span>}
+          <Button variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}>{editing ? "닫기" : "변경"}</Button>
+        </span>
+      </div>
+      {editing && (
+        <div className="mt-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input value={path} onChange={(e) => onPathChange(e.target.value)} aria-label={`${label} 폴더 경로`}
+              className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder={placeholder} />
+            <Button size="sm" variant="outline" onClick={onSave}>저장</Button>
+          </div>
+          <p className="mt-1.5 text-[11px] text-muted-foreground">{help}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // MCP 연동: chatmem-mcp를 각 클라이언트 설정에 등록/해제(파일은 .bak 백업 후 수정).
 function McpSection() {
   const [targets, setTargets] = useState<McpTarget[] | null>(null)
@@ -634,48 +672,29 @@ export function SettingsView() {
                 </Row>
               </Section>
 
-              <Section title="Claude Code 로그 폴더">
-                <div className="py-3.5">
-                  <div className="mb-2 flex items-center gap-2 text-sm">
-                    {!cfg
-                      ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-4 animate-spin" />확인 중…</span>
-                      : cfg.projects_exists
-                        ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · JSONL {cfg.jsonl_count}개 감지</span>
-                        : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-4" />폴더를 찾지 못함 — 경로를 지정하세요</span>}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input value={projectsDir} onChange={(e) => setProjectsDir(e.target.value)} aria-label="Claude Code 로그 폴더 경로"
-                      className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.claude/projects" />
-                    <Button size="sm" variant="outline" onClick={saveProjects}>저장</Button>
-                    {projSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    기본값은 각 사용자 홈의 <code className="cm-inline">~/.claude/projects</code>로 자동 지정됩니다.
-                    Claude Code 로그가 다른 위치에 있으면 여기서 지정하세요.
-                  </p>
-                </div>
-              </Section>
-
-              <Section title="Codex 로그 폴더">
-                <div className="py-3.5">
-                  <div className="mb-2 flex items-center gap-2 text-sm">
-                    {!cfg
-                      ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-4 animate-spin" />확인 중…</span>
-                      : cfg.codex_exists
-                        ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · rollout {(cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0}개 감지</span>
-                        : <span className="inline-flex items-center gap-1 text-muted-foreground"><AlertTriangle className="size-4" />폴더 없음 — Codex를 안 쓰면 비워두면 돼요</span>}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input value={codexDir} onChange={(e) => setCodexDir(e.target.value)} aria-label="Codex 로그 폴더 경로"
-                      className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.codex/sessions" />
-                    <Button size="sm" variant="outline" onClick={saveCodex}>저장</Button>
-                    {codexSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
-                  </div>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    기본값은 <code className="cm-inline">~/.codex/sessions</code>(또는 <code className="cm-inline">$CODEX_HOME/sessions</code>)로 자동 지정됩니다.
-                    Codex 로그가 다른 위치에 있으면 여기서 지정하세요.
-                  </p>
-                </div>
+              <Section title="로그 폴더">
+                <FolderRow
+                  label="Claude Code"
+                  chip={!cfg
+                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />확인 중</StatusChip>
+                    : cfg.projects_exists
+                      ? <StatusChip tone="ok"><Check className="size-3" />대화 {cfg.jsonl_count}개 감지</StatusChip>
+                      : <StatusChip tone="warn"><AlertTriangle className="size-3" />폴더 없음</StatusChip>}
+                  path={projectsDir} onPathChange={setProjectsDir} onSave={saveProjects} saved={projSaved}
+                  placeholder="~/.claude/projects"
+                  help="Claude Code 대화 기록이 저장된 폴더예요. 보통 자동으로 찾으며, 다른 위치에 있을 때만 지정하면 됩니다."
+                />
+                <FolderRow
+                  label="Codex"
+                  chip={!cfg
+                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />확인 중</StatusChip>
+                    : cfg.codex_exists
+                      ? <StatusChip tone="ok"><Check className="size-3" />대화 {(cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0}개 감지</StatusChip>
+                      : <StatusChip tone="muted">안 씀</StatusChip>}
+                  path={codexDir} onPathChange={setCodexDir} onSave={saveCodex} saved={codexSaved}
+                  placeholder="~/.codex/sessions"
+                  help="Codex 대화 기록 폴더예요. Codex를 쓰지 않으면 비워둬도 됩니다."
+                />
               </Section>
 
               <Section title="저장소 현황">
@@ -718,8 +737,7 @@ export function SettingsView() {
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    끄면 그 소스는 <b>다음 색인부터 건너뜁니다</b>(색인만 중단, 이미 색인된 데이터는 검색에 남아요).
-                    환경변수 <code className="cm-inline">CHATMEM_SOURCES</code>로도 지정할 수 있어요.
+                    끄면 그 소스는 <b>다음 색인부터 건너뜁니다</b>. 이미 저장된 대화는 검색에 그대로 남아요.
                   </p>
                 </div>
               </Section>
