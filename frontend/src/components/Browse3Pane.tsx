@@ -195,7 +195,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
       {!groups && !groupsErr && <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
       {groups?.map((g) => compact ? (
         <button key={g.id} onClick={() => pickGroup(g.id)}
-          className={`flex w-full items-center gap-2.5 rounded-lg border p-3 text-left transition-colors ${sel === g.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
+          className={`cm-cv-row flex w-full items-center gap-2.5 rounded-lg border p-3 text-left transition-colors ${sel === g.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
           {groupIcon(g)}
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium">{g.label}</span>
@@ -204,7 +204,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
         </button>
       ) : (
         <button key={g.id} onClick={() => pickGroup(g.id)}
-          className="group flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md">
+          className="cm-cv-row group flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:shadow-md">
           {groupIcon(g)}
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{g.label}</div>
@@ -304,7 +304,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
               {!searching && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">결과 없음</div>}
               {hits.map((h) => (
                 <button key={h.id} onClick={() => setSelTurn({ session: h.session_full, turn: h.id })}
-                  className={`w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === h.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
+                  className={`cm-cv-row w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === h.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
                   <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground tabular-nums">
                     {h.sources.map((s) => <Badge key={s} variant={s === "키워드" ? "secondary" : "default"} className="h-4 px-1.5 text-[9.5px]">{s}</Badge>)}
                     <span>{h.cosine != null ? `cos ${h.cosine.toFixed(2)}` : "키워드"}</span><span className="opacity-40">·</span><span>{fmtTime(h.timestamp)}</span>
@@ -316,7 +316,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
           ) : (
             convs?.map((it) => (
               <button key={it.t} onClick={() => setSelTurn({ session: it.s, turn: it.t })}
-                className={`w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === it.t ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
+                className={`cm-cv-row w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === it.t ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
                 <div className="line-clamp-2 text-[13px] font-medium leading-snug">{it.h || "(제목 없음)"}</div>
                 <div className="mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">세션 {it.s.slice(0, 8)}</div>
               </button>

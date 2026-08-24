@@ -80,7 +80,7 @@ export default function App() {
 
   if (backendDown) {
     return (
-      <div className="grid h-screen place-items-center bg-background px-6">
+      <div className="grid h-full place-items-center bg-background px-6">
         <div className="flex max-w-sm flex-col items-center gap-3 text-center">
           <AlertTriangle className="size-6 text-amber-500" />
           <div className="text-sm font-medium">백엔드에 연결할 수 없어요</div>
@@ -93,16 +93,16 @@ export default function App() {
     )
   }
   if (onboard === null) {
-    return <div className="grid h-screen place-items-center bg-background text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
+    return <div className="grid h-full place-items-center bg-background text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
   }
   if (onboard) {
     return <Onboarding onDone={() => setOnboard(false)} />
   }
 
   return (
-    <div className="grid h-screen grid-cols-[60px_1fr] grid-rows-[1fr_auto] overflow-hidden">
+    <div className="grid h-full grid-cols-[60px_1fr] overflow-hidden pb-7">
       {/* 옵시디언식 좌측 아이콘 리본 */}
-      <nav className="row-span-2 flex flex-col items-center gap-1 border-r bg-sidebar py-3">
+      <nav className="flex flex-col items-center gap-1 border-r bg-sidebar py-3">
         <svg viewBox="0 0 32 32" className="mb-2 size-8" role="img" aria-label="Engram">
           <title>Engram</title>
           <rect width="32" height="32" rx="7" fill="#0b0d11" />

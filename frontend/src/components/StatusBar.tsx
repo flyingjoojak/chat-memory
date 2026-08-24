@@ -40,7 +40,7 @@ export function StatusBar() {
   const n = (v?: number) => (v ?? 0).toLocaleString()
 
   return (
-    <footer className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 border-t bg-sidebar px-3 py-1 text-[11px] text-muted-foreground tabular-nums">
+    <footer className="fixed inset-x-0 bottom-0 z-20 flex h-7 items-center gap-x-3 overflow-hidden border-t bg-sidebar px-3 text-[11px] text-muted-foreground tabular-nums">
       {/* 왼쪽: 색인 활동 */}
       {ix?.running
         ? <span className="inline-flex items-center gap-1 text-foreground/80"><Loader2 className="size-3 animate-spin" />색인 중</span>

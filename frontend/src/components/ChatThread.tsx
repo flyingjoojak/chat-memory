@@ -11,7 +11,7 @@ function Turn({ t, i, highlight }: { t: SessionTurn; i: number; highlight: boole
   // 선택한 턴이면 그 '상단'으로 즉시 이동(애니메이션 없이 한 번에 — 긴 내용도 번잡하지 않게).
   useEffect(() => { if (highlight) ref.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior, block: "start" }) }, [highlight])
   return (
-    <div ref={ref} className={`scroll-mt-4 rounded-xl border p-3 ${highlight ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30" : "bg-card"}`}>
+    <div ref={ref} className={`scroll-mt-4 rounded-xl border p-3 ${highlight ? "border-primary/50 bg-primary/5 ring-1 ring-primary/30" : "bg-card cm-cv-turn"}`}>
       <div className="mb-2 flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
         <span className="shrink-0">#{i + 1} · {fmtTime(t.timestamp)}</span>
         {highlight && <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">선택</span>}

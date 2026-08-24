@@ -129,7 +129,19 @@
   html {
     @apply font-sans;
     }
+  /* 창을 채우는 높이는 100% 체인으로(vh 아님) — Electron 리사이즈 시 뷰포트단위(vh)보다
+     레이아웃 박스(100%)가 창 크기에 더 즉각 동기화돼 하단바가 덜 지연되며 따라온다. */
+  html, body, #root {
+    height: 100%;
+    }
 }
+
+/* 긴 목록·채팅 말풍선 경량화: 화면 밖 요소의 레이아웃·페인트를 건너뛴다(내용·검색·접근성은
+   그대로 유지). 창 리사이즈와 스크롤 시 프레임당 비용을 크게 줄여 옵시디언처럼 즉각 반응하게 한다.
+   contain-intrinsic-size 의 auto 키워드가 한 번 그려진 실제 높이를 기억해 스크롤바 점프를 막는다
+   (뒤의 px 값은 첫 페인트 전 추정치일 뿐). */
+.cm-cv-row  { content-visibility: auto; contain-intrinsic-size: auto 60px; }
+.cm-cv-turn { content-visibility: auto; contain-intrinsic-size: auto 140px; }
 
 /* 마크다운 렌더 */
 .cm-md { line-height: 1.6; word-break: break-word; }
