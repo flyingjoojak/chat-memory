@@ -9,7 +9,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { StatusBar } from "@/components/StatusBar"
 import { UpdateBanner } from "@/components/UpdateBanner"
 import { AlertTriangle } from "lucide-react"
-import { getOnboarding, getSystem } from "@/lib/api"
+import { getOnboarding, getSchemaReport, getSystem, type SchemaSource } from "@/lib/api"
+import { buildIssueUrl, copyText } from "@/lib/report"
 import { applyTheme } from "@/lib/theme"
 
 // three.js는 무거우니 3D 탭 열 때만 로드(초기 번들 경량).
@@ -64,6 +65,18 @@ export default function App() {
     const id = window.setInterval(load, 20000)
     return () => window.clearInterval(id)
   }, [])
+
+  // 드리프트 원클릭 신고: 그 소스의 리댁트 지문(대화 내용 없음)을 클립보드에 담고 프리필된 GitHub 이슈를 연다.
+  async function reportDrift() {
+    const src = drift[0]
+    if (!src) return
+    try {
+      const report = await getSchemaReport(src as SchemaSource)
+      const json = JSON.stringify(report, null, 2)
+      const ok = await copyText(json)
+      window.open(buildIssueUrl(report, json, ok), "_blank", "noopener,noreferrer")
+    } catch { /* 실패해도 '설정 열기' 폴백이 있음 */ }
+  }
 
   if (backendDown) {
     return (
@@ -143,10 +156,14 @@ export default function App() {
           <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
             <AlertTriangle className="size-4 shrink-0" />
             <span>
-              <b>{drift.map((s) => (s === "codex" ? "Codex" : s === "claude-code" ? "Claude Code" : s)).join(", ")}</b> 로그를 못 읽고 있어요 — 형식이 바뀐 것 같아요. 설정 &gt; 문제 신고로 알려주시면 빨리 고칠 수 있어요.
+              <b>{drift.map((s) => (s === "codex" ? "Codex" : s === "claude-code" ? "Claude Code" : s)).join(", ")}</b> 로그를 못 읽고 있어요 — 형식이 바뀐 것 같아요. 한 번 눌러 신고해 주시면 빨리 고칠 수 있어요(대화 내용은 안 보내요).
             </span>
+            <button onClick={reportDrift}
+              className="ml-auto rounded-md border border-amber-500/50 bg-amber-500/20 px-2 py-0.5 font-medium hover:bg-amber-500/30">
+              바로 신고
+            </button>
             <button onClick={() => { setView("settings"); setJump(null) }}
-              className="ml-auto rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
+              className="rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
               설정 열기
             </button>
           </div>
