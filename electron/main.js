@@ -119,7 +119,13 @@ async function bootAndLoad() {
   if (!backend) spawnBackend()
   try {
     await waitReady()
-    if (win && !win.isDestroyed()) await win.loadURL(`http://127.0.0.1:${port}/`)
+    if (win && !win.isDestroyed()) {
+      await win.loadURL(`http://127.0.0.1:${port}/`)
+      // 뒤로가기(마우스 4번·Alt+←)로 시작 화면(loading.html)에 되돌아가 '엔진 불러오는 중'에
+      // 갇히는 것 방지: 앱 URL 로드 후 내비게이션 히스토리를 비워 '뒤로 갈 대상'을 없앤다.
+      try { win.webContents.navigationHistory.clear() }
+      catch (_) { try { win.webContents.clearHistory() } catch (_2) { /* 구버전/미지원 — 무시 */ } }
+    }
   } catch (e) {
     if (win && !win.isDestroyed()) {
       win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(
@@ -144,6 +150,15 @@ function createWindow() {
   })
   win.setMenuBarVisibility(false)
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" } })
+  // SPA라 페이지 이동이 없다 → 마우스 뒤로/앞으로 버튼(및 Alt+←/→)으로 인한 히스토리 이동을 차단.
+  // 이게 없으면 뒤로가기가 시작 화면(loading.html)으로 돌아가 무한 '엔진 불러오는 중'에 갇힌다.
+  win.on("app-command", (e, cmd) => {
+    if (cmd === "browser-backward" || cmd === "browser-forward") e.preventDefault()
+  })
+  win.webContents.on("will-navigate", (e, url) => {
+    // 앱 URL(그리고 그 하위) 로만 이동 허용. loading.html(file://)·외부로의 이동은 차단.
+    if (!url.startsWith(`http://127.0.0.1:${port}/`)) e.preventDefault()
+  })
   win.loadFile(path.join(__dirname, "loading.html"))
   win.show()
   // 창 닫기 = 트레이로 숨김(백그라운드 색인·동기 계속). 완전 종료는 트레이 메뉴.
