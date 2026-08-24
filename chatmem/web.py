@@ -890,22 +890,17 @@ def api_config_put(payload: dict):
 
 # 임베딩 모델 카탈로그(한국어 대화용). ram_gb=임베딩 실행 중 피크 워킹셋 실측(MB→GB),
 # cps=청크/초 처리량 실측(CPU 기준, 기기 성능에 따라 다름). 재색인 예상시간 산출에 사용.
-# 순서 = 화면 표기 순서(첫 번째가 권장 기본).
-# 실측 요약: int8 e5-large = fp32와 검색 품질 사실상 동일(공정벤치 R@1 동일·MRR −0.4%)이면서
-#   색인 ~2x 빠름·다운로드 0.52GB·설치본 동봉. → 기본·권장.
-# fp32 e5-large = 원본(최고 품질, int8과 미세차) 이나 RAM·속도 부담 큼·2.24GB. → '최고 품질' 옵션.
+# 순서 = 화면 표기 순서(첫 번째가 권장 기본). 용량(디스크 GB)은 note에 적지 않는다 —
+# 프론트가 size_gb 로 따로 표기하므로 중복 방지.
+# int8 e5-large = fp32와 검색 품질 사실상 동일(공정벤치 R@1 동일·MRR −0.4%)이면서 색인 ~2x 빠름. → 기본·권장.
 # MiniLM = 경량(RAM ~1.2GB)이나 품질 낮음. → 저사양(32GB 미만) 옵션.
 _EMBED_ALLOW = {
     INT8_MODEL_ID: {
-        "note": "권장 기본 — e5-large 품질에 색인 ~2x 빠름·0.52GB, 설치본에 동봉(오프라인 즉시).",
+        "note": "권장 기본 — e5-large 수준 품질에 색인 속도 약 2배 빠름.",
         "ram_gb": 5.0, "cps": 1.6,
         "tags": ["권장 기본", "품질 최상", "빠름"]},
-    "intfloat/multilingual-e5-large": {
-        "note": "최고 품질(원본 fp32). int8과 미세차. RAM·속도 부담 큼, 2.24GB 다운로드.",
-        "ram_gb": 6.4, "cps": 0.8,
-        "tags": ["최고 품질", "무거움", "느림"]},
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
-        "note": "경량 — RAM 적은 기기(32GB 미만) 권장. 빠르지만 검색 품질은 낮음. 0.22GB.",
+        "note": "경량 — RAM이 적은 기기(32GB 미만)에 권장. 빠르지만 검색 품질은 다소 낮음.",
         "ram_gb": 1.2, "cps": 31.0,
         "tags": ["저사양 추천", "램 부하 적음", "속도 매우 빠름"]},
 }
@@ -1120,7 +1115,7 @@ def api_mcp_unregister(payload: dict):
 # 30으로 두는 이유: 명목 32GB 기기도 OS/하드웨어 예약분 때문에 실측 총량이 ~31.6GB로 보고됨
 # → 32로 두면 실제 32GB 기기가 걸러짐. 30이면 명목 32GB=int8, 명목 16/24GB=MiniLM로 의도대로.
 _RECO_RAM_GB = 30
-_MODEL_INT8 = INT8_MODEL_ID            # 기본·권장(설치본 동봉)
+_MODEL_INT8 = INT8_MODEL_ID            # 기본·권장
 _MODEL_MINI = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
 # fastembed 카탈로그에 없는 커스텀(번들) 모델의 dim/size 수동 지정.
 _CUSTOM_META = {INT8_MODEL_ID: {"dim": 1024, "size_gb": 0.52}}
