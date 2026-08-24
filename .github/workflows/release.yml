@@ -9,8 +9,8 @@
 # 아직 남은 전제(코드 밖):
 #   - 코드 서명 인증서 없음 → 설치본은 미서명(SmartScreen/Gatekeeper 경고). 인증서 생기면
 #     electron-builder 서명 설정 + 시크릿(CSC_LINK/CSC_KEY_PASSWORD 등)만 추가하면 된다.
-#   - macOS 는 512px 이상 아이콘이 있어야 dmg 가 빌드된다(현재 256px) → 준비 전까지 mac 잡은
-#     continue-on-error 로 두어 win/linux 릴리스를 막지 않게 한다.
+#   - 아이콘은 1024px 로 준비됨(icon.png) → mac dmg 빌드 가능. 다만 서명·공증은 아직이라
+#     mac 잡은 첫 릴리스 안전망으로 continue-on-error 를 유지(그린 확인되면 제거).
 name: Release
 
 on:
@@ -29,7 +29,7 @@ jobs:
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    # mac 아이콘(512px) 준비 전까지 mac 실패가 win/linux 릴리스를 막지 않게.
+    # 아이콘은 해결됨. 서명·공증 미적용이라 첫 릴리스 안전망으로만 mac 을 비차단 유지.
     continue-on-error: ${{ matrix.os == 'macos-latest' }}
     steps:
       - uses: actions/checkout@v4
