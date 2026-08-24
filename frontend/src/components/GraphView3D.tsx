@@ -546,7 +546,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                     onClick={() => openCluster(c.id)} title={`${c.label}로 이동`}
                     role="button" tabIndex={0} aria-label={`${c.label} 군집으로 이동`}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); openCluster(c.id) } }}
-                    className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
+                    className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
                     style={{
                       display: "none", color: colorOf(c.id),
                       // 채운 박스 대신 배경색 후광(halo) — 점을 안 가리고 글자만 또렷.
