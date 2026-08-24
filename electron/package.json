@@ -19,6 +19,7 @@
   "build": {
     "appId": "com.engram.app",
     "productName": "Engram",
+    "artifactName": "${productName}-Setup-${version}.${ext}",
     "files": ["main.js", "preload.js", "loading.html", "icon.png"],
     "extraResources": [
       { "from": "../dist/chatmem-backend", "to": "backend" }

@@ -285,6 +285,28 @@ async def _csrf_guard(request: Request, call_next):  # noqa: ANN001,ANN201 — S
     return await call_next(request)
 
 
+# 방어심층 보안 헤더. SPA는 인라인 스크립트가 없어(script-src 'self') 엄격 CSP가 안전하다.
+# 인라인 element style(style={})은 쓰므로 style-src 에 'unsafe-inline' 만 허용. 모두 동일 출처(로컬).
+_CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+_SEC_HEADERS = {
+    "Content-Security-Policy": _CSP,
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):  # noqa: ANN001,ANN201 — Starlette 시그니처
+    resp = await call_next(request)
+    for k, v in _SEC_HEADERS.items():
+        resp.headers.setdefault(k, v)
+    return resp
+
+
 @app.exception_handler(Exception)
 async def _friendly_error(request, exc):  # noqa: ANN001 — FastAPI 핸들러 시그니처
     """예상치 못한 서버 오류를 500 대신 사람이 읽는 한글 메시지로. (HTTPException은 별도 처리됨)"""

@@ -50,6 +50,37 @@ def _asset_url(version: str) -> tuple[str, str]:
     return f"https://github.com/syncthing/syncthing/releases/download/{version}/{name}", name
 
 
+# 다운로드 무결성 검증(공급망 방어): 핀된 버전의 공식 SHA-256(릴리스 sha256sum.txt.asc 기준).
+# SYNCTHING_VERSION 갱신 시 이 표도 반드시 함께 갱신해야 한다(미등록 자산은 검증 실패로 차단).
+_SHA256: dict[str, str] = {
+    "syncthing-windows-amd64-v2.1.3.zip": "c0b79cffa6ce5dad5ed41ede86454f3325d13ccac33447a528cb59d65fbc3a21",
+    "syncthing-windows-arm64-v2.1.3.zip": "c8a00ff23ce54ca07c5749e40a72c0515150dfcc57f640832fb7eb5d55184675",
+    "syncthing-macos-amd64-v2.1.3.zip": "207557c0f708578375be9a286d13078cd709bfccae43d61d004913bb512b10aa",
+    "syncthing-macos-arm64-v2.1.3.zip": "e0f0d8df05bf0118c48c6515214a96bf3a3f11dbd115f56c3c0b52251b3f71aa",
+    "syncthing-linux-amd64-v2.1.3.tar.gz": "f929eb8e5b72a85543eeeefb2c38f34a68e0c530e70758a2905b78840c76602c",
+    "syncthing-linux-arm64-v2.1.3.tar.gz": "a5c046965b590a8de2f8c8c16a0dbf9201d99600b0cafd604040232b603e4586",
+}
+
+
+def _verify_sha256(path: Path, name: str) -> None:
+    """다운로드한 아카이브가 핀된 공식 SHA-256과 일치하는지 검증. 불일치·미등록이면 예외."""
+    import hashlib
+    expected = _SHA256.get(name)
+    if not expected:
+        raise RuntimeError(
+            f"Syncthing 체크섬이 등록되지 않은 자산입니다: {name} "
+            f"(버전 갱신 시 _SHA256 표를 갱신하세요).")
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    actual = h.hexdigest()
+    if actual != expected:
+        raise RuntimeError(
+            f"Syncthing 다운로드 무결성 검증 실패({name}) — 변조·손상 의심. "
+            f"예상 {expected[:12]}… / 실제 {actual[:12]}…")
+
+
 def binary_path() -> Path:
     """확보돼 있으면 바이너리 경로(없으면 캐시 예정 위치). 존재 여부는 .exists()로 확인."""
     _, _, _, exe = _plat()
@@ -75,6 +106,12 @@ def ensure_binary(version: str = SYNCTHING_VERSION, log_fn=lambda m: None) -> Pa
     log_fn(f"syncthing 다운로드: {name}")
     tmp = _BIN_DIR / name
     urllib.request.urlretrieve(url, tmp)   # noqa: S310 — 고정 GitHub 릴리스 URL
+    try:
+        _verify_sha256(tmp, name)   # 무결성 검증 — 실패 시 추출하지 않고 임시파일 삭제 후 예외
+    except Exception:
+        with contextlib.suppress(Exception):
+            tmp.unlink()
+        raise
 
     out = _BIN_DIR / exe
     if ext == ".zip":
