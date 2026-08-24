@@ -397,6 +397,8 @@ export function SettingsView() {
   const [mode, setMode] = useState<ThemeMode>(getThemeMode())
   const [stats, setStats] = useState<Stats | null>(null)
   const [cfg, setCfg] = useState<Config | null>(null)
+  const [srcBusy, setSrcBusy] = useState<string | null>(null)   // 색인 소스 토글 진행 중인 소스명
+  const [srcErr, setSrcErr] = useState<string | null>(null)
   const [backend, setBackend] = useState("claude")
   const [model, setModel] = useState("")
   const [customModel, setCustomModel] = useState(false)
@@ -455,6 +457,24 @@ export function SettingsView() {
       if (!r.ok) setEnrichErr(r.error || "정제 실행 실패")
       else setEnrichSt((s) => ({ ...(s ?? { done_sessions: 0, total_sessions: 0, enriched: 0, last_error: null }), running: true, phase: "시작…" }))
     } catch (e) { setEnrichErr(e instanceof Error ? e.message : "정제 실행 실패") }
+  }
+
+  // 색인 소스 on/off. 낙관적 반영(깜빡임 방지) → 서버 확정, 실패 시 되돌림 + 에러 표시.
+  async function toggleSourceRow(name: string, targetEnabled: boolean) {
+    if (srcBusy) return   // 진행 중이면 중복 클릭 무시
+    setSrcBusy(name); setSrcErr(null)
+    setCfg((c) => (c ? { ...c, sources: c.sources?.map((x) => (x.name === name ? { ...x, disabled: !targetEnabled } : x)) } : c))
+    const label = name === "codex" ? "Codex" : name === "claude-code" ? "Claude Code" : name
+    try {
+      const r = await toggleSource(name, targetEnabled)
+      if (!r.ok) throw new Error("toggle failed")
+      const fresh = await getConfig(); setCfg(fresh)   // 서버 진실로 확정
+    } catch {
+      setSrcErr(`${label} 전환에 실패했어요 — 잠시 후 다시 시도해 주세요`)
+      getConfig().then(setCfg).catch(() => {})          // 서버 상태로 되돌림
+    } finally {
+      setSrcBusy(null)
+    }
   }
 
   useEffect(() => {
@@ -640,23 +660,33 @@ export function SettingsView() {
                 <div className="space-y-1.5 py-2">
                   {(cfg?.sources ?? []).map((s) => {
                     const enabled = !s.disabled
+                    const on = s.exists && enabled            // 실제 색인 중(색상·배지 일관)
                     const status = !s.exists ? "폴더 없음" : s.disabled ? "꺼짐" : `색인 중 · ${s.count}개`
+                    const label = s.name === "codex" ? "Codex CLI" : s.name === "claude-code" ? "Claude Code" : s.name
+                    const busy = srcBusy === s.name
                     return (
                       <div key={s.name} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-medium">
-                          {s.name === "codex" ? "Codex CLI" : s.name === "claude-code" ? "Claude Code" : s.name}
-                        </span>
-                        <span className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${s.active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{status}</span>
+                        <span className="font-medium">{label}</span>
+                        <span id={`src-status-${s.name}`}
+                          className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${on ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{status}</span>
                         <code className="cm-inline min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{s.root ?? "—"}</code>
-                        <button type="button" role="switch" aria-checked={enabled} disabled={!s.exists}
-                          aria-label={`${s.name} 색인 ${enabled ? "끄기" : "켜기"}`}
-                          onClick={async () => { await toggleSource(s.name, !enabled); getConfig().then(setCfg).catch(() => {}) }}
-                          className={`ml-auto shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${enabled ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                          {enabled ? "켜짐" : "꺼짐"}
+                        <button type="button" role="switch" aria-checked={enabled}
+                          disabled={!s.exists || busy}
+                          aria-label={`${label} 색인 ${enabled ? "끄기" : "켜기"}`}
+                          aria-describedby={`src-status-${s.name}`}
+                          onClick={() => toggleSourceRow(s.name, !enabled)}
+                          className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${enabled ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                          {busy && <Loader2 className="size-3 animate-spin" />}{enabled ? "켜짐" : "꺼짐"}
                         </button>
                       </div>
                     )
                   })}
+                  {srcErr && <div className="text-[11px] text-destructive">{srcErr}</div>}
+                  {(cfg?.sources ?? []).length > 0 && (cfg?.sources ?? []).every((x) => !x.exists || x.disabled) && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="size-3.5 shrink-0" />모든 소스가 꺼져 있어요 — 새 대화가 색인되지 않아요.
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     끄면 그 소스는 <b>다음 색인부터 건너뜁니다</b>(색인만 중단, 이미 색인된 데이터는 검색에 남아요).
                     환경변수 <code className="cm-inline">CHATMEM_SOURCES</code>로도 지정할 수 있어요.
