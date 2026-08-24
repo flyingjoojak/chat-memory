@@ -893,15 +893,17 @@ def api_config_put(payload: dict):
 # 순서 = 화면 표기 순서(첫 번째가 권장 기본). 용량(디스크 GB)은 note에 적지 않는다 —
 # 프론트가 size_gb 로 따로 표기하므로 중복 방지.
 # int8 e5-large = fp32와 검색 품질 사실상 동일(공정벤치 R@1 동일·MRR −0.4%)이면서 색인 ~2x 빠름. → 기본·권장.
-# MiniLM = 경량(RAM ~1.2GB)이나 품질 낮음. → 저사양(32GB 미만) 옵션.
+# MiniLM = 경량(RAM ~0.8GB)이나 품질 낮음. → 저사양(32GB 미만) 옵션.
+# ram_gb 실측(peak_wset, 색인 배치 32 기준): int8 로드~0.9GB·임베딩 피크~1.4GB(큰 배치 스파이크
+#   대비 여유 2.0), MiniLM 피크~0.8GB(여유 1.0). ※ 과거 5.0/1.2는 과다 표기였음 — 실측으로 정정.
 _EMBED_ALLOW = {
     INT8_MODEL_ID: {
         "note": "권장 기본 — e5-large 수준 품질에 색인 속도 약 2배 빠름.",
-        "ram_gb": 5.0, "cps": 1.6,
+        "ram_gb": 2.0, "cps": 1.6,
         "tags": ["권장 기본", "품질 최상", "빠름"]},
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": {
         "note": "경량 — RAM이 적은 기기(32GB 미만)에 권장. 빠르지만 검색 품질은 다소 낮음.",
-        "ram_gb": 1.2, "cps": 31.0,
+        "ram_gb": 1.0, "cps": 31.0,
         "tags": ["저사양 추천", "램 부하 적음", "속도 매우 빠름"]},
 }
 
