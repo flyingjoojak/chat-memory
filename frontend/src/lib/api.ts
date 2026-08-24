@@ -167,6 +167,7 @@ export interface SystemInfo {
   ram_total_mb: number | null
   ram_avail_mb: number | null
   model_mismatch: { stored: string; current: string } | null
+  drift_sources?: string[]   // 로그 형식이 바뀌어 못 읽는 것으로 의심되는 소스
 }
 export const getSystem = () => getJSON<SystemInfo>(`/api/system`)
 
@@ -203,6 +204,8 @@ export interface Config {
   config_path: string
   projects_dir: string
   projects_exists: boolean
+  codex_dir: string
+  codex_exists: boolean
   jsonl_count: number
   sources?: SourceInfo[]
 }

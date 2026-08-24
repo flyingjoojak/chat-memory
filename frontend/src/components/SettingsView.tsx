@@ -412,6 +412,8 @@ export function SettingsView() {
   const [blockMsg, setBlockMsg] = useState("")
   const [projectsDir, setProjectsDir] = useState("")
   const [projSaved, setProjSaved] = useState(false)
+  const [codexDir, setCodexDir] = useState("")
+  const [codexSaved, setCodexSaved] = useState(false)
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
   const [quitState, setQuitState] = useState<"idle" | "confirm" | "done">("idle")
@@ -481,7 +483,7 @@ export function SettingsView() {
     getStats().then(setStats).catch(() => {})
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
-      setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir)
+      setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir); setCodexDir(c.codex_dir)
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
       setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
@@ -559,6 +561,12 @@ export function SettingsView() {
   async function saveProjects() {
     await putConfig({ CLAUDE_PROJECTS_DIR: projectsDir })
     setProjSaved(true); setTimeout(() => setProjSaved(false), 1800)
+    getConfig().then(setCfg).catch(() => {})
+  }
+
+  async function saveCodex() {
+    await putConfig({ CODEX_SESSIONS_DIR: codexDir })
+    setCodexSaved(true); setTimeout(() => setCodexSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
 
@@ -644,6 +652,28 @@ export function SettingsView() {
                   <p className="mt-2 text-xs text-muted-foreground">
                     기본값은 각 사용자 홈의 <code className="cm-inline">~/.claude/projects</code>로 자동 지정됩니다.
                     Claude Code 로그가 다른 위치에 있으면 여기서 지정하세요.
+                  </p>
+                </div>
+              </Section>
+
+              <Section title="Codex 로그 폴더">
+                <div className="py-3.5">
+                  <div className="mb-2 flex items-center gap-2 text-sm">
+                    {!cfg
+                      ? <span className="inline-flex items-center gap-1 text-muted-foreground"><Loader2 className="size-4 animate-spin" />확인 중…</span>
+                      : cfg.codex_exists
+                        ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-4" />폴더 있음 · rollout {(cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0}개 감지</span>
+                        : <span className="inline-flex items-center gap-1 text-muted-foreground"><AlertTriangle className="size-4" />폴더 없음 — Codex를 안 쓰면 비워두면 돼요</span>}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input value={codexDir} onChange={(e) => setCodexDir(e.target.value)} aria-label="Codex 로그 폴더 경로"
+                      className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder="~/.codex/sessions" />
+                    <Button size="sm" variant="outline" onClick={saveCodex}>저장</Button>
+                    {codexSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    기본값은 <code className="cm-inline">~/.codex/sessions</code>(또는 <code className="cm-inline">$CODEX_HOME/sessions</code>)로 자동 지정됩니다.
+                    Codex 로그가 다른 위치에 있으면 여기서 지정하세요.
                   </p>
                 </div>
               </Section>

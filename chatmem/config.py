@@ -152,6 +152,10 @@ def write_config(updates: dict[str, str]) -> None:
 
     값이 빈 문자열이면 해당 키를 주석 처리(비활성).
     """
+    # 개행 주입 차단: 값에 \n/\r 이 있으면 config.env 에 임의 키가 추가되어 화이트리스트가 무력화됨.
+    for k, v in updates.items():
+        if "\n" in v or "\r" in v:
+            raise ValueError(f"설정 값에 줄바꿈은 허용되지 않습니다: {k}")
     path = CONFIG_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
