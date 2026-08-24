@@ -2,10 +2,12 @@
 # chat-memory 백엔드 사이드카 빌드 (Electron 데스크탑 앱에 동봉).
 #
 # FastAPI + fastembed(onnxruntime·tokenizers 네이티브)를 단일 폴더 exe로 번들한다.
-# 임베딩 모델(~2.2GB)은 번들하지 않음 — 첫 실행 시 다운로드/캐시.
+# 기본·권장 모델(int8 e5-large, 0.52GB)은 아래에서 생성해 동봉 → 설치 즉시 오프라인 동작.
+#   (선택 옵션인 MiniLM 등 다른 모델만 첫 사용 시 다운로드/캐시)
 # 결과: dist/chatmem-backend/  (onedir; Electron이 이 폴더를 resources로 포함)
 #
-# 사전: pip install ".[all]" pyinstaller
+# 사전: pip install ".[all]" pyinstaller onnx
+#   ("onnx"는 아래 make_int8(양자화)에만 필요. 이미 생성된 e5int8 폴더가 있으면 불필요)
 # 크로스플랫폼: 각 OS에서 그 OS로 실행해야 함(Win→.exe, mac→mach-o, linux→elf).
 set -e
 cd "$(dirname "$0")/.."
