@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from chatmem import schema_report
+from chatmem import config, schema_report
 
 SID = "019e80dc-1754-7422-b72f-2d176635efb2"
 SECRET = "TOP_SECRET_CONVERSATION_XYZ"
@@ -73,7 +73,7 @@ def test_build_report_unknown_source():
 
 
 def test_build_report_missing_root(tmp_path, monkeypatch):
-    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "nonexistent"))
+    monkeypatch.setattr(config, "CODEX_SESSIONS_DIR", tmp_path / "nonexistent")
     r = schema_report.build_report("codex")
     assert r["root_exists"] is False
     assert r["files"] == 0
@@ -85,7 +85,7 @@ def test_build_report_ok_no_drift(tmp_path, monkeypatch):
         '{"timestamp":"t","type":"event_msg","payload":{"type":"user_message","message":"' + SECRET + '"}}',
         '{"timestamp":"t","type":"event_msg","payload":{"type":"agent_message","message":"reply"}}',
     ])
-    monkeypatch.setenv("CODEX_HOME", str(root.parent))
+    monkeypatch.setattr(config, "CODEX_SESSIONS_DIR", root)
     r = schema_report.build_report("codex")
     assert r["root_exists"] is True
     assert r["files_scanned"] == 1
@@ -111,7 +111,7 @@ def test_build_report_mixed_files_not_flagged(tmp_path, monkeypatch):
         zero.append('{"timestamp":"t","type":"turn_context","payload":{"type":"x"}}')
     (d / "rollout-2026-08-21T11-00-00-019e80dd-1754-7422-b72f-2d176635efb2.jsonl").write_text(
         "\n".join(zero) + "\n", encoding="utf-8")
-    monkeypatch.setenv("CODEX_HOME", str(root.parent))
+    monkeypatch.setattr(config, "CODEX_SESSIONS_DIR", root)
     r = schema_report.build_report("codex")
     assert r["files_scanned"] == 2
     assert r["files_with_turns"] == 1
@@ -128,7 +128,7 @@ def test_build_report_detects_drift_and_no_leak(tmp_path, monkeypatch):
             '"blob":"' + SECRET + str(i) + '"}}'
         )
     root = _codex_root(tmp_path, lines)
-    monkeypatch.setenv("CODEX_HOME", str(root.parent))
+    monkeypatch.setattr(config, "CODEX_SESSIONS_DIR", root)
     r = schema_report.build_report("codex")
     assert r["drift_suspected"] is True
     assert r["suspect_files"] == 1

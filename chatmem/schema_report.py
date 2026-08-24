@@ -52,13 +52,9 @@ def _engram_version() -> str:
 
 
 def source_root(source: str) -> Path | None:
-    """소스별 로그 루트. 미지원 소스는 None."""
-    if source == "claude-code":
-        return Path(config.PROJECTS_DIR)
-    if source == "codex":
-        base = os.environ.get("CODEX_HOME")
-        return Path(base) / "sessions" if base else Path.home() / ".codex" / "sessions"
-    return None
+    """소스별 로그 루트. 어댑터 레지스트리와 동일 해석(설정 CODEX_SESSIONS_DIR 등 반영). 미지원=None."""
+    from .sources import source_roots
+    return source_roots().get(source)
 
 
 def redact(value: Any, depth: int = 0) -> Any:

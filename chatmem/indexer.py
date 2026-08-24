@@ -265,9 +265,20 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
             except Exception:  # noqa: BLE001 — 진행 콜백 오류가 색인을 막지 않게
                 pass
 
+    turns_by_src: dict[str, int] = {}     # 이번 회차 소스별 추출 턴 수
+    newdata_by_src: dict[str, int] = {}   # 이번 회차 새 바이트가 있던 파일 수(소스별)
     for i, (f, adapter) in enumerate(files):
+        had_new = False
+        try:
+            off, _s, _m = db.get_cursor(f)
+            had_new = os.path.getsize(f) > off
+        except OSError:
+            pass
         try:
             n = index_file(f, db, vi, embedder, adapter=adapter, on_flush=_on_flush)
+            if had_new:
+                newdata_by_src[adapter.name] = newdata_by_src.get(adapter.name, 0) + 1
+            turns_by_src[adapter.name] = turns_by_src.get(adapter.name, 0) + (n or 0)
             if n:
                 log_fn(f"indexed {n} turns  {os.path.basename(f)}")
                 total += n
@@ -278,7 +289,39 @@ def index_all(db, vi, embedder, recent_first: bool = True, log_fn=print,
                 progress_fn(i + 1, total_files)
             except Exception:  # noqa: BLE001
                 pass
+    _update_drift(db, turns_by_src, newdata_by_src)
     return total
+
+
+def _update_drift(db, turns_by_src: dict[str, int], newdata_by_src: dict[str, int]) -> None:
+    """소스 로그 형식 변경(어댑터가 못 읽음) 자동 감지 → meta 'drift_sources'.
+
+    신호: 이번 회차 그 소스에 새 바이트가 있었는데 턴을 0개 뽑았다 → build_report 로 확정
+    ('스캔한 모든 파일이 레코드는 있으나 0턴'). 턴이 나온 소스는 회복으로 간주해 플래그 해제.
+    비용: build_report(bounded) 는 '새 데이터 있는데 0턴'인 드문 경우에만 호출.
+    """
+    try:
+        cur = {s.strip() for s in (db.get_meta("drift_sources") or "").split(",") if s.strip()}
+    except Exception:  # noqa: BLE001 — 감지 실패가 색인을 막지 않게
+        return
+    changed = False
+    for name, t in turns_by_src.items():
+        if t > 0 and name in cur:   # 다시 정상적으로 읽힘 → 해제
+            cur.discard(name)
+            changed = True
+    suspects = [n for n, nd in newdata_by_src.items() if nd > 0 and turns_by_src.get(n, 0) == 0 and n not in cur]
+    if suspects:
+        from .schema_report import build_report
+        for name in suspects:
+            try:
+                if build_report(name).get("drift_suspected"):
+                    cur.add(name)
+                    changed = True
+            except Exception:  # noqa: BLE001
+                pass
+    if changed:
+        db.set_meta("drift_sources", ",".join(sorted(cur)))
+        db.commit()
 
 
 def backfill_missing(db, vi, embedder, batch: int = EMBED_BATCH,

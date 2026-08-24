@@ -351,12 +351,19 @@ def api_quit():
 
 @app.get("/api/system")
 def api_system():
-    """기기 메모리 + 모델/벡터 불일치 경고(배너용)."""
+    """기기 메모리 + 모델/벡터 불일치 경고 + 소스 형식 드리프트(배너용)."""
     from .sysmem import available_mb, total_mb
+    drift: list[str] = []
+    try:
+        raw = ArchiveDB().get_meta("drift_sources") or ""
+        drift = [s.strip() for s in raw.split(",") if s.strip()]
+    except Exception:  # noqa: BLE001 — 조회 실패해도 시스템 상태는 반환
+        pass
     return {
         "ram_total_mb": total_mb(),
         "ram_avail_mb": available_mb(),
         "model_mismatch": _state.get("model_mismatch"),
+        "drift_sources": drift,   # 로그 형식이 바뀌어 못 읽는 것으로 의심되는 소스
     }
 
 
@@ -828,6 +835,9 @@ def api_config():
         # Claude Code 로그 소스 — 각 사용자 홈 기준 자동 해석, 필요 시 직접 지정.
         "projects_dir": str(C.PROJECTS_DIR),
         "projects_exists": C.PROJECTS_DIR.exists(),
+        # Codex 로그 루트(직접 지정 가능). 기본=$CODEX_HOME/sessions 또는 ~/.codex/sessions.
+        "codex_dir": str(C.CODEX_SESSIONS_DIR),
+        "codex_exists": C.CODEX_SESSIONS_DIR.exists(),
         # .stversions 제외 카운트 — 3s 폴링 대비 TTL 캐시(매번 전체 walk 방지).
         "jsonl_count": _jsonl_count_cached(),
         # 멀티소스 색인 현황(claude-code + codex …). 루트 없는 소스는 active=false.
@@ -849,7 +859,7 @@ def api_config_put(payload: dict):
 
     # 화이트리스트: CHATMEM_* 설정 + 알려진 키/경로만 허용(임의 env 주입 차단).
     _allowed_exact = {"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY",
-                      "GOOGLE_API_KEY", "CLAUDE_PROJECTS_DIR"}
+                      "GOOGLE_API_KEY", "CLAUDE_PROJECTS_DIR", "CODEX_SESSIONS_DIR"}
     raw = {str(k): str(v) for k, v in (payload or {}).items()}
     updates = {k: v for k, v in raw.items() if k.startswith("CHATMEM_") or k in _allowed_exact}
     rejected = [k for k in raw if k not in updates]

@@ -43,6 +43,7 @@ export default function App() {
   const [onboard, setOnboard] = useState<boolean | null>(null)
   const [backendDown, setBackendDown] = useState(false)
   const [mismatch, setMismatch] = useState<{ stored: string; current: string } | null>(null)
+  const [drift, setDrift] = useState<string[]>([])   // 로그 형식이 바뀌어 못 읽는 소스
   useEffect(() => { applyTheme() }, [])
   // 온보딩 상태 확인 = 백엔드 헬스체크 겸용. 실패는 '완료'가 아니라 '백엔드 미기동'으로 구분(빈 화면 방지).
   const checkOnboard = useCallback(() => {
@@ -58,7 +59,7 @@ export default function App() {
   }, [backendDown, checkOnboard])
   // 모델↔벡터 불일치 배너: 폴링으로 (1) 콜드스타트 시 재시도해 결국 표시, (2) 재색인으로 해소되면 자동 사라짐.
   useEffect(() => {
-    const load = () => getSystem().then((s) => setMismatch(s.model_mismatch)).catch(() => {})
+    const load = () => getSystem().then((s) => { setMismatch(s.model_mismatch); setDrift(s.drift_sources ?? []) }).catch(() => {})
     load()
     const id = window.setInterval(load, 20000)
     return () => window.clearInterval(id)
@@ -135,6 +136,18 @@ export default function App() {
             <button onClick={() => { setView("settings"); setJump(null) }}
               className="ml-auto rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
               설정에서 재색인
+            </button>
+          </div>
+        )}
+        {drift.length > 0 && (
+          <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>
+              <b>{drift.map((s) => (s === "codex" ? "Codex" : s === "claude-code" ? "Claude Code" : s)).join(", ")}</b> 로그를 못 읽고 있어요 — 형식이 바뀐 것 같아요. 설정 &gt; 문제 신고로 알려주시면 빨리 고칠 수 있어요.
+            </span>
+            <button onClick={() => { setView("settings"); setJump(null) }}
+              className="ml-auto rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
+              설정 열기
             </button>
           </div>
         )}
