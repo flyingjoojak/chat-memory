@@ -48,9 +48,8 @@ CONFIG_TEMPLATE = """# chat-memory 설정 파일 (KEY=VALUE, 환경변수가 우
 #CLAUDE_PROJECTS_DIR=~/.claude/projects
 
 # ── 임베딩 모델 (변경 시 전체 재색인 필요) ──
-# 기본=int8 e5-large(품질≈fp32·색인 2x·설치본 동봉). 아래는 대체 옵션.
+# 기본=int8 e5-large(fp32 수준 품질·색인 약 2배 빠름). 저사양 기기는 아래 MiniLM 옵션.
 #CHATMEM_EMBED_MODEL=intfloat/multilingual-e5-large-int8
-#CHATMEM_EMBED_MODEL=intfloat/multilingual-e5-large
 #CHATMEM_EMBED_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
 """
 
