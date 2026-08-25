@@ -9,11 +9,13 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import platform
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -64,7 +66,6 @@ _SHA256: dict[str, str] = {
 
 def _verify_sha256(path: Path, name: str) -> None:
     """다운로드한 아카이브가 핀된 공식 SHA-256과 일치하는지 검증. 불일치·미등록이면 예외."""
-    import hashlib
     expected = _SHA256.get(name)
     if not expected:
         raise RuntimeError(
@@ -159,39 +160,68 @@ def _free_port(preferred: int = 8384) -> int:
     return preferred
 
 
-def _pidfile(home: Path) -> Path:
-    return Path(home) / "chatmem-syncthing.pid"
+def _alive(pid: int) -> bool:
+    """POSIX: pid 생존 여부(신호 0). 실패(권한 등)면 살아있다고 보수적으로 간주."""
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True   # 권한 등 — 존재하나 신호 못 보냄
 
 
-def _kill_tree(pid: int) -> None:
-    """syncthing v2는 감시(부모)+워커(자식) 프로세스로 뜨므로 트리째 종료한다."""
+def _kill_tree(pid: int, log_fn=lambda m: None) -> None:
+    """syncthing v2는 감시(부모)+워커(자식) 프로세스로 뜨므로 트리째 종료한다.
+
+    Windows는 taskkill /F(강제)라 한 번에 끝난다. POSIX는 SIGTERM 후 최대 ~2초 생존을
+    확인하고, 안 죽으면 SIGKILL로 에스컬레이션한다(구 코드의 kill() 보장을 복원 — 이게 없으면
+    SIGTERM을 못 받은 프로세스가 락을 계속 쥐어 다음 기동이 실패한다)."""
     try:
         if sys.platform.startswith("win"):
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],  # noqa: S603,S607
                            capture_output=True, timeout=10)
-        else:
-            import signal
-            try:
-                os.killpg(os.getpgid(pid), signal.SIGTERM)
-            except Exception:  # noqa: BLE001
-                os.kill(pid, signal.SIGTERM)
-    except Exception:  # noqa: BLE001
-        pass
+            return
+        # POSIX: 프로세스 그룹 우선, 안 되면 개별 pid.
+        try:
+            pgid = os.getpgid(pid)
+        except OSError:
+            pgid = None
+        def _send(sig: int) -> None:
+            if pgid is not None:
+                os.killpg(pgid, sig)
+            else:
+                os.kill(pid, sig)
+        _send(signal.SIGTERM)
+        for _ in range(20):        # 최대 ~2초 유예
+            if not _alive(pid):
+                return
+            time.sleep(0.1)
+        _send(signal.SIGKILL)      # 여전히 살아있으면 강제 종료
+    except ProcessLookupError:
+        return                     # 이미 종료됨
+    except Exception as e:         # noqa: BLE001
+        log_fn(f"프로세스 종료 실패(pid {pid}): {e}")
 
 
-def _syncthing_pids_for_home(home: Path) -> list[int]:
+def _syncthing_pids_for_home(home: Path, log_fn=lambda m: None) -> list[int]:
     """커맨드라인이 우리 home 을 가리키는 모든 syncthing pid(감시·워커·재양육된 고아 전부).
 
     pid 기준이 아니라 home 기준이라, 부모가 죽고 워커만 다른 부모로 재양육돼 살아남은
-    고아까지 확실히 잡는다(v2의 감시+워커 구조 때문에 pidfile 하나로는 부족)."""
+    고아까지 확실히 잡는다(v2의 감시+워커 구조 때문). 열거 자체가 실패하면(권한·명령 없음 등)
+    빈 리스트를 반환하되 log_fn 으로 남긴다 — '고아 없음'과 '조회 실패'를 로그로 구분한다."""
     home_s = str(home).lower()
     pids: list[int] = []
     try:
         if sys.platform.startswith("win"):
-            ps = ("Get-CimInstance Win32_Process -Filter \"Name='syncthing.exe'\" | "
+            # 한글 등 비ASCII 홈 경로가 CommandLine에 포함될 수 있어 UTF-8로 강제(콘솔 코드페이지
+            # 불일치로 매칭이 조용히 실패하는 것 방지). encoding 도 명시.
+            ps = ("[Console]::OutputEncoding=[Text.Encoding]::UTF8; "
+                  "Get-CimInstance Win32_Process -Filter \"Name='syncthing.exe'\" | "
                   "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
             out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],  # noqa: S603,S607
-                                 capture_output=True, text=True, timeout=15)
+                                 capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=15)
             for ln in (out.stdout or "").splitlines():
                 pid_s, _, cmd = ln.partition("\t")
                 if home_s in cmd.lower():
@@ -199,14 +229,15 @@ def _syncthing_pids_for_home(home: Path) -> list[int]:
                         pids.append(int(pid_s.strip()))
         else:
             out = subprocess.run(["ps", "-eo", "pid=,args="],  # noqa: S603,S607
-                                 capture_output=True, text=True, timeout=10)
+                                 capture_output=True, text=True,
+                                 encoding="utf-8", errors="replace", timeout=10)
             for ln in (out.stdout or "").splitlines():
                 low = ln.lower()
                 if "syncthing" in low and home_s in low:
                     with contextlib.suppress(ValueError, IndexError):
                         pids.append(int(ln.split(None, 1)[0]))
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as e:  # noqa: BLE001
+        log_fn(f"syncthing 프로세스 목록 조회 실패(고아 회수 불가할 수 있음): {e}")
     return pids
 
 
@@ -216,14 +247,11 @@ def _reap_orphan(home: Path, log_fn=lambda m: None) -> None:
     앱/백엔드가 재시작·크래시되면 예전에 spawn한 syncthing(특히 재양육된 워커)이 추적 핸들을
     잃은 채 살아남아 home 락을 계속 쥔다 → 새 기동이 'Failed to acquire lock'으로 즉시 실패한다.
     우리는 단일 인스턴스만 운영하므로, 우리 home 을 쓰는 syncthing은 곧 이전 잔여물 → 전부 종료."""
-    pids = _syncthing_pids_for_home(home)
+    pids = _syncthing_pids_for_home(home, log_fn)
     if pids:
         log_fn(f"이전 Syncthing 프로세스 {len(pids)}개 정리 후 재기동")
         for pid in pids:
-            _kill_tree(pid)
-        time.sleep(1.5)   # 락 해제 대기
-    with contextlib.suppress(Exception):
-        _pidfile(home).unlink()
+            _kill_tree(pid, log_fn)
 
 
 def log_error(home: Path | None = None) -> str | None:
@@ -265,27 +293,24 @@ class Syncthing:
         env["STNOUPGRADE"] = "1"                     # 자동 업그레이드 끔(번들 버전 고정)
         env["STNODEFAULTFOLDER"] = "1"               # 기본 ~/Sync 폴더 자동생성 안 함
         args = [str(exe), "serve", "--home", str(self.home), "--no-browser"]
-        kwargs: dict = {}
+        kwargs: dict[str, bool] = {}
         if not sys.platform.startswith("win"):
             kwargs["start_new_session"] = True       # 프로세스 그룹 분리 → 트리 종료 가능(posix)
         self.proc = subprocess.Popen(  # noqa: S603
             args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs,
         )
-        # 다음 실행에서 고아를 회수할 수 있도록 pid 기록.
-        with contextlib.suppress(Exception):
-            _pidfile(self.home).write_text(str(self.proc.pid), encoding="utf-8")
 
-    def stop(self) -> None:
+    def stop(self, log_fn=lambda m: None) -> None:
         # 감시(부모)를 먼저 terminate 하면 워커(자식)가 재양육돼 살아남아 락을 계속 쥔다.
-        # → home 을 쓰는 syncthing을 트리째 모두 종료하는 방식으로 워커까지 확실히 회수.
-        for pid in _syncthing_pids_for_home(self.home):
-            _kill_tree(pid)
-        if self.proc is not None:
-            _kill_tree(self.proc.pid)   # 혹시 열거에서 누락돼도 우리 핸들은 확실히
+        # → home 을 쓰는 syncthing을 트리째 모두 종료(SIGKILL 에스컬레이션 포함)해 워커까지 회수.
+        for pid in _syncthing_pids_for_home(self.home, log_fn):
+            _kill_tree(pid, log_fn)
+        # 혹시 열거에서 누락돼도 우리 핸들은 확실히 — 단, 아직 살아있을 때만(죽은 핸들의 pid가
+        # OS에 의해 무관 프로세스로 재할당됐을 수 있으므로 poll() 로 생존 확인 후 종료).
+        if self.proc is not None and self.proc.poll() is None:
+            _kill_tree(self.proc.pid, log_fn)
             with contextlib.suppress(Exception):
                 self.proc.wait(timeout=5)
-        with contextlib.suppress(Exception):
-            _pidfile(self.home).unlink()
 
     def _req(self, method: str, path: str, body=None, timeout: float = 8.0):
         data = json.dumps(body).encode() if body is not None else None

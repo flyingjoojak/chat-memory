@@ -35,12 +35,13 @@ export function UpdateBanner() {
   const [dismissed, setDismissed] = useState(false)
   const [showNotes, setShowNotes] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [assistedOpened, setAssistedOpened] = useState(false)   // macOS 안내형: 다운로드 페이지 연 뒤 확인 표시
 
   useEffect(() => {
     const up = window.engramUpdater
     if (!up) return
     const offs = [
-      up.onAvailable((i) => { setInfo(i); setPhase("available"); setError(null); setDismissed(false) }),
+      up.onAvailable((i) => { setInfo(i); setPhase("available"); setError(null); setDismissed(false); setAssistedOpened(false) }),
       up.onProgress((p) => { setPercent(p.percent); setPhase("downloading") }),
       up.onDownloaded((i) => { setInfo((prev) => ({ ...(prev ?? {}), version: i.version })); setPhase("downloaded"); setError(null); setDismissed(false) }),
       // 다운로드/설치 실패 → 멈춤 방지: 에러 표시 + 재시도 가능하게 available 로 되돌림.
@@ -80,13 +81,15 @@ export function UpdateBanner() {
             )}
             <div className="ml-auto flex items-center gap-1.5">
               {info?.assisted ? (
-                // macOS 미서명: 자동 설치 불가 → 다운로드 페이지를 열어 사용자가 직접 교체.
+                // macOS 미서명: 자동 설치 불가 → 다운로드 페이지를 열고, 즉시 닫지 않고 안내를 남겨
+                // 포커스 유실과 무피드백을 방지(a11y).
                 <button
-                  onClick={() => { window.engramUpdater?.download(); setDismissed(true) }}
-                  className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
-                  title="브라우저에서 새 버전을 받아 Applications 로 끌어다 교체하세요"
+                  onClick={() => { window.engramUpdater?.download(); setAssistedOpened(true) }}
+                  disabled={assistedOpened}
+                  aria-describedby="assisted-update-help"
+                  className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                 >
-                  다운로드 페이지 열기
+                  {assistedOpened ? "페이지 열림" : "다운로드 페이지 열기"}
                 </button>
               ) : (
                 <button
@@ -103,6 +106,14 @@ export function UpdateBanner() {
                 나중에
               </button>
             </div>
+            {/* macOS 안내: 수동 교체 방법을 hover 툴팁이 아니라 화면·스크린리더로 항상 노출(a11y). */}
+            {info?.assisted && (
+              <span id="assisted-update-help" className="w-full text-[12px] text-muted-foreground">
+                {assistedOpened
+                  ? "다운로드 페이지를 열었어요 — 받은 파일을 Applications 폴더로 끌어다 교체한 뒤 앱을 다시 여세요."
+                  : "macOS는 자동 설치가 안 돼요 — 다운로드한 파일을 Applications 폴더로 끌어다 교체하세요."}
+              </span>
+            )}
           </>
         )}
 

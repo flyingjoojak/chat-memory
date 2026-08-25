@@ -141,7 +141,6 @@
    contain-intrinsic-size 의 auto 키워드가 한 번 그려진 실제 높이를 기억해 스크롤바 점프를 막는다
    (뒤의 px 값은 첫 페인트 전 추정치일 뿐). */
 .cm-cv-row  { content-visibility: auto; contain-intrinsic-size: auto 60px; }
-.cm-cv-turn { content-visibility: auto; contain-intrinsic-size: auto 140px; }
 
 /* 마크다운 렌더 */
 .cm-md { line-height: 1.6; word-break: break-word; }

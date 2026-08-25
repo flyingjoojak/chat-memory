@@ -264,11 +264,13 @@ function setupAutoUpdate() {
     const REPO = "flyingjoojak/chat-memory"
     let dlUrl = `https://github.com/${REPO}/releases/latest`
     const httpsMod = require("https")
-    const getJson = (url) => new Promise((resolve, reject) => {
+    // 리다이렉트는 최대 3회까지만 추적(주석과 구현 일치 + 리다이렉트 루프 방어).
+    const getJson = (url, depth = 0) => new Promise((resolve, reject) => {
       httpsMod.get(url, { headers: { "User-Agent": "Engram", Accept: "application/vnd.github+json" } }, (res) => {
-        // GitHub API 는 릴리스 자산 등에서 리다이렉트할 수 있음 → 최대 1회 추적.
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          res.resume(); getJson(res.headers.location).then(resolve, reject); return
+          res.resume()
+          if (depth >= 3) { reject(new Error("리다이렉트 횟수 초과")); return }
+          getJson(res.headers.location, depth + 1).then(resolve, reject); return
         }
         if (res.statusCode !== 200) { res.resume(); reject(new Error("HTTP " + res.statusCode)); return }
         let body = ""; res.on("data", (d) => (body += d))
@@ -282,8 +284,15 @@ function setupAutoUpdate() {
       for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0) }
       return false
     }
-    ipcMain.on("cm-update-download", () => shell.openExternal(dlUrl))   // '다운로드 페이지 열기'
-    ipcMain.on("cm-update-install", () => shell.openExternal(dlUrl))
+    // shell.openExternal 은 스킴에 따라 로컬파일·커스텀 프로토콜 실행으로도 이어질 수 있는 민감 싱크.
+    // 릴리스 파이프라인/계정 침해로 응답 URL이 변조돼도, 신뢰 호스트(https GitHub)만 열도록 화이트리스트.
+    const openIfTrusted = (url) => {
+      const ok = /^https:\/\/(github\.com|objects\.githubusercontent\.com|[a-z0-9-]+\.githubusercontent\.com)\//i.test(url)
+      if (!ok) { console.error("update: 신뢰할 수 없는 다운로드 URL 차단:", url); return }
+      shell.openExternal(url).catch((e) => console.error("update: openExternal 실패:", e))
+    }
+    ipcMain.on("cm-update-download", () => openIfTrusted(dlUrl))   // '다운로드 페이지 열기'
+    ipcMain.on("cm-update-install", () => openIfTrusted(dlUrl))
     getJson(`https://api.github.com/repos/${REPO}/releases/latest`).then((rel) => {
       const remote = String(rel.tag_name || "").replace(/^v/, "")
       if (!remote || !isNewer(remote, app.getVersion())) return
@@ -296,7 +305,7 @@ function setupAutoUpdate() {
         releaseDate: rel.published_at || "",
         assisted: true,   // 렌더러: 자동 다운로드 대신 '다운로드 페이지 열기' 버튼으로 표시
       })
-    }).catch(() => { /* 오프라인·릴리스 없음 — 조용히 미표시 */ })
+    }).catch((e) => { console.error("update: macOS 업데이트 확인 실패:", e && e.message ? e.message : e) })
     return
   }
 
