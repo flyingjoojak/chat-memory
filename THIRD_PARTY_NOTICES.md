@@ -26,6 +26,27 @@ published by the Syncthing project.
 
 ---
 
+## Desktop shell — Electron
+
+The packaged desktop app is built with **Electron**, which bundles Chromium and
+Node.js. These are redistributed as part of the installer.
+
+| Component | License | Project |
+|---|---|---|
+| Electron | MIT | https://github.com/electron/electron |
+| electron-updater / electron-builder | MIT | https://github.com/electron-userland/electron-builder |
+| Chromium (bundled by Electron) | BSD-3-Clause and others | https://www.chromium.org/ |
+| Node.js (bundled by Electron) | MIT | https://github.com/nodejs/node |
+
+The Python backend sidecar is packaged with **PyInstaller**. PyInstaller's
+bootloader is distributed under the GPL v2 **with an exception** that permits
+bundling and distributing the resulting application under any license; the
+application code and dependencies are not placed under the GPL by this.
+
+- **PyInstaller:** https://github.com/pyinstaller/pyinstaller (GPL-2.0 with bootloader exception)
+
+---
+
 ## Python dependencies
 
 | Package | License | Project |
@@ -46,12 +67,19 @@ published by the Syncthing project.
 that provider). `pywebview`, `sqlite-vec`, `umap-learn`, `scikit-learn`, `mcp`
 are optional extras.
 
-### Embedding models (downloaded at runtime)
+### Embedding models
 
-Embedding models are fetched on first use from the Hugging Face Hub and are not
-redistributed with this project. The defaults (e.g. the `intfloat/multilingual-e5`
-family and `BAAI/bge` family) are published under the MIT License by their
-respective authors; consult each model card for its exact terms.
+The **default model is bundled** (redistributed) in packaged builds so the app
+works offline on first launch: an **int8-quantized derivative** of
+`intfloat/multilingual-e5-large` (generated at build time — see
+`packaging/make_int8.py`). The source model is published under the **MIT License**
+by its authors, which permits redistribution of this quantized derivative.
+
+- **Source model:** `intfloat/multilingual-e5-large` — MIT — https://huggingface.co/intfloat/multilingual-e5-large
+
+Other, non-default models (e.g. the `sentence-transformers` MiniLM family) are
+**not** bundled; they are fetched from the Hugging Face Hub on first use. Consult
+each model card for its exact terms.
 
 ---
 
