@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useTranslation } from "react-i18next"
+import { Trans, useTranslation } from "react-i18next"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import { chooseModel, getEmbedModels, type EmbedModel } from "@/lib/api"
 
@@ -28,7 +28,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       <div className="mx-auto max-w-2xl px-6 py-10">
         <h1 className="text-balance text-2xl font-bold">{t("onboarding.title")}</h1>
         <p className="mt-2 text-pretty text-sm text-muted-foreground">
-          {t("onboarding.descIntro")} <b>{t("onboarding.descEmphasis")}</b> {t("onboarding.descRest")}
+          <Trans i18nKey="onboarding.desc" components={{ b: <b /> }} />
         </p>
 
         <div className="mt-6 space-y-3">
@@ -69,7 +69,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </div>
 
         <p className="mt-5 text-[11.5px] text-muted-foreground">
-          {t("onboarding.helpIntro")} <b>{t("onboarding.helpBadge")}</b> {t("onboarding.helpPickSuffix")}{ramGb ? t("onboarding.ramNote", { v: ramGb }) : ""}{t("onboarding.helpRamLead")} <b>{t("onboarding.help32Plus")}</b>{t("onboarding.help32Detail")} <b>{t("onboarding.helpBelow")}</b>{t("onboarding.helpBelowDetail")}
+          <Trans i18nKey="onboarding.help1" components={{ b: <b /> }} />
+        </p>
+        <p className="mt-1 text-[11.5px] text-muted-foreground">
+          {ramGb ? `${t("onboarding.ramLead", { v: ramGb })} ` : ""}
+          <Trans i18nKey="onboarding.help2" components={{ b: <b /> }} />
         </p>
       </div>
     </div>
