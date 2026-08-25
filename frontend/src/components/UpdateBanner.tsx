@@ -7,6 +7,8 @@ type UpdateInfo = {
   releaseName?: string
   releaseNotes?: string
   releaseDate?: string
+  // macOS 미서명 빌드: 자동 다운로드/설치 대신 다운로드 페이지를 여는 '안내형' 업데이트.
+  assisted?: boolean
 }
 type EngramUpdater = {
   onAvailable: (cb: (info: UpdateInfo) => void) => () => void
@@ -77,12 +79,23 @@ export function UpdateBanner() {
               </button>
             )}
             <div className="ml-auto flex items-center gap-1.5">
-              <button
-                onClick={startDownload}
-                className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
-              >
-                {error ? "다시 시도" : "지금 업데이트"}
-              </button>
+              {info?.assisted ? (
+                // macOS 미서명: 자동 설치 불가 → 다운로드 페이지를 열어 사용자가 직접 교체.
+                <button
+                  onClick={() => { window.engramUpdater?.download(); setDismissed(true) }}
+                  className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
+                  title="브라우저에서 새 버전을 받아 Applications 로 끌어다 교체하세요"
+                >
+                  다운로드 페이지 열기
+                </button>
+              ) : (
+                <button
+                  onClick={startDownload}
+                  className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  {error ? "다시 시도" : "지금 업데이트"}
+                </button>
+              )}
               <button
                 onClick={() => setDismissed(true)}
                 className="rounded-md border border-border px-2 py-0.5 text-muted-foreground hover:bg-muted"

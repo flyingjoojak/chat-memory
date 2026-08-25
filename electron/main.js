@@ -257,6 +257,49 @@ function setupAutoUpdate() {
     return
   }
 
+  // macOS: 미서명 앱은 Squirrel.Mac 자동 적용이 불가(코드서명 필수). → 자동 교체 대신 '안내형 업데이트':
+  // GitHub 릴리스에서 최신 버전을 직접 확인해 배너로 알리고, 사용자가 누르면 다운로드 페이지를 연다.
+  // (서명 인증서가 준비되면 이 분기를 제거하고 아래 electron-updater 경로로 통일하면 된다.)
+  if (process.platform === "darwin") {
+    const REPO = "flyingjoojak/chat-memory"
+    let dlUrl = `https://github.com/${REPO}/releases/latest`
+    const httpsMod = require("https")
+    const getJson = (url) => new Promise((resolve, reject) => {
+      httpsMod.get(url, { headers: { "User-Agent": "Engram", Accept: "application/vnd.github+json" } }, (res) => {
+        // GitHub API 는 릴리스 자산 등에서 리다이렉트할 수 있음 → 최대 1회 추적.
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume(); getJson(res.headers.location).then(resolve, reject); return
+        }
+        if (res.statusCode !== 200) { res.resume(); reject(new Error("HTTP " + res.statusCode)); return }
+        let body = ""; res.on("data", (d) => (body += d))
+        res.on("end", () => { try { resolve(JSON.parse(body)) } catch (e) { reject(e) } })
+      }).on("error", reject)
+    })
+    // 단순 유의버전 비교(x.y.z, 프리릴리스 접미사는 무시) — 알림 목적엔 충분.
+    const isNewer = (r, l) => {
+      const nums = (v) => String(v).replace(/^v/, "").split("-")[0].split(".").map((x) => parseInt(x, 10) || 0)
+      const a = nums(r), b = nums(l)
+      for (let i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0) }
+      return false
+    }
+    ipcMain.on("cm-update-download", () => shell.openExternal(dlUrl))   // '다운로드 페이지 열기'
+    ipcMain.on("cm-update-install", () => shell.openExternal(dlUrl))
+    getJson(`https://api.github.com/repos/${REPO}/releases/latest`).then((rel) => {
+      const remote = String(rel.tag_name || "").replace(/^v/, "")
+      if (!remote || !isNewer(remote, app.getVersion())) return
+      const dmg = (rel.assets || []).find((a) => /\.dmg$/i.test(a.name || ""))
+      dlUrl = (dmg && dmg.browser_download_url) || rel.html_url || dlUrl
+      onAvailable({
+        version: remote,
+        releaseName: rel.name || "",
+        releaseNotes: rel.body || "",
+        releaseDate: rel.published_at || "",
+        assisted: true,   // 렌더러: 자동 다운로드 대신 '다운로드 페이지 열기' 버튼으로 표시
+      })
+    }).catch(() => { /* 오프라인·릴리스 없음 — 조용히 미표시 */ })
+    return
+  }
+
   let au
   try { au = require("electron-updater").autoUpdater } catch (_) { return } // 피드/모듈 없음 — 조용히 미동작
   au.autoDownload = false           // 사용자가 [지금 업데이트] 누를 때만 받음(업데이트는 선택)

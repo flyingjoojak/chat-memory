@@ -223,6 +223,22 @@ Codex CLI/Desktop·Claude Code 자동 색인, 기기 동기화(Syncthing 내장)
 > 현재 설치본은 **미서명**입니다 — Windows SmartScreen / macOS Gatekeeper 경고가 뜰 수 있습니다.
 > 코드 서명 인증서가 준비되면 CI에 서명 시크릿만 추가하면 됩니다.
 
+### macOS 설치·업데이트 (Homebrew 권장)
+
+macOS는 **미서명 앱의 자동 업데이트를 막습니다**(Squirrel.Mac은 코드 서명을 요구). 그래서 mac에서는
+**Homebrew로 설치·업데이트**하는 것을 권장합니다 — Homebrew가 다운로드·교체를 대신 처리하고
+격리(quarantine)를 떼주므로 **서명 없이도 설치·업데이트가 되고 Gatekeeper 경고도 안 뜹니다.**
+
+```bash
+brew tap flyingjoojak/chat-memory https://github.com/flyingjoojak/chat-memory
+brew install --cask flyingjoojak/chat-memory/engram   # 설치
+brew upgrade --cask engram                            # 업데이트
+```
+
+Homebrew를 쓰지 않고 **dmg를 직접 받은 mac 사용자**에게는, 앱이 새 버전을 감지하면 **업데이트 배너로
+알리고 다운로드 페이지를 열어**줍니다(자동 교체는 안 되므로 새 dmg를 받아 Applications로 끌어 교체).
+Windows는 미서명이어도 배너에서 **자동 업데이트**가 동작합니다.
+
 ## 라이선스
 
 MIT License — [LICENSE](LICENSE) 참고.
