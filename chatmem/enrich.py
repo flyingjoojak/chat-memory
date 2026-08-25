@@ -42,13 +42,17 @@ def _build_prompt(turns: list[Turn]) -> str:
     head = [
         # sentinel: claude -p 는 세션 로그를 남기므로 이 프롬프트가 새 세션으로 기록된다.
         # 파서가 이 접두를 보고 인덱싱에서 제외한다(자기오염 방지).
-        "<<CHATMEM-ENRICH>> chatmem 정제 작업(자동 생성 — 인덱싱 제외).",
-        "다음은 한 Claude Code 세션의 대화 턴들이다.",
-        "각 턴마다 한국어 한 줄 요약(summary)과 태그 2~4개(tags)를 생성하라.",
-        "설명·인사·코드펜스 없이 아래 형식의 JSON만 출력하라:",
-        '{"turns":[{"id":"<그대로 복사>","summary":"한 줄","tags":["태그","태그"]}]}',
+        "<<CHATMEM-ENRICH>> chatmem enrichment task (auto-generated — excluded from indexing).",
+        "Below are the conversation turns of one AI coding session.",
+        "For each turn, produce a one-line summary and 2-4 tags.",
+        # 출력 언어를 UI가 아니라 '대화 언어'에 맞춘다 → 한국어 대화는 한국어, 영어 대화는 영어 요약.
+        # (외국인 사용자의 대화가 강제로 한글 요약이 되던 문제 해결)
+        "Write the summary and tags in the SAME LANGUAGE as that turn's conversation "
+        "(Korean turns -> Korean, English turns -> English, and so on).",
+        "Output ONLY JSON in exactly this form — no prose, no greetings, no code fences:",
+        '{"turns":[{"id":"<copy verbatim>","summary":"one line","tags":["tag","tag"]}]}',
         "",
-        "=== 턴 ===",
+        "=== TURNS ===",
     ]
     for t in turns:
         q = " ".join(t.question.split())[:_FIELD_CHARS]
@@ -56,7 +60,7 @@ def _build_prompt(turns: list[Turn]) -> str:
         acts = t.action_summary()[:150]
         block = f"[id={t.id}]\nQ: {q}\nA: {a}"
         if acts:
-            block += f"\n행동: {acts}"
+            block += f"\nActions: {acts}"
         head.append(block)
     return "\n".join(head)
 
