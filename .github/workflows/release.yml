@@ -55,6 +55,9 @@ jobs:
       # PyInstaller onedir(chatmem-backend) + int8 e5-large 모델 생성·동봉 → dist/chatmem-backend/
       - name: 백엔드 빌드(사이드카)
         shell: bash
+        env:
+          PYTHONUTF8: "1" # Windows 콘솔 인코딩(cp1252)으로 인한 비ASCII 로그 UnicodeEncodeError 방지
+          HF_HUB_DISABLE_SYMLINKS: "1" # HF 캐시 외부데이터 심링크로 인한 onnx 양자화 실패 방지(소스에서도 복사로 처리)
         run: bash packaging/build-backend.sh
 
       - name: electron 의존성

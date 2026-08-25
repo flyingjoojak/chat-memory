@@ -6,6 +6,13 @@ fp32 e5-large를 fastembed로 받아 동적 int8 양자화 → <dst>/model.onnx 
 import sys
 from pathlib import Path
 
+# Windows CI 등 콘솔 기본 인코딩(cp1252/cp949)이 비ASCII 로그를 못 써서 UnicodeEncodeError 나는 것 방지.
+for _s in (sys.stdout, sys.stderr):
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+    except Exception:  # noqa: BLE001 — 재설정 불가 환경은 무시
+        pass
+
 from chatmem.int8_model import generate_int8_dir
 
 dst = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("packaging/build/e5int8")

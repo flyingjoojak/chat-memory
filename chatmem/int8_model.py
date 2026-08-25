@@ -41,12 +41,25 @@ def generate_int8_dir(dst: Path, log_fn=print) -> Path:
     from fastembed import TextEmbedding
     from onnxruntime.quantization import QuantType, quantize_dynamic
 
+    import tempfile
+
     dst.mkdir(parents=True, exist_ok=True)
     log_fn("fp32 e5-large 확보(fastembed 캐시)…")
     te = TextEmbedding(FP32_MODEL_ID)
     src = Path(te.model._model_dir)   # 다운로드된 fp32 onnx + 토크나이저 위치
-    log_fn("int8 동적 양자화…")
-    quantize_dynamic(str(src / "model.onnx"), str(dst / "model.onnx"), weight_type=QuantType.QInt8)
+    # HF 캐시는 외부 가중치(model.onnx_data)를 심볼릭 링크로 둘 수 있는데, onnx 체커/양자화기가
+    # 심링크 외부데이터를 거부한다("should be stored in ..., but it is a symbolic link").
+    # → model.onnx + 외부데이터를 임시 폴더로 복사(shutil.copy는 심링크를 따라가 실제 파일로 복사)한 뒤 양자화.
+    work = Path(tempfile.mkdtemp(prefix="e5int8_src_"))
+    try:
+        shutil.copy(src / "model.onnx", work / "model.onnx")
+        for extra in src.iterdir():
+            if extra.name.startswith("model.onnx") and extra.name != "model.onnx":
+                shutil.copy(extra, work / extra.name)   # model.onnx_data 등 외부 가중치(심링크 해제)
+        log_fn("int8 동적 양자화…")
+        quantize_dynamic(str(work / "model.onnx"), str(dst / "model.onnx"), weight_type=QuantType.QInt8)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
     for f in _TOKENIZER_FILES:
         shutil.copy(src / f, dst / f)
     log_fn(f"int8 준비 완료: {dst}")
