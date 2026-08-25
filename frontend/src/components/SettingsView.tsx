@@ -457,6 +457,8 @@ export function SettingsView() {
   const [apiKey, setApiKey] = useState("")
   const [enrichTime, setEnrichTime] = useState("04:00")
   const [interval, setIntervalMin] = useState(10)
+  const [indexMode, setIndexMode] = useState("interval")   // off|interval|realtime|scheduled
+  const [indexTime, setIndexTime] = useState("03:00")       // scheduled 색인 시각
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434/v1")
   const [saved, setSaved] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -536,6 +538,7 @@ export function SettingsView() {
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
       setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir); setCodexDir(c.codex_dir)
+      setIndexMode(c.index_mode || "interval"); setIndexTime(c.index_time || "03:00")
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
       setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
@@ -622,8 +625,13 @@ export function SettingsView() {
     getConfig().then(setCfg).catch(() => {})
   }
 
-  async function saveInterval() {
-    await putConfig({ CHATMEM_INDEX_INTERVAL: String(interval) })
+  async function saveIndex(mode = indexMode) {
+    setIndexMode(mode)
+    await putConfig({
+      CHATMEM_INDEX_MODE: mode,
+      CHATMEM_INDEX_INTERVAL: String(interval),
+      CHATMEM_INDEX_TIME: indexTime,
+    })
     setIntervalSaved(true); setTimeout(() => setIntervalSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
@@ -899,12 +907,34 @@ export function SettingsView() {
           {tab === "index" && (
             <>
               <Section title={t("settings.incrementalIndex")}>
-                <Row label={t("settings.indexInterval")}>
-                  <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label={t("settings.indexInterval")}
-                    onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
-                  <Button size="sm" variant="outline" onClick={saveInterval}>{t("common.save")}</Button>
-                  {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />{t("common.saved")}</span>}
+                <Row label={t("settings.indexMode")}>
+                  <div className="inline-flex overflow-hidden rounded-lg border">
+                    {(["off", "interval", "realtime", "scheduled"] as const).map((m) => (
+                      <button key={m} type="button" onClick={() => saveIndex(m)}
+                        aria-pressed={indexMode === m}
+                        className={`px-2.5 py-1.5 text-xs transition-colors ${indexMode === m ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                        {t(`settings.indexMode_${m}`)}
+                      </button>
+                    ))}
+                  </div>
                 </Row>
+                {indexMode === "interval" && (
+                  <Row label={t("settings.indexInterval")}>
+                    <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label={t("settings.indexInterval")}
+                      onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
+                    <Button size="sm" variant="outline" onClick={() => saveIndex()}>{t("common.save")}</Button>
+                    {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />{t("common.saved")}</span>}
+                  </Row>
+                )}
+                {indexMode === "scheduled" && (
+                  <Row label={t("settings.indexTime")}>
+                    <Input type="time" value={indexTime} onChange={(e) => setIndexTime(e.target.value)} aria-label={t("settings.indexTime")}
+                      className="h-8 w-32 tabular-nums" />
+                    <Button size="sm" variant="outline" onClick={() => saveIndex()}>{t("common.save")}</Button>
+                    {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />{t("common.saved")}</span>}
+                  </Row>
+                )}
+                <div className="border-b py-2 text-xs text-muted-foreground last:border-0">{t(`settings.indexModeHint_${indexMode}`)}</div>
                 {/* 지금 색인 + 대기(새 대화) 수 + 자가복구 진행 */}
                 <div className="border-b py-3 last:border-0">
                   <div className="flex flex-wrap items-center gap-2">
