@@ -280,7 +280,7 @@ async def _csrf_guard(request: Request, call_next):  # noqa: ANN001,ANN201 — S
     if _csrf_blocked(request.method, h.get("sec-fetch-site"), h.get("host"), h.get("origin")):
         return JSONResponse(
             status_code=403,
-            content={"error": "허용되지 않은 출처의 요청이에요(CSRF 보호). 앱 안에서 실행해 주세요."},
+            content={"error": "허용되지 않은 출처의 요청이에요(CSRF 보호). 앱 안에서 실행해 주세요.", "code": "csrf_blocked"},
         )
     return await call_next(request)
 
@@ -442,7 +442,7 @@ def api_search(
     embedder = None
     if want_sem:
         if _state.get("needs_onboarding"):
-            return {"error": "먼저 임베딩 모델을 선택하세요", "hits": []}
+            return {"error": "먼저 임베딩 모델을 선택하세요", "hits": [], "code": "no_embed_model"}
         embedder = get_embedder()   # 지연 로드 — 유휴 후 첫 검색은 로딩에 몇 초 걸릴 수 있음
     db = ArchiveDB()
     vi = make_index()
@@ -467,7 +467,7 @@ def api_sources_toggle(payload: dict):
     name = str((payload or {}).get("source", "")).strip()
     enabled = bool((payload or {}).get("enabled", True))
     if name not in ADAPTERS:
-        raise HTTPException(status_code=400, detail="알 수 없는 소스")
+        raise HTTPException(status_code=400, detail={"code": "unknown_source", "msg": "알 수 없는 소스"})
     cur = disabled_sources()
     cur.discard(name) if enabled else cur.add(name)
     db = ArchiveDB()
@@ -574,11 +574,11 @@ def api_resume(session: str = Query(...), force: bool = False):
     활성 가드(M3): 세션이 최근 수정됐으면(다른 기기 진행 가능) force=false일 때 경고만 반환."""
     sid = session.strip()
     if not _SID_RE.fullmatch(sid):
-        raise HTTPException(status_code=400, detail="잘못된 세션 id")
+        raise HTTPException(status_code=400, detail={"code": "invalid_session_id", "msg": "잘못된 세션 id"})
     db = ArchiveDB()
     info = db.session_source(sid)
     if info is None:
-        raise HTTPException(status_code=404, detail="세션을 찾을 수 없음")
+        raise HTTPException(status_code=404, detail={"code": "session_not_found", "msg": "세션을 찾을 수 없음"})
     source, stored, project = info
     cwd = (project or "").strip() or None
     if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
@@ -587,7 +587,7 @@ def api_resume(session: str = Query(...), force: bool = False):
     # 원문 존재 확인: 로그 파일이 없어졌으면 재개 불가(세션을 열 수 없음).
     src_file = _find_source_file(source, sid, stored)
     if src_file is None:
-        return {"ok": False, "missing": True,
+        return {"ok": False, "missing": True, "code": "resume_missing_log",
                 "warning": "원문 로그 파일이 없어 세션을 열 수 없어요 (삭제·이동됐을 수 있어요)."}
 
     # 활성 가드: 최근 수정된 세션이면 이중 재개(분기) 위험을 경고(실행은 보류).
@@ -596,7 +596,7 @@ def api_resume(session: str = Query(...), force: bool = False):
     if act.active and not force:
         secs = int(act.seconds_since or 0)
         return {
-            "ok": False, "active": True, "seconds_since": secs,
+            "ok": False, "active": True, "seconds_since": secs, "code": "resume_active",
             "warning": f"이 세션이 약 {secs}초 전에 수정됐어요 — 다른 기기에서 진행 중이면 "
                        "지금 재개 시 분기(fork)될 수 있어요.",
         }
@@ -604,7 +604,7 @@ def api_resume(session: str = Query(...), force: bool = False):
     try:
         _launch_resume(sid, cwd, source)
     except Exception as e:               # 실행 실패를 사용자에게 그대로 전달
-        raise HTTPException(status_code=500, detail=f"터미널 실행 실패: {e}")
+        raise HTTPException(status_code=500, detail={"code": "resume_launch_failed", "msg": f"터미널 실행 실패: {e}", "detail": str(e)})
     return {"ok": True, "cwd": cwd, "source": source}
 
 
@@ -823,19 +823,19 @@ def api_syncthing_pair(payload: dict):
     from . import config as C
     inst = _st.get("inst")
     if not _st_state["running"] or inst is None:
-        return {"ok": False, "error": "먼저 '기기 연결'을 시작하세요"}
+        return {"ok": False, "error": "먼저 '기기 연결'을 시작하세요", "code": "sync_not_started"}
     did = str((payload or {}).get("device_id", "")).strip().upper().replace(" ", "")
     if not _ST_DEVID_RE.fullmatch(did):
-        return {"ok": False, "error": "Device ID 형식이 올바르지 않아요(예: XXXXXXX-XXXXXXX-… 8묶음)"}
+        return {"ok": False, "error": "Device ID 형식이 올바르지 않아요(예: XXXXXXX-XXXXXXX-… 8묶음)", "code": "device_id_invalid"}
     if did == _st_state.get("my_id"):
-        return {"ok": False, "error": "내 기기 ID예요 — 상대 기기의 ID를 넣어주세요"}
+        return {"ok": False, "error": "내 기기 ID예요 — 상대 기기의 ID를 넣어주세요", "code": "device_id_self"}
     try:
         name = str((payload or {}).get("name", "")).strip()
         inst.add_device(did, name)
         inst.share_projects(C.PROJECTS_DIR, [did])
         return {"ok": True}
     except Exception as e:  # noqa: BLE001
-        return {"ok": False, "error": f"연결 실패: {e}"}
+        return {"ok": False, "error": f"연결 실패: {e}", "code": "pair_failed", "detail": str(e)}
 
 
 @app.get("/api/config")
@@ -1079,11 +1079,11 @@ def api_enrich(payload: dict | None = None):
     from . import config as C
     from .enrich import backend_available, enrich_all
     if _enrich_state["running"]:
-        return {"ok": False, "error": "이미 정제 중"}
+        return {"ok": False, "error": "이미 정제 중", "code": "enrich_already_running"}
     backend = C.ENRICH_BACKEND
     ok, why = backend_available(backend)
     if not ok:
-        return {"ok": False, "error": why}   # 예: "claude CLI 없음", "ANTHROPIC_API_KEY 미설정"
+        return {"ok": False, "error": why, "code": "enrich_unavailable", "detail": why}   # 예: "claude CLI 없음", "ANTHROPIC_API_KEY 미설정"
     only_missing = not bool((payload or {}).get("all"))
 
     def worker():
@@ -1196,7 +1196,7 @@ def api_onboarding_choose(payload: dict):
     from . import config as C
     model = str((payload or {}).get("model", "")).strip()
     if model not in _EMBED_ALLOW:
-        return {"ok": False, "error": "알 수 없는 모델"}
+        return {"ok": False, "error": "알 수 없는 모델", "code": "unknown_model"}
     C.write_config({"CHATMEM_EMBED_MODEL": model})
 
     def _load():
@@ -1219,9 +1219,9 @@ def api_reindex(payload: dict):
     payload = payload or {}
     model = str(payload.get("model", "")).strip() or C.EMBED_MODEL   # 빈값=현재 모델
     if model not in _EMBED_ALLOW:
-        return {"ok": False, "error": "알 수 없는 모델"}
+        return {"ok": False, "error": "알 수 없는 모델", "code": "unknown_model"}
     if _reindex_state["running"] or _autoindex_state.get("running"):
-        return {"ok": False, "error": "이미 색인/재색인 중"}
+        return {"ok": False, "error": "이미 색인/재색인 중", "code": "reindex_already_running"}
     fast = bool(payload.get("fast"))
     try:
         parallel = int(payload.get("parallel") or 2)
