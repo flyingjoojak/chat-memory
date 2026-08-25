@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
+
+# 설정 키 형식(env 이름): 영문·숫자·밑줄, 숫자 선두 금지. '='·개행·임의 키 주입 차단용.
+_CONFIG_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # --- 설정 파일 로드 -----------------------------------------------------
 # ~/chat-memory/config.env (또는 CHATMEM_CONFIG)의 KEY=VALUE 를 환경변수로 로드.
@@ -152,12 +156,10 @@ def write_config(updates: dict[str, str]) -> None:
     값이 빈 문자열이면 해당 키를 주석 처리(비활성).
     """
     # 주입 차단: 키/값 모두 검증.
-    # - 키는 env 이름 형식만 허용(영문·숫자·밑줄, 숫자 선두 금지) → '='·개행·임의 키 주입 차단.
+    # - 키는 env 이름 형식만 허용(_CONFIG_KEY_RE) → '='·개행·임의 키 주입 차단.
     # - 값에 \n/\r 이 있으면 config.env 에 임의 키가 추가돼 화이트리스트가 무력화됨.
-    import re as _re
-    _key_re = _re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
     for k, v in updates.items():
-        if not _key_re.fullmatch(k):
+        if not _CONFIG_KEY_RE.fullmatch(k):
             raise ValueError(f"허용되지 않은 설정 키 형식입니다: {k!r}")
         if "\n" in v or "\r" in v:
             raise ValueError(f"설정 값에 줄바꿈은 허용되지 않습니다: {k}")
@@ -181,7 +183,6 @@ def write_config(updates: dict[str, str]) -> None:
     for k, val in remaining.items():
         out.append(f"{k}={val}" if val != "" else f"#{k}=")
     # 원자적 쓰기(temp→replace): 크래시·백신 스캔 중 잘려 설정이 조용히 초기화되는 것 방지.
-    import os
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
     os.replace(tmp, path)

@@ -65,7 +65,8 @@ function Row({ label, children }: { label: React.ReactNode; children: React.Reac
 // 상태 알약(초록=정상/주황=주의/회색=해당없음·확인중). 비개발자도 한눈에 상태만 보게.
 function StatusChip({ tone, children }: { tone: "ok" | "warn" | "muted"; children: React.ReactNode }) {
   const cls = tone === "ok" ? "bg-primary/10 text-primary"
-    : tone === "warn" ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+    // warn: 라이트 모드 대비 확보(amber-700 ≈ 4.5:1+), 다크는 amber-400 유지.
+    : tone === "warn" ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
     : "bg-muted text-muted-foreground"
   return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${cls}`}>{children}</span>
 }
@@ -77,17 +78,19 @@ function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder
   onSave: () => void; saved: boolean; placeholder: string; help: React.ReactNode
 }) {
   const [editing, setEditing] = useState(false)
+  const panelId = `folder-edit-${label.replace(/\s+/g, "-").toLowerCase()}`
   return (
     <div className="border-b py-3 last:border-0">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm"><span className="font-medium">{label}</span>{chip}</span>
         <span className="flex items-center gap-2">
           {saved && <span className="inline-flex items-center gap-1 text-[12px] text-primary"><Check className="size-3.5" />저장됨</span>}
-          <Button variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}>{editing ? "닫기" : "변경"}</Button>
+          <Button variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}
+            aria-expanded={editing} aria-controls={panelId}>{editing ? "닫기" : "변경"}</Button>
         </span>
       </div>
       {editing && (
-        <div className="mt-2.5">
+        <div id={panelId} className="mt-2.5">
           <div className="flex flex-wrap items-center gap-2">
             <Input value={path} onChange={(e) => onPathChange(e.target.value)} aria-label={`${label} 폴더 경로`}
               className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder={placeholder} />
@@ -724,7 +727,7 @@ export function SettingsView() {
                           aria-label={`${label} 색인 ${enabled ? "끄기" : "켜기"}`}
                           aria-describedby={`src-status-${s.name}`}
                           onClick={() => toggleSourceRow(s.name, !enabled)}
-                          className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-medium transition-colors disabled:opacity-50 ${enabled ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                          className={`ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${enabled ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
                           {busy && <Loader2 className="size-3 animate-spin" />}{enabled ? "켜짐" : "꺼짐"}
                         </button>
                       </div>
