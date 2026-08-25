@@ -168,21 +168,46 @@ async def _lifespan(app: FastAPI):
             _state["model_mismatch"] = ({"stored": stored, "current": _C.EMBED_MODEL}
                                         if stored and stored != _C.EMBED_MODEL else None)
 
-    # 자동 색인(프리즈 exe 전용): 배포된 프로그램은 외부 스케줄러가 없으므로 웹서버가 스스로 색인한다.
-    # 시작 시 1회 + 주기적으로 새 대화(동기 유입 포함)를 증분 색인. 개발(python)은 스케줄러가 하므로 미가동.
+    # 자동 색인: 웹서버가 스스로 색인한다(사용자가 모드로 제어 — 자율성).
+    # 모드는 매 틱 config에서 재평가(api_config_put이 importlib.reload로 갱신) → 설정 변경 즉시 반영.
+    #   off       : 자동 색인 안 함
+    #   interval  : INDEX_INTERVAL_MIN 분마다(기본)
+    #   realtime  : 짧은 폴링으로 새 대화가 생기면 곧바로(내부 has_new_data가 없으면 값싸게 즉시 반환)
+    #   scheduled : INDEX_TIME(HH:MM)에 하루 1회
     def _autoindex():
         import time
+        from datetime import datetime
 
         from . import config as C
-        _autoindex_state["enabled"] = True
-        interval = max(60, int(getattr(C, "INDEX_INTERVAL_MIN", 10)) * 60)
+        last_run = 0.0
+        last_sched_day = None
         while True:
-            with contextlib.suppress(Exception):
-                _run_incremental()
-            time.sleep(interval)
+            mode = getattr(C, "INDEX_MODE", "interval")
+            _autoindex_state["enabled"] = mode != "off"
+            should = False
+            if mode == "realtime":
+                should = True
+            elif mode == "scheduled":
+                dt = datetime.now()
+                try:
+                    hh, mm = (getattr(C, "INDEX_TIME", "03:00") or "03:00").split(":")
+                    hh, mm = int(hh), int(mm)
+                except (ValueError, AttributeError):
+                    hh, mm = 3, 0
+                if dt.hour == hh and dt.minute == mm and last_sched_day != dt.date():
+                    last_sched_day = dt.date()
+                    should = True
+            elif mode != "off":   # interval(기본)
+                iv = max(60, int(getattr(C, "INDEX_INTERVAL_MIN", 10)) * 60)
+                if time.time() - last_run >= iv:
+                    should = True
+            if should:
+                with contextlib.suppress(Exception):
+                    _run_incremental()
+                last_run = time.time()
+            time.sleep(10 if mode == "realtime" else 20)
 
-    if getattr(_sys, "frozen", False):
-        threading.Thread(target=_autoindex, daemon=True).start()
+    threading.Thread(target=_autoindex, daemon=True).start()
 
     # 유휴 언로더: 마지막 사용 후 IDLE_SECS 지나면 임베더를 내려 RAM 반환(상시 앱 렉 방지).
     def _idle_unloader():
@@ -854,6 +879,8 @@ def api_config():
         "ollama_url": C.ENRICH_OLLAMA_URL,
         "enrich_time": C.ENRICH_TIME,
         "index_interval": C.INDEX_INTERVAL_MIN,
+        "index_mode": getattr(C, "INDEX_MODE", "interval"),
+        "index_time": getattr(C, "INDEX_TIME", "03:00"),
         "embed_model": C.EMBED_MODEL,
         "keys": {k: bool(os.environ.get(k)) for k in
                  ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")},

@@ -213,6 +213,8 @@ export interface Config {
   ollama_url: string
   enrich_time: string
   index_interval: number
+  index_mode: string        // off|interval|realtime|scheduled
+  index_time: string        // scheduled 모드 색인 시각 HH:MM
   embed_model: string
   keys: Record<string, boolean>
   config_path: string

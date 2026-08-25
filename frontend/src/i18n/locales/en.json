@@ -190,7 +190,17 @@
     "ramAvail": "Available",
     "ramWillUse": "Est. use",
     "ramOver": "Exceeds available RAM — lower parallelism to {{recMax}} or fewer (it's auto-capped if exceeded).",
-    "reindexStart": "Start re-index"
+    "reindexStart": "Start re-index",
+    "indexMode": "Auto-indexing",
+    "indexMode_off": "Off",
+    "indexMode_interval": "Interval",
+    "indexMode_realtime": "Real-time",
+    "indexMode_scheduled": "Scheduled",
+    "indexTime": "Index time",
+    "indexModeHint_off": "Auto-indexing is off. Run it manually with “Index now” below when needed.",
+    "indexModeHint_interval": "Automatically indexes new conversations on the interval you set (minutes).",
+    "indexModeHint_realtime": "Indexes new conversations automatically as soon as they appear (within seconds).",
+    "indexModeHint_scheduled": "Indexes once a day at the time you set."
   },
   "chat": {
     "selected": "Selected",
