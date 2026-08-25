@@ -182,9 +182,46 @@ python -m chatmem config                          # 현재 유효 설정·파일
 - `CHATMEM_OPENAI_MODEL` / `CHATMEM_GEMINI_MODEL` / `CHATMEM_OLLAMA_MODEL` — 각 백엔드 모델
 - `CHATMEM_OLLAMA_URL` — Ollama 엔드포인트 (기본 `http://localhost:11434/v1`)
 
+## 데이터·개인정보
+
+기본은 **전부 로컬**입니다. 대화 아카이브(archive.db)와 벡터 인덱스는 이 기기의
+`~/chat-memory/data`(변경: `CHATMEM_DATA_DIR`)에 저장되며, 평상시 어떤 서버로도 데이터를 보내지 않습니다.
+
+기기 밖으로 데이터가 나갈 수 있는 경우는 **사용자가 켠 기능** 세 가지뿐입니다:
+
+1. **클라우드 정제 AI** — 정제 백엔드를 Anthropic/OpenAI/Gemini로 설정하면, 요약·태깅을 위해
+   대화 일부가 해당 API로 전송됩니다. `claude`(구독)·`ollama`(로컬)·`off`는 외부 전송이 없습니다.
+2. **기기 동기화(Syncthing)** — 기기 연결을 켜면 대화 로그가 연결한 **본인 기기끼리** P2P로
+   동기화됩니다. 제3자 서버를 거치지 않는 기기 간 직접 전송이며 전송 구간은 암호화됩니다.
+   내장 Syncthing 바이너리는 공식 릴리스에서 받아 **SHA-256으로 무결성 검증** 후 실행합니다.
+3. **MCP 연동** — 등록하면 등록한 AI 도구(Claude Code 등)가 로컬 대화를 **검색·조회**할 수
+   있게 됩니다. 그 도구가 클라우드 모델이면, 반환된 대화를 자기 모델로 보낼 수 있습니다(도구 쪽 동작).
+
+그 외:
+- **텔레메트리·사용통계·자동 오류 리포트를 수집하지 않습니다.**
+- '문제 신고'(로그 형식 변화 감지) 기능은 대화 **내용을 보내지 않습니다** — 형식 지문만 보내며 값은 마스킹됩니다.
+- API 키 등 비밀값은 로컬 설정 파일에만 저장되고 응답에는 설정 여부(true/false)만 노출됩니다.
+
 ## 상태
 
-Phase 1 (코어 + CLI) 구현·테스트 완료. 남은 것: 야간 정제(Sonnet), 자동 배치 스케줄러, 전체 백필. Phase 2 = 자체 프로그램(FastAPI+React).
+Phase 1(코어 + CLI)·Phase 2(FastAPI + React + Electron 데스크탑 앱)까지 구현·테스트 완료.
+Codex CLI/Desktop·Claude Code 자동 색인, 기기 동기화(Syncthing 내장), MCP 연동, 자동 업데이트,
+3-OS 릴리스 CI를 갖춤. 남은 배포 과제는 코드 서명(인증서)과 첫 릴리스 실전 검증.
+
+## 릴리스 (배포·버전)
+
+버전 태그(`vX.Y.Z`)를 올리면 GitHub Actions가 Windows·Linux·macOS 설치본을 빌드해 GitHub
+릴리스에 자동 업로드합니다(자동업데이트용 `latest.yml` 포함). 절차:
+
+1. `electron/package.json`의 `version`을 올린다(예: `0.2.0`).
+2. `CHANGELOG.md`에 이번 변경을 정리한다.
+3. 같은 버전 태그를 올린다: `git tag v0.2.0 && git push origin v0.2.0`.
+4. Actions가 3-OS 설치본을 만들어 `v0.2.0` 릴리스에 첨부한다.
+5. **GitHub 릴리스 본문(릴리스노트)은 앱의 업데이트 배너에 그대로 표시**되므로, CHANGELOG 내용을
+   릴리스 본문에 넣으면 사용자에게 노출된다.
+
+> 현재 설치본은 **미서명**입니다 — Windows SmartScreen / macOS Gatekeeper 경고가 뜰 수 있습니다.
+> 코드 서명 인증서가 준비되면 CI에 서명 시크릿만 추가하면 됩니다.
 
 ## 라이선스
 
