@@ -16,6 +16,8 @@ GitHub 릴리스가 만들어지고, **그 릴리스 본문이 앱의 업데이�
 - 로그 형식 변화 자동 감지 + 원클릭 GitHub 이슈 신고(대화 내용은 보내지 않음, 형식 지문만).
 - 자동 업데이트 알림 배너(선택적 — 새 버전과 릴리스노트를 표시).
 - 3-OS(Windows·Linux·macOS) 릴리스 빌드 CI + 테스트 CI(GitHub Actions).
+- macOS Homebrew cask 배포 — 서명 없이도 `brew install/upgrade --cask`로 설치·업데이트(격리 해제로 Gatekeeper 경고 없음).
+- 미서명 macOS용 '안내형 업데이트' — 새 버전 감지 시 배너로 알리고 다운로드 페이지를 열어줌(자동 교체는 서명 필요).
 
 ### Changed
 - Electron 32 → 43 상향(최신 Chromium으로 창 리사이즈 매끄러움 개선).
