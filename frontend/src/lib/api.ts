@@ -2,8 +2,24 @@ import type { SearchResult, SessionDetail, SessionRow, SessionSource, Stats } fr
 
 async function getJSON<T>(url: string): Promise<T> {
   const r = await fetch(url)
-  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  if (!r.ok) return failure(r)
   return r.json() as Promise<T>
+}
+
+// 실패 응답을 code(errors.* 번역키)와 params(detail 등)를 실은 Error로 던진다.
+// 표시부(errText)가 code를 t()로 번역하고, code가 없으면 message를 그대로 쓴다.
+export type ApiError = Error & { code?: string; params?: Record<string, unknown> }
+async function failure(r: Response): Promise<never> {
+  const body = await r.json().catch(() => null)
+  const detail = body?.detail
+  const detailObj = detail && typeof detail === "object" ? detail : null
+  const code: string | undefined = detailObj?.code ?? body?.code
+  const rawMsg = detailObj?.msg ?? (typeof detail === "string" ? detail : undefined) ?? body?.error
+  const e = new Error(typeof rawMsg === "string" ? rawMsg : `HTTP ${r.status}`) as ApiError
+  if (code) e.code = code
+  const d = detailObj?.detail ?? body?.detail_text
+  if (d != null) e.params = { detail: d }
+  throw e
 }
 
 export type SearchMode = "hybrid" | "semantic" | "keyword"
@@ -47,13 +63,11 @@ export interface ResumeResult {
   warning?: string
   missing?: boolean            // 원문 로그가 없어 재개 불가
   source?: SessionSource
+  code?: string                // 백엔드 에러/경고 코드(errText로 번역)
 }
 export async function resumeSession(id: string, force = false): Promise<ResumeResult> {
   const r = await fetch(`/api/resume?session=${encodeURIComponent(id)}&force=${force}`, { method: "POST" })
-  if (!r.ok) {
-    const msg = await r.json().catch(() => null)
-    throw new Error(msg?.detail || `실행 실패 (HTTP ${r.status})`)
-  }
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -90,20 +104,20 @@ export interface SyncthingStatus {
 export const getSyncthingStatus = () => getJSON<SyncthingStatus>(`/api/syncthing/status`)
 export async function syncthingStart(): Promise<{ ok: boolean; phase?: string }> {
   const r = await fetch(`/api/syncthing/start`, { method: "POST" })
-  if (!r.ok) throw new Error(`시작 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 export async function syncthingStop(): Promise<{ ok: boolean }> {
   const r = await fetch(`/api/syncthing/stop`, { method: "POST" })
-  if (!r.ok) throw new Error(`중지 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
-export async function syncthingPair(deviceId: string, name = ""): Promise<{ ok: boolean; error?: string }> {
+export async function syncthingPair(deviceId: string, name = ""): Promise<{ ok: boolean; error?: string; code?: string; detail?: string }> {
   const r = await fetch(`/api/syncthing/pair`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ device_id: deviceId, name }),
   })
-  if (!r.ok) throw new Error(`연결 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -127,7 +141,7 @@ export const getIndexStatus = () => getJSON<IndexStatus>(`/api/index/status`)
 // 수동 증분 색인(새 대화만).
 export async function runIndex(): Promise<{ ok: boolean; started?: boolean; busy?: boolean }> {
   const r = await fetch(`/api/index/run`, { method: "POST" })
-  if (!r.ok) throw new Error(`색인 실행 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -143,12 +157,12 @@ export interface EnrichStatus {
   pending_turns?: number   // 아직 요약·태그 없는 턴 수(summary IS NULL)
 }
 export const getEnrichStatus = () => getJSON<EnrichStatus>(`/api/enrich/status`)
-export async function runEnrich(all = false): Promise<{ ok: boolean; started?: boolean; backend?: string; error?: string }> {
+export async function runEnrich(all = false): Promise<{ ok: boolean; started?: boolean; backend?: string; error?: string; code?: string; detail?: string }> {
   const r = await fetch(`/api/enrich`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ all }),
   })
-  if (!r.ok) throw new Error(`정제 실행 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 export async function toggleSync(enabled: boolean, interval?: number): Promise<SyncStatus> {
@@ -156,7 +170,7 @@ export async function toggleSync(enabled: boolean, interval?: number): Promise<S
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled, interval }),
   })
-  if (!r.ok) throw new Error(`동기화 토글 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -174,7 +188,7 @@ export const getSystem = () => getJSON<SystemInfo>(`/api/system`)
 // 기기 간 아카이브 병합(다른 기기가 보존한 삭제-원본 세션까지 가져오기). 벡터는 이후 색인이 채움.
 export async function archiveSync(): Promise<{ ok: boolean; imported: number; exported: number }> {
   const r = await fetch(`/api/archive/sync`, { method: "POST" })
-  if (!r.ok) throw new Error(`병합 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -235,7 +249,7 @@ export async function putConfig(updates: Record<string, string>): Promise<{ ok: 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(updates),
   })
-  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -245,7 +259,7 @@ export async function verifyEnrich(p: {
   const r = await fetch(`/api/verify-enrich`, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p),
   })
-  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -272,12 +286,12 @@ export const getEmbedModels = () =>
 
 // 첫 실행 온보딩(임베딩 모델 선택)
 export const getOnboarding = () => getJSON<{ needed: boolean }>(`/api/onboarding`)
-export async function chooseModel(model: string): Promise<{ ok: boolean; model?: string; error?: string }> {
+export async function chooseModel(model: string): Promise<{ ok: boolean; model?: string; error?: string; code?: string }> {
   const r = await fetch(`/api/onboarding/choose`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model }),
   })
-  if (!r.ok) throw new Error(`모델 선택 실패 (HTTP ${r.status})`)
+  if (!r.ok) return failure(r)
   return r.json()
 }
 
@@ -312,7 +326,7 @@ export async function mcpUnregister(target: string): Promise<{ ok: boolean; erro
 // fast=true: 재파싱 없이 병렬(멀티프로세싱)로 대량 임베딩 — RAM 여유 있는 고성능 기기용.
 export async function reindex(
   model?: string, opts: { fast?: boolean; parallel?: number } = {},
-): Promise<{ ok: boolean; started?: boolean; error?: string }> {
+): Promise<{ ok: boolean; started?: boolean; error?: string; code?: string }> {
   const body: Record<string, unknown> = {}
   if (model) body.model = model
   if (opts.fast) { body.fast = true; if (opts.parallel) body.parallel = opts.parallel }

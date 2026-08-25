@@ -19,6 +19,7 @@ import {
   type SyncthingStatus, type SyncthingSync, type SystemInfo,
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
+import { errText } from "@/lib/errors"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
 import { getLang, setLang, type Lang } from "@/lib/lang"
 
@@ -125,7 +126,7 @@ function McpSection() {
     setBusy(tgt.id); setNote(null)
     try {
       const r = willRegister ? await mcpRegister(tgt.id) : await mcpUnregister(tgt.id)
-      if (!r.ok) { setNote(`${tgt.label}: ${r.error || t("mcp.failed")}`); setSnip(tgt.id) }
+      if (!r.ok) { setNote(`${tgt.label}: ${errText(t, r, "mcp.failed")}`); setSnip(tgt.id) }
       else {
         // 낙관적 반영: 즉시 등록/해제 상태로 바꿔 표시(느린 `claude mcp list` 재조회를 안 기다림).
         setTargets((ts) => ts?.map((x) => (x.id === tgt.id ? { ...x, registered: willRegister } : x)) ?? ts)
@@ -270,9 +271,9 @@ function SyncthingSection() {
     try {
       const r = await syncthingPair(id)
       if (r.ok) { setNote({ ok: true, text: t("sync.pairSent") }); setPeer("") }
-      else setNote({ ok: false, text: r.error || t("sync.pairFailed") })
+      else setNote({ ok: false, text: errText(t, r, "sync.pairFailed") })
       load()
-    } catch (e) { setNote({ ok: false, text: e instanceof Error ? e.message : t("sync.pairFailed") }) }
+    } catch (e) { setNote({ ok: false, text: errText(t, e, "sync.pairFailed") }) }
     finally { setBusy(false) }
   }
 
@@ -507,9 +508,9 @@ export function SettingsView() {
     setEnrichErr("")
     try {
       const r = await runEnrich(false)
-      if (!r.ok) setEnrichErr(r.error || t("settings.enrichRunFailed"))
+      if (!r.ok) setEnrichErr(errText(t, r, "settings.enrichRunFailed"))
       else setEnrichSt((s) => ({ ...(s ?? { done_sessions: 0, total_sessions: 0, enriched: 0, last_error: null }), running: true, phase: t("settings.starting") }))
-    } catch (e) { setEnrichErr(e instanceof Error ? e.message : t("settings.enrichRunFailed")) }
+    } catch (e) { setEnrichErr(errText(t, e, "settings.enrichRunFailed")) }
   }
 
   // 색인 소스 on/off. 낙관적 반영(깜빡임 방지) → 서버 확정, 실패 시 되돌림 + 에러 표시.
@@ -992,7 +993,7 @@ export function SettingsView() {
                           setArchiveMsg(r.imported > 0
                             ? t("sync.mergeImported", { count: r.imported.toLocaleString() })
                             : t("sync.mergeUpToDate"))
-                        } catch (e) { setArchiveMsg(e instanceof Error ? e.message : t("sync.mergeFailed")) }
+                        } catch (e) { setArchiveMsg(errText(t, e, "sync.mergeFailed")) }
                         finally { setArchiving(false) }
                       }}>
                       {archiving && <Loader2 className="mr-1 size-4 animate-spin" />}{t("sync.mergeNow")}

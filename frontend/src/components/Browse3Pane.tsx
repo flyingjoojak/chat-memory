@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
 import { getGraph3D, getSession, listSessions, resumeSession, search, type SearchMode } from "@/lib/api"
+import { errText } from "@/lib/errors"
 import { fmtTime } from "@/lib/format"
 import type { Hit, SessionDetail } from "@/lib/types"
 
@@ -92,15 +93,15 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     try {
       let r = await resumeSession(sel)
       if (!r.ok && r.active) {   // 최근 수정됨 → 확인 후 강제 재개
-        const go = window.confirm(`${r.warning ?? t("browse.resumeActiveWarning")}\n\n${t("browse.resumeConfirm")}`)
+        const go = window.confirm(`${errText(t, r, "browse.resumeActiveWarning")}\n\n${t("browse.resumeConfirm")}`)
         if (!go) return
         r = await resumeSession(sel, true)
       }
       // 성공 여부는 r.ok 로만 판단(missing·실행실패 등은 경고로). '거짓 성공' 방지.
       if (r.ok) flashMsg({ ok: true, text: t("browse.resumeStarted") })
-      else flashMsg({ ok: false, text: r.warning ?? t("browse.resumeCannotOpen") })
+      else flashMsg({ ok: false, text: errText(t, r, "browse.resumeCannotOpen") })
     } catch (e) {
-      flashMsg({ ok: false, text: e instanceof Error ? e.message : t("browse.execFailed") })
+      flashMsg({ ok: false, text: errText(t, e, "browse.execFailed") })
     } finally {
       setOpening(false)
     }

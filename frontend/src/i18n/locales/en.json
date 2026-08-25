@@ -388,5 +388,24 @@
     "copied": "Copied",
     "copyFailedNote": "Couldn't copy to clipboard — select the text above and copy it manually.",
     "noRootFolder": "No log folder for this source:"
+  },
+  "errors": {
+    "generic": "Something went wrong.",
+    "csrf_blocked": "Blocked a request from an untrusted origin (CSRF protection). Please use it inside the app.",
+    "no_embed_model": "Choose an embedding model first.",
+    "unknown_source": "Unknown source.",
+    "invalid_session_id": "Invalid session ID.",
+    "session_not_found": "Session not found.",
+    "resume_missing_log": "Can't open the session — its source log is missing (it may have been deleted or moved).",
+    "resume_active": "This session was modified about {{seconds}}s ago — if it's running on another device, resuming now may fork it.",
+    "resume_launch_failed": "Failed to launch the terminal: {{detail}}",
+    "sync_not_started": "Start “Device connection” first.",
+    "device_id_invalid": "Invalid Device ID format (e.g. XXXXXXX-XXXXXXX-… , 8 groups).",
+    "device_id_self": "That's your own device ID — enter the other device's ID.",
+    "pair_failed": "Connection failed: {{detail}}",
+    "enrich_already_running": "Enrichment is already running.",
+    "enrich_unavailable": "Enrichment is unavailable: {{detail}}",
+    "unknown_model": "Unknown model.",
+    "reindex_already_running": "Indexing/re-indexing is already running."
   }
 }
