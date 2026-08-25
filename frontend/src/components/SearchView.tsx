@@ -179,7 +179,7 @@ export function SearchView() {
                     <span className="rounded bg-muted px-1 py-0.5 text-[9.5px] font-medium text-foreground/70">{sourceLabel(h.source)}</span>
                   )}
                   {h.sources.map((s) => (
-                    <Badge key={s} variant={s === "키워드" ? "secondary" : "default"} className="h-4 px-1.5 text-[9.5px]">{s}</Badge>
+                    <Badge key={s} variant={s === "keyword" ? "secondary" : "default"} className="h-4 px-1.5 text-[9.5px]">{t(s === "keyword" ? "search.srcKeyword" : "search.srcSemantic")}</Badge>
                   ))}
                   <span>{h.cosine != null ? `cos ${h.cosine.toFixed(2)}` : t("search.keywordMatch")}</span>
                   <span className="opacity-40">·</span>

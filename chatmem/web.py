@@ -84,17 +84,33 @@ def _maybe_unload_embedder() -> None:
     gc.collect()   # onnxruntime 세션·텐서 해제 유도
 
 
-def _run_incremental() -> bool:
+_FULL_SWEEP_SECS = 300   # realtime 모드에서 peer 병합·자가복구 전체 스윕 최소 간격(초)
+_last_full_sweep = [0.0]
+
+
+def _run_incremental(quick: bool = False) -> bool:
     """새 대화만 증분 색인(현재 임베더 재사용, 벡터 유지). 자동 스레드·수동 트리거 공용.
-    다른 색인 작업이 이미 돌고 있으면 스킵. 반환: 실제로 실행했으면 True."""
+    다른 색인 작업이 이미 돌고 있으면 스킵. 반환: 실제로 실행했으면 True.
+    quick=True(realtime 폴링)면 값싼 has_new_data(세션 파일 stat) 체크를 먼저 해,
+    새 대화가 없고 전체 스윕 주기(_FULL_SWEEP_SECS)도 아니면 벡터 인덱스 로드 없이 즉시 반환한다.
+    (10초 폴링이 전체 벡터 행렬 재로드+turns 풀스캔이 되지 않게 함)."""
     if not _index_lock.acquire(blocking=False):
         return False
     try:
+        import time as _time
         from . import config as C
         from .archive_sync import device_id, export_archive, import_archives
         from .indexer import backfill_missing, has_new_data, index_all, reconcile
         db = ArchiveDB()
+        if quick:
+            # 값싼 게이트: 로컬 세션 파일 stat만 확인(벡터 로드·풀스캔 없음).
+            # 새 대화가 없고 peer 병합/자가복구 전체 스윕 주기도 아니면 무거운 작업을 건너뛴다.
+            sweep_due = (_time.time() - _last_full_sweep[0]) >= _FULL_SWEEP_SECS
+            if not has_new_data(db) and not sweep_due:
+                _autoindex_state.update(running=False, phase="새 대화 없음")
+                return True
         vi = make_index()
+        _last_full_sweep[0] = _time.time()
         with contextlib.suppress(Exception):
             reconcile(db, vi, log_fn=lambda m: None)   # 고아 벡터 정리(값쌈)
         # 기기 간 아카이브 병합: 다른 기기가 보존한 세션(삭제된 원본 포함)을 먼저 가져온다.
@@ -172,7 +188,7 @@ async def _lifespan(app: FastAPI):
     # 모드는 매 틱 config에서 재평가(api_config_put이 importlib.reload로 갱신) → 설정 변경 즉시 반영.
     #   off       : 자동 색인 안 함
     #   interval  : INDEX_INTERVAL_MIN 분마다(기본)
-    #   realtime  : 짧은 폴링으로 새 대화가 생기면 곧바로(내부 has_new_data가 없으면 값싸게 즉시 반환)
+    #   realtime  : 짧은 폴링으로 새 대화가 생기면 곧바로(quick 게이트로 새 대화 없으면 값싸게 즉시 반환)
     #   scheduled : INDEX_TIME(HH:MM)에 하루 1회
     def _autoindex():
         import time
@@ -202,8 +218,10 @@ async def _lifespan(app: FastAPI):
                 if time.time() - last_run >= iv:
                     should = True
             if should:
-                with contextlib.suppress(Exception):
-                    _run_incremental()
+                try:
+                    _run_incremental(quick=(mode == "realtime"))
+                except Exception as ex:   # 백그라운드 스레드 — 흔적 없이 죽지 않게 최소 로깅
+                    print(f"[autoindex] tick failed: {ex}", file=_sys.stderr)
                 last_run = time.time()
             time.sleep(10 if mode == "realtime" else 20)
 
@@ -1662,7 +1680,7 @@ function tog(el){el.nextElementSibling.classList.toggle('open');}
 window.tog=tog;
 
 function card(h){
-  const src=(h.sources||[]).map(s=>`<span class="badge ${s==='키워드'?'kw':''}">${s}</span>`).join('');
+  const src=(h.sources||[]).map(s=>`<span class="badge ${s==='keyword'?'kw':''}">${s==='keyword'?'키워드':'의미'}</span>`).join('');
   const cos=h.cosine!=null?`cos ${h.cosine.toFixed(3)}`:'키워드';
   const meta=`<div class="meta">${src}<span>${cos}</span>· ${esc(fmtTime(h.timestamp))} · 세션 ${esc(h.session)}</div>`;
   const tags=(h.tags||[]).length?`<div class="tags">${h.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join('')}</div>`:'';

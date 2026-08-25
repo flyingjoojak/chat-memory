@@ -23,7 +23,10 @@
     "mismatchReindex": "설정에서 재색인",
     "driftMsg": "{{sources}} 로그를 못 읽고 있어요 — 형식이 바뀐 것 같아요. 한 번 눌러 신고해 주시면 빨리 고칠 수 있어요(대화 내용은 안 보내요).",
     "driftReport": "바로 신고",
-    "driftOpenSettings": "설정 열기"
+    "driftOpenSettings": "설정 열기",
+    "backendDownTitle": "백엔드에 연결할 수 없어요",
+    "backendDownBody": "앱이 아직 준비 중이거나 종료됐을 수 있어요. 연결되면 자동으로 넘어갑니다.",
+    "backendDownRetry": "다시 시도"
   },
   "update": {
     "available": "{{version}} 업데이트가 있어요.",
@@ -167,6 +170,7 @@
     "embedHint": "처음부터 다시 임베딩하려면 현재 모델의 「전체 재색인」, 다른 모델로 바꾸려면 「변경」.",
     "reindexing": "재색인 중… {{msg}}",
     "reindexPreparing": "준비 중… (첫 배치 임베딩 시작하면 진행률이 표시됩니다)",
+    "reindexFailed": "재색인을 시작하지 못했어요. 다시 시도해 주세요.",
     "embedTip": "기기가 느리거나 RAM이 부족하면 <b>가벼운 모델(MiniLM)</b>을 권장해요 — 예상 시간·RAM이 훨씬 적습니다(품질은 약간 낮음). RAM 여유가 큰 고성능 기기라면 재색인 시 「빠른 재색인(병렬)」로 시간을 줄일 수 있어요.",
     "lowSpecRec": "저사양 추천",
     "diskLabel": "디스크 {{gb}}GB",
@@ -259,6 +263,8 @@
     "ex4": "설정 방법",
     "ex5": "결정한 내용",
     "keywordMatch": "키워드",
+    "srcSemantic": "의미",
+    "srcKeyword": "키워드",
     "session": "세션 {{n}}",
     "untitled": "(제목 없음)",
     "detailPlaceholder": "왼쪽 결과를 클릭하면 그 대화가 여기에 채팅으로 열립니다.",

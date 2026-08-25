@@ -31,7 +31,7 @@ def test_hit_to_dict_shape():
         turn = t
         score = 0.1
         cosine = 0.87
-        sources = ("의미", "키워드")
+        sources = ("semantic", "keyword")
         summary = "요약"
         tags = ("t1",)
         thread = ()
@@ -39,5 +39,5 @@ def test_hit_to_dict_shape():
     d = web._hit_to_dict(H())
     assert d["question"] == "질문"
     assert d["actions"] == ["Edit(x.py)"]
-    assert d["sources"] == ["의미", "키워드"]
+    assert d["sources"] == ["semantic", "keyword"]
     assert d["cosine"] == 0.87
