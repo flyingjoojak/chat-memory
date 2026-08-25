@@ -20,13 +20,14 @@
     "appId": "com.engram.app",
     "productName": "Engram",
     "artifactName": "${productName}-Setup-${version}.${ext}",
+    "icon": "icon.png",
     "files": ["main.js", "preload.js", "loading.html", "icon.png"],
     "extraResources": [
       { "from": "../dist/chatmem-backend", "to": "backend" }
     ],
     "win": { "target": "nsis", "icon": "icon.png" },
-    "mac": { "target": "dmg", "category": "public.app-category.productivity" },
-    "linux": { "target": "AppImage", "category": "Utility" },
+    "mac": { "target": "dmg", "category": "public.app-category.productivity", "icon": "icon.png" },
+    "linux": { "target": "AppImage", "category": "Utility", "icon": "icon.png" },
     "publish": [
       { "provider": "github", "owner": "flyingjoojak", "repo": "chat-memory" }
     ]

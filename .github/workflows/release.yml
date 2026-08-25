@@ -1,0 +1,69 @@
+# Release: 버전 태그(vX.Y.Z)를 올리면 Windows·Linux·macOS 설치본을 각 OS에서 자동 빌드해
+# GitHub 릴리스에 업로드한다(자동업데이트용 latest.yml 포함).
+#
+# 릴리스 절차:
+#   1) electron/package.json 의 version 을 올린다(예: 0.2.0). ← 릴리스 이름/자동업데이트 기준.
+#   2) 커밋 후 그 버전과 같은 태그를 올린다:  git tag v0.2.0 && git push origin v0.2.0
+#   3) 이 워크플로가 3-OS 설치본을 만들어 v0.2.0 릴리스에 붙인다.
+#
+# 아직 남은 전제(코드 밖):
+#   - 코드 서명 인증서 없음 → 설치본은 미서명(SmartScreen/Gatekeeper 경고). 인증서 생기면
+#     electron-builder 서명 설정 + 시크릿(CSC_LINK/CSC_KEY_PASSWORD 등)만 추가하면 된다.
+#   - 아이콘은 1024px 로 준비됨(icon.png) → mac dmg 빌드 가능. 다만 서명·공증은 아직이라
+#     mac 잡은 첫 릴리스 안전망으로 continue-on-error 를 유지(그린 확인되면 제거).
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch: {} # 수동 실행: 퍼블리시 없이 빌드만 검증
+
+permissions:
+  contents: write # GitHub 릴리스에 설치본 업로드 권한
+
+jobs:
+  build:
+    name: 빌드·퍼블리시 (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    # 아이콘은 해결됨. 서명·공증 미적용이라 첫 릴리스 안전망으로만 mac 을 비차단 유지.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # onnx 는 make_int8(int8 양자화)에만 필요. fastembed/onnxruntime 등은 .[all] 로 들어온다.
+      - name: Python 빌드 의존성
+        run: pip install ".[all]" pyinstaller onnx
+
+      - name: 프론트 빌드
+        run: |
+          npm --prefix frontend ci
+          npm --prefix frontend run build
+
+      # PyInstaller onedir(chatmem-backend) + int8 e5-large 모델 생성·동봉 → dist/chatmem-backend/
+      - name: 백엔드 빌드(사이드카)
+        shell: bash
+        run: bash packaging/build-backend.sh
+
+      - name: electron 의존성
+        run: npm --prefix electron ci
+
+      # 태그 푸시면 GitHub 릴리스에 퍼블리시, 수동 실행이면 빌드만(never).
+      - name: 설치본 빌드·퍼블리시
+        working-directory: electron
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false" # 서명 인증서 없음 → 자동 서명 탐색 끔(mac)
+        run: npx electron-builder --publish ${{ github.event_name == 'push' && 'always' || 'never' }}
