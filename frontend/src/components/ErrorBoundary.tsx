@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react"
+import i18n from "@/i18n"
 
 interface Props { children: ReactNode }
 interface State { error: Error | null }
@@ -22,14 +23,14 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.error) {
       return (
         <div role="alert" className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-          <div className="text-lg font-semibold">이 화면에서 오류가 났어요</div>
+          <div className="text-lg font-semibold">{i18n.t("error.viewCrashed")}</div>
           <pre className="max-w-full overflow-auto rounded-lg border bg-muted px-3 py-2 text-left text-xs text-destructive">
             {this.state.error.message}
             {"\n\n"}
             {this.state.error.stack?.split("\n").slice(0, 6).join("\n")}
           </pre>
           <button onClick={this.reset}
-            className="rounded-lg border bg-card px-3 py-1.5 text-sm hover:bg-muted">다시 시도</button>
+            className="rounded-lg border bg-card px-3 py-1.5 text-sm hover:bg-muted">{i18n.t("common.retry")}</button>
         </div>
       )
     }

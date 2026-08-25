@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Download, RefreshCw, ChevronDown, ChevronUp, X, AlertTriangle } from "lucide-react"
 
 // Electron preload(preload.js)이 주입하는 업데이트 브리지. 브라우저에는 없다 → 배너 미표시.
@@ -29,6 +30,7 @@ declare global {
 type Phase = "idle" | "available" | "downloading" | "downloaded"
 
 export function UpdateBanner() {
+  const { t } = useTranslation()
   const [phase, setPhase] = useState<Phase>("idle")
   const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [percent, setPercent] = useState(0)
@@ -58,7 +60,7 @@ export function UpdateBanner() {
 
   if (!window.engramUpdater || phase === "idle" || dismissed) return null
 
-  const version = info?.version ? `v${info.version}` : "새 버전"
+  const version = info?.version ? `v${info.version}` : t("update.newVersion")
   const startDownload = () => { setError(null); setPercent(0); setPhase("downloading"); window.engramUpdater?.download() }
 
   return (
@@ -68,7 +70,7 @@ export function UpdateBanner() {
 
         {phase === "available" && (
           <>
-            <span><b>{version}</b> 업데이트가 있어요.</span>
+            <span>{t("update.available", { version })}</span>
             {info?.releaseNotes && (
               <button
                 onClick={() => setShowNotes((s) => !s)}
@@ -76,7 +78,7 @@ export function UpdateBanner() {
                 aria-controls="update-notes"
                 className="inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground"
               >
-                업데이트 내역 {showNotes ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+                {t("update.notes")} {showNotes ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
               </button>
             )}
             <div className="ml-auto flex items-center gap-1.5">
@@ -89,29 +91,27 @@ export function UpdateBanner() {
                   aria-describedby="assisted-update-help"
                   className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
                 >
-                  {assistedOpened ? "페이지 열림" : "다운로드 페이지 열기"}
+                  {assistedOpened ? t("update.assistedOpened") : t("update.assistedOpen")}
                 </button>
               ) : (
                 <button
                   onClick={startDownload}
                   className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
                 >
-                  {error ? "다시 시도" : "지금 업데이트"}
+                  {error ? t("common.retry") : t("update.updateNow")}
                 </button>
               )}
               <button
                 onClick={() => setDismissed(true)}
                 className="rounded-md border border-border px-2 py-0.5 text-muted-foreground hover:bg-muted"
               >
-                나중에
+                {t("common.later")}
               </button>
             </div>
             {/* macOS 안내: 수동 교체 방법을 hover 툴팁이 아니라 화면·스크린리더로 항상 노출(a11y). */}
             {info?.assisted && (
               <span id="assisted-update-help" className="w-full text-[12px] text-muted-foreground">
-                {assistedOpened
-                  ? "다운로드 페이지를 열었어요 — 받은 파일을 Applications 폴더로 끌어다 교체한 뒤 앱을 다시 여세요."
-                  : "macOS는 자동 설치가 안 돼요 — 다운로드한 파일을 Applications 폴더로 끌어다 교체하세요."}
+                {assistedOpened ? t("update.macHelpOpened") : t("update.macHelp")}
               </span>
             )}
           </>
@@ -119,13 +119,13 @@ export function UpdateBanner() {
 
         {phase === "downloading" && (
           <>
-            <span>업데이트 내려받는 중…</span>
+            <span>{t("update.downloading")}</span>
             <div
               role="progressbar"
               aria-valuenow={percent}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-label="업데이트 다운로드 진행률"
+              aria-label={t("update.downloadProgress")}
               className="ml-2 h-1.5 w-40 overflow-hidden rounded-full bg-muted"
             >
               <div className="h-full bg-primary transition-all" style={{ width: `${percent}%` }} />
@@ -137,20 +137,20 @@ export function UpdateBanner() {
         {phase === "downloaded" && (
           <>
             <RefreshCw className="size-4 shrink-0 text-primary" />
-            <span><b>{version}</b> 준비 완료 — 재시작하면 설치돼요.</span>
+            <span>{t("update.ready", { version })}</span>
             <div className="ml-auto flex items-center gap-1.5">
               <button
                 onClick={() => window.engramUpdater?.install()}
                 className="rounded-md bg-primary px-2.5 py-0.5 font-medium text-primary-foreground hover:bg-primary/90"
               >
-                지금 재시작해 설치
+                {t("update.installNow")}
               </button>
               <button
                 onClick={() => setDismissed(true)}
-                title="다음에 종료할 때 자동 설치됩니다"
+                title={t("update.installOnQuit")}
                 className="rounded-md border border-border px-2 py-0.5 text-muted-foreground hover:bg-muted"
               >
-                나중에
+                {t("common.later")}
               </button>
             </div>
           </>
@@ -159,7 +159,7 @@ export function UpdateBanner() {
         {/* 닫기: 어떤 단계에서도 항상 노출(다운로드 중 멈춤 방지). */}
         <button
           onClick={() => setDismissed(true)}
-          aria-label="닫기"
+          aria-label={t("common.close")}
           className={`${phase === "available" || phase === "downloaded" ? "" : "ml-auto"} rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground`}
         >
           <X className="size-3.5" />
@@ -169,7 +169,7 @@ export function UpdateBanner() {
       {error && (
         <div className="mt-1 flex items-center gap-1.5 text-[12px] text-amber-600 dark:text-amber-400">
           <AlertTriangle className="size-3.5 shrink-0" />
-          <span>업데이트에 실패했어요: {error}</span>
+          <span>{t("update.failed", { error })}</span>
         </div>
       )}
 

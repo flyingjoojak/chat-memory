@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, lazy, Suspense } from "react"
+import { useTranslation } from "react-i18next"
 import { Search, MessagesSquare, Layers, Box, Settings } from "lucide-react"
 import { Loader2 } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
@@ -18,15 +19,16 @@ const GraphView3D = lazy(() => import("@/components/GraphView3D").then((m) => ({
 
 type View = "search" | "sessions" | "clusters" | "graph3d" | "settings"
 
-const NAV: { v: View; icon: React.ReactNode; label: string }[] = [
-  { v: "search", icon: <Search className="size-[18px]" />, label: "검색" },
-  { v: "sessions", icon: <MessagesSquare className="size-[18px]" />, label: "세션" },
-  { v: "clusters", icon: <Layers className="size-[18px]" />, label: "군집" },
-  { v: "graph3d", icon: <Box className="size-[18px]" />, label: "지도" },
-  { v: "settings", icon: <Settings className="size-[18px]" />, label: "설정" },
+const NAV: { v: View; icon: React.ReactNode; labelKey: string }[] = [
+  { v: "search", icon: <Search className="size-[18px]" />, labelKey: "nav.search" },
+  { v: "sessions", icon: <MessagesSquare className="size-[18px]" />, labelKey: "nav.sessions" },
+  { v: "clusters", icon: <Layers className="size-[18px]" />, labelKey: "nav.clusters" },
+  { v: "graph3d", icon: <Box className="size-[18px]" />, labelKey: "nav.map" },
+  { v: "settings", icon: <Settings className="size-[18px]" />, labelKey: "nav.settings" },
 ]
 
 export default function App() {
+  const { t } = useTranslation()
   const [view, setView] = useState<View>("search")
   // 지도에서 대화(턴)를 클릭하면 그 탭(3분할·왼쪽 검색창)으로 이동해 그 대화를 연다(진입 경로만 다르고 화면 동일).
   const [jump, setJump] = useState<{ kind: "sessions" | "clusters"; id: string; turn: string; session: string } | null>(null)
@@ -128,8 +130,8 @@ export default function App() {
           <button
             key={n.v}
             onClick={() => onNav(n.v)}
-            title={n.label}
-            aria-label={n.label}
+            title={t(n.labelKey)}
+            aria-label={t(n.labelKey)}
             className={`grid size-10 place-items-center rounded-lg transition-colors ${
               view === n.v ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
             }`}
@@ -145,10 +147,10 @@ export default function App() {
         {mismatch && (
           <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
             <AlertTriangle className="size-4 shrink-0" />
-            <span>저장된 벡터가 <b>{mismatch.stored.split("/").pop()}</b>로 만들어졌는데 현재 설정은 <b>{mismatch.current.split("/").pop()}</b>예요 — 검색 결과가 부정확할 수 있어요.</span>
+            <span>{t("app.mismatchMsg", { stored: mismatch.stored.split("/").pop(), current: mismatch.current.split("/").pop() })}</span>
             <button onClick={() => { setView("settings"); setJump(null) }}
               className="ml-auto rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
-              설정에서 재색인
+              {t("app.mismatchReindex")}
             </button>
           </div>
         )}
@@ -156,15 +158,15 @@ export default function App() {
           <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
             <AlertTriangle className="size-4 shrink-0" />
             <span>
-              <b>{drift.map((s) => (s === "codex" ? "Codex" : s === "claude-code" ? "Claude Code" : s)).join(", ")}</b> 로그를 못 읽고 있어요 — 형식이 바뀐 것 같아요. 한 번 눌러 신고해 주시면 빨리 고칠 수 있어요(대화 내용은 안 보내요).
+              {t("app.driftMsg", { sources: drift.map((s) => (s === "codex" ? "Codex" : s === "claude-code" ? "Claude Code" : s)).join(", ") })}
             </span>
             <button onClick={reportDrift}
               className="ml-auto rounded-md border border-amber-500/50 bg-amber-500/20 px-2 py-0.5 font-medium hover:bg-amber-500/30">
-              바로 신고
+              {t("app.driftReport")}
             </button>
             <button onClick={() => { setView("settings"); setJump(null) }}
               className="rounded-md border border-amber-500/50 px-2 py-0.5 font-medium hover:bg-amber-500/20">
-              설정 열기
+              {t("app.driftOpenSettings")}
             </button>
           </div>
         )}
@@ -179,7 +181,7 @@ export default function App() {
               initialTurn={jump?.kind === "clusters" ? { turn: jump.turn, session: jump.session } : null} />
           )}
           {view === "graph3d" && (
-            <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">3D 엔진 불러오는 중…</div>}>
+            <Suspense fallback={<div className="grid h-full place-items-center text-muted-foreground">{t("app.mapLoading")}</div>}>
               <GraphView3D onOpenTurn={openTurn} />
             </Suspense>
           )}

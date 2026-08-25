@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { Trans, useTranslation } from "react-i18next"
 import {
   AlertTriangle, Check, Copy, Database, Loader2, Monitor, Moon,
   Plug, RefreshCw, SlidersHorizontal, Sparkles, Sun, X,
@@ -19,30 +20,32 @@ import {
 } from "@/lib/api"
 import type { Stats } from "@/lib/types"
 import { type ThemeMode, getThemeMode, setThemeMode } from "@/lib/theme"
+import { getLang, setLang, type Lang } from "@/lib/lang"
 
 const BACKENDS = [
-  { v: "claude", label: "Claude Code 구독", key: null, keyEx: "", modelEnv: "CHATMEM_ENRICH_MODEL", models: ["sonnet", "opus", "haiku"] },
-  { v: "anthropic", label: "Anthropic API", key: "ANTHROPIC_API_KEY", keyEx: "sk-ant-api03-...", modelEnv: "CHATMEM_ENRICH_API_MODEL", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
-  { v: "openai", label: "OpenAI (GPT)", key: "OPENAI_API_KEY", keyEx: "sk-... 또는 sk-proj-...", modelEnv: "CHATMEM_OPENAI_MODEL", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"] },
-  { v: "gemini", label: "Google Gemini", key: "GEMINI_API_KEY", keyEx: "AIza...", modelEnv: "CHATMEM_GEMINI_MODEL", models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"] },
-  { v: "ollama", label: "Ollama (로컬)", key: null, keyEx: "", modelEnv: "CHATMEM_OLLAMA_MODEL", models: ["llama3.1", "llama3.2", "qwen2.5", "mistral", "gemma2"] },
-  { v: "off", label: "정제 안 함", key: null, keyEx: "", modelEnv: null, models: [] },
+  { v: "claude", labelKey: "settings.backendClaude", key: null, keyEx: "", keyExKey: null, modelEnv: "CHATMEM_ENRICH_MODEL", models: ["sonnet", "opus", "haiku"] },
+  { v: "anthropic", labelKey: "settings.backendAnthropic", key: "ANTHROPIC_API_KEY", keyEx: "sk-ant-api03-...", keyExKey: "settings.keyExAnthropic", modelEnv: "CHATMEM_ENRICH_API_MODEL", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
+  { v: "openai", labelKey: "settings.backendOpenai", key: "OPENAI_API_KEY", keyEx: "sk-... or sk-proj-...", keyExKey: "settings.keyExOpenai", modelEnv: "CHATMEM_OPENAI_MODEL", models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"] },
+  { v: "gemini", labelKey: "settings.backendGemini", key: "GEMINI_API_KEY", keyEx: "AIza...", keyExKey: "settings.keyExGemini", modelEnv: "CHATMEM_GEMINI_MODEL", models: ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"] },
+  { v: "ollama", labelKey: "settings.backendOllama", key: null, keyEx: "", keyExKey: null, modelEnv: "CHATMEM_OLLAMA_MODEL", models: ["llama3.1", "llama3.2", "qwen2.5", "mistral", "gemma2"] },
+  { v: "off", labelKey: "settings.backendOff", key: null, keyEx: "", keyExKey: null, modelEnv: null, models: [] },
 ] as const
 const CUSTOM = "__custom__"
 
 type TabKey = "general" | "enrich" | "index" | "sync" | "mcp"
-const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "general", label: "일반", icon: <SlidersHorizontal className="size-4" /> },
-  { key: "enrich", label: "정제 AI", icon: <Sparkles className="size-4" /> },
-  { key: "index", label: "색인·임베딩", icon: <Database className="size-4" /> },
-  { key: "sync", label: "동기화", icon: <RefreshCw className="size-4" /> },
-  { key: "mcp", label: "MCP 연동", icon: <Plug className="size-4" /> },
+const TABS: { key: TabKey; labelKey: string; icon: React.ReactNode }[] = [
+  { key: "general", labelKey: "settings.tabGeneral", icon: <SlidersHorizontal className="size-4" /> },
+  { key: "enrich", labelKey: "settings.tabEnrich", icon: <Sparkles className="size-4" /> },
+  { key: "index", labelKey: "settings.tabIndex", icon: <Database className="size-4" /> },
+  { key: "sync", labelKey: "settings.tabSync", icon: <RefreshCw className="size-4" /> },
+  { key: "mcp", labelKey: "settings.tabMcp", icon: <Plug className="size-4" /> },
 ]
 
 // 대기 수 강조 배지(0이면 흐리게, 있으면 강조).
 function Pending({ n, unit }: { n: number; unit: string }) {
-  if (n <= 0) return <span className="text-muted-foreground">대기 없음</span>
-  return <span className="font-medium text-foreground">{n.toLocaleString()}{unit} 대기</span>
+  const { t } = useTranslation()
+  if (n <= 0) return <span className="text-muted-foreground">{t("settings.pendingNone")}</span>
+  return <span className="font-medium text-foreground">{t("settings.pendingCount", { n: n.toLocaleString(), unit })}</span>
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -77,6 +80,7 @@ function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder
   label: string; chip: React.ReactNode; path: string; onPathChange: (v: string) => void
   onSave: () => void; saved: boolean; placeholder: string; help: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const panelId = `folder-edit-${label.replace(/\s+/g, "-").toLowerCase()}`
   return (
@@ -84,17 +88,17 @@ function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="flex items-center gap-2 text-sm"><span className="font-medium">{label}</span>{chip}</span>
         <span className="flex items-center gap-2">
-          {saved && <span className="inline-flex items-center gap-1 text-[12px] text-primary"><Check className="size-3.5" />저장됨</span>}
+          {saved && <span className="inline-flex items-center gap-1 text-[12px] text-primary"><Check className="size-3.5" />{t("common.saved")}</span>}
           <Button variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}
-            aria-expanded={editing} aria-controls={panelId}>{editing ? "닫기" : "변경"}</Button>
+            aria-expanded={editing} aria-controls={panelId}>{editing ? t("common.close") : t("settings.change")}</Button>
         </span>
       </div>
       {editing && (
         <div id={panelId} className="mt-2.5">
           <div className="flex flex-wrap items-center gap-2">
-            <Input value={path} onChange={(e) => onPathChange(e.target.value)} aria-label={`${label} 폴더 경로`}
+            <Input value={path} onChange={(e) => onPathChange(e.target.value)} aria-label={t("settings.folderPathAria", { label })}
               className="h-8 min-w-0 flex-1 font-mono text-[12px]" placeholder={placeholder} />
-            <Button size="sm" variant="outline" onClick={onSave}>저장</Button>
+            <Button size="sm" variant="outline" onClick={onSave}>{t("common.save")}</Button>
           </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">{help}</p>
         </div>
@@ -105,6 +109,7 @@ function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder
 
 // MCP 연동: chatmem-mcp를 각 클라이언트 설정에 등록/해제(파일은 .bak 백업 후 수정).
 function McpSection() {
+  const { t } = useTranslation()
   const [targets, setTargets] = useState<McpTarget[] | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
@@ -115,16 +120,16 @@ function McpSection() {
   const load = () => getMcp().then((r) => { setTargets(r.targets); setErr(false) }).catch(() => setErr(true))
   useEffect(() => { load() }, [])
 
-  async function toggle(t: McpTarget) {
-    const willRegister = !t.registered
-    setBusy(t.id); setNote(null)
+  async function toggle(tgt: McpTarget) {
+    const willRegister = !tgt.registered
+    setBusy(tgt.id); setNote(null)
     try {
-      const r = willRegister ? await mcpRegister(t.id) : await mcpUnregister(t.id)
-      if (!r.ok) { setNote(`${t.label}: ${r.error || "실패"}`); setSnip(t.id) }
+      const r = willRegister ? await mcpRegister(tgt.id) : await mcpUnregister(tgt.id)
+      if (!r.ok) { setNote(`${tgt.label}: ${r.error || t("mcp.failed")}`); setSnip(tgt.id) }
       else {
         // 낙관적 반영: 즉시 등록/해제 상태로 바꿔 표시(느린 `claude mcp list` 재조회를 안 기다림).
-        setTargets((ts) => ts?.map((x) => (x.id === t.id ? { ...x, registered: willRegister } : x)) ?? ts)
-        setNote(willRegister ? `✓ ${t.label} 등록됨 — 적용하려면 ${t.label}를 재시작하세요` : `${t.label} 등록 해제됨`)
+        setTargets((ts) => ts?.map((x) => (x.id === tgt.id ? { ...x, registered: willRegister } : x)) ?? ts)
+        setNote(willRegister ? t("mcp.registeredRestart", { label: tgt.label }) : t("mcp.unregistered", { label: tgt.label }))
       }
     } finally {
       setBusy(null)   // 스피너 즉시 종료(등록 subprocess만 끝나면 됨)
@@ -135,35 +140,35 @@ function McpSection() {
   if (targets === null) {
     return err ? (
       <div className="flex flex-col items-center gap-2 py-6 text-center text-sm">
-        <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="size-4" />불러오지 못했어요</span>
-        <span className="text-[12px] text-muted-foreground">앱이 준비 중일 수 있어요.</span>
-        <button onClick={load} className="rounded-md border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">다시 시도</button>
+        <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="size-4" />{t("mcp.loadFailed")}</span>
+        <span className="text-[12px] text-muted-foreground">{t("mcp.loadFailedHint")}</span>
+        <button onClick={load} className="rounded-md border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">{t("common.retry")}</button>
       </div>
     ) : (
-      <Row label="불러오는 중…"><Loader2 className="size-4 animate-spin text-muted-foreground" /></Row>
+      <Row label={t("common.loading")}><Loader2 className="size-4 animate-spin text-muted-foreground" /></Row>
     )
   }
-  const active = targets.find((t) => t.id === snip)
+  const active = targets.find((tgt) => tgt.id === snip)
   return (
     <>
-      {targets.map((t) => (
-        <Row key={t.id} label={
+      {targets.map((tgt) => (
+        <Row key={tgt.id} label={
           <span className="flex items-center gap-2">
-            {t.label}
-            {t.registered
-              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">등록됨</span>
-              : !t.installed && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">미설치</span>}
+            {tgt.label}
+            {tgt.registered
+              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t("mcp.registered")}</span>
+              : !tgt.installed && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("mcp.notInstalled")}</span>}
           </span>
         }>
-          <Button variant="ghost" size="sm" onClick={() => setSnip(snip === t.id ? null : t.id)}>명령</Button>
-          <Button variant={t.registered ? "outline" : "default"} size="sm" disabled={busy === t.id} onClick={() => toggle(t)}>
-            {busy === t.id ? <Loader2 className="size-4 animate-spin" /> : t.registered ? "해제" : "등록"}
+          <Button variant="ghost" size="sm" onClick={() => setSnip(snip === tgt.id ? null : tgt.id)}>{t("mcp.command")}</Button>
+          <Button variant={tgt.registered ? "outline" : "default"} size="sm" disabled={busy === tgt.id} onClick={() => toggle(tgt)}>
+            {busy === tgt.id ? <Loader2 className="size-4 animate-spin" /> : tgt.registered ? t("mcp.unregister") : t("mcp.register")}
           </Button>
         </Row>
       ))}
       {active && (
         <div className="border-b py-3 last:border-0">
-          <div className="mb-1 text-[11px] text-muted-foreground">수동 등록용 · {active.path}</div>
+          <div className="mb-1 text-[11px] text-muted-foreground">{t("mcp.manualSnippet", { path: active.path })}</div>
           <pre className="overflow-x-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-[11px]">{active.snippet}</pre>
         </div>
       )}
@@ -174,6 +179,7 @@ function McpSection() {
 
 // 동기화 충돌 자동 정리: 기기 간 동기화 중 생긴 충돌 파일을 자동 정리(긴 쪽 채택, 진짜 분기만 새 세션 보존).
 function SyncSection() {
+  const { t } = useTranslation()
   const [st, setSt] = useState<SyncStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
@@ -191,8 +197,8 @@ function SyncSection() {
     try {
       const r = await toggleSync(!st.running)
       setSt(r)
-      setNote(r.running ? "✓ 켜짐 — 이제 충돌을 자동으로 정리해요(계속 켜두면 됩니다)" : "꺼짐")
-    } catch { setNote("실패") } finally { setBusy(false) }
+      setNote(r.running ? t("sync.onNote") : t("common.off"))
+    } catch { setNote(t("sync.failed")) } finally { setBusy(false) }
   }
 
   const loading = st === null
@@ -200,29 +206,29 @@ function SyncSection() {
     <>
       <Row label={
         <span className="flex items-center gap-2">
-          자동 정리
+          {t("sync.autoResolve")}
           {loading
-            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">확인 중</span>
+            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("sync.checking")}</span>
             : st?.running
-              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">켜짐</span>
-              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">꺼짐</span>}
+              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t("common.on")}</span>
+              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("common.off")}</span>}
         </span>
       }>
         {loading
           ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
           : <Button variant={st?.running ? "outline" : "default"} size="sm" disabled={busy} onClick={toggle}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? "끄기" : "켜기"}
+              {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? t("sync.turnOff") : t("sync.turnOn")}
             </Button>}
       </Row>
       {note && <div className="py-1 text-[11px] text-primary">{note}</div>}
       {st && (
         <div className="py-2 text-[11px] text-muted-foreground">
-          정리한 충돌 {st.resolved_total}건 · 확인 간격 {st.interval}s
-          {st.last_error && <span className="text-destructive"> · 오류: {st.last_error}</span>}
+          {t("sync.resolvedStat", { count: st.resolved_total, interval: st.interval })}
+          {st.last_error && <span className="text-destructive"> · {t("sync.errorInline", { error: st.last_error })}</span>}
         </div>
       )}
       <div className="py-2 text-xs text-muted-foreground">
-        여러 기기에서 같은 대화를 동시에 이어가면 드물게 <b>충돌</b>이 생길 수 있어요. 켜두면 앱이 자동으로 정리합니다 — 더 긴 대화를 채택하고, 진짜로 갈라진 경우만 새 세션으로 보존해요. 위 <b>기기 연결</b>을 쓴다면 켜두는 걸 권합니다.
+        <Trans i18nKey="sync.explain" components={{ b: <b /> }} />
       </div>
     </>
   )
@@ -230,6 +236,7 @@ function SyncSection() {
 
 // 기기 연결(앱 내장 Syncthing) — 외부 프로그램 설치 없이 앱 안에서 기기 페어링.
 function SyncthingSection() {
+  const { t } = useTranslation()
   const [st, setSt] = useState<SyncthingStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [peer, setPeer] = useState("")
@@ -262,10 +269,10 @@ function SyncthingSection() {
     setBusy(true); setNote(null)
     try {
       const r = await syncthingPair(id)
-      if (r.ok) { setNote({ ok: true, text: "✓ 연결 요청 보냄 — 상대 앱에서 수락하면 동기 시작" }); setPeer("") }
-      else setNote({ ok: false, text: r.error || "연결 실패" })
+      if (r.ok) { setNote({ ok: true, text: t("sync.pairSent") }); setPeer("") }
+      else setNote({ ok: false, text: r.error || t("sync.pairFailed") })
       load()
-    } catch (e) { setNote({ ok: false, text: e instanceof Error ? e.message : "연결 실패" }) }
+    } catch (e) { setNote({ ok: false, text: e instanceof Error ? e.message : t("sync.pairFailed") }) }
     finally { setBusy(false) }
   }
 
@@ -275,28 +282,28 @@ function SyncthingSection() {
     <>
       <Row label={
         <span className="flex items-center gap-2">
-          기기 동기화
+          {t("sync.deviceSync")}
           {loading
-            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">확인 중</span>
+            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("sync.checking")}</span>
             : running
-              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">실행 중</span>
-              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">중지</span>}
+              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t("sync.running")}</span>
+              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("sync.stopped")}</span>}
         </span>
       }>
         {loading
           ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
           : running
-            ? <Button variant="outline" size="sm" disabled={busy} onClick={stop}>중지</Button>
+            ? <Button variant="outline" size="sm" disabled={busy} onClick={stop}>{t("sync.stop")}</Button>
             : <Button size="sm" disabled={busy || starting} onClick={start}>
-                {busy || starting ? <Loader2 className="size-4 animate-spin" /> : "시작"}
+                {busy || starting ? <Loader2 className="size-4 animate-spin" /> : t("sync.start")}
               </Button>}
       </Row>
 
       {!loading && !running && (
         <div className="py-2 text-[11px] text-muted-foreground">
-          {starting ? "엔진 준비 중… (첫 실행은 엔진을 내려받아 잠시 걸려요)"
-            : st?.last_error ? <span className="text-destructive">오류: {st.last_error}</span>
-              : "Syncthing을 따로 설치할 필요 없이 앱에 내장된 엔진으로 기기를 연결해요. 「시작」을 누르면 준비됩니다."}
+          {starting ? t("sync.engineStarting")
+            : st?.last_error ? <span className="text-destructive">{t("sync.errorInline", { error: st.last_error })}</span>
+              : t("sync.engineIdleHint")}
         </div>
       )}
 
@@ -304,39 +311,37 @@ function SyncthingSection() {
         <>
           <SyncStateLine sync={st?.sync} />
           <div className="py-2">
-            <div className="mb-1 text-[11px] font-medium text-muted-foreground">내 연결 코드 (상대 기기에 붙여넣기)</div>
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">{t("sync.myCodeLabel")}</div>
             <div className="flex items-center gap-1.5">
               <code className="min-w-0 flex-1 truncate rounded bg-muted px-1.5 py-1 font-mono text-[11px]" title={st?.my_id ?? ""}>{st?.my_id ?? "…"}</code>
-              <button type="button" onClick={copyMyId} aria-label="내 연결 코드 복사"
+              <button type="button" onClick={copyMyId} aria-label={t("sync.copyMyCodeAria")}
                 className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] hover:bg-muted">
-                {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}{copied ? "복사됨" : "복사"}
+                {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}{copied ? t("sync.copied") : t("sync.copy")}
               </button>
             </div>
           </div>
           <div className="py-2">
-            <div className="mb-1 text-[11px] font-medium text-muted-foreground">상대 기기 코드 붙여넣기 → 연결</div>
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">{t("sync.pastePeerLabel")}</div>
             <div className="flex items-center gap-1.5">
               <Input value={peer} onChange={(e) => setPeer(e.target.value)} placeholder="XXXXXXX-XXXXXXX-…" className="h-8 min-w-0 flex-1 font-mono text-[12px]" />
-              <Button size="sm" disabled={busy || !peer.trim()} onClick={pair}>연결</Button>
+              <Button size="sm" disabled={busy || !peer.trim()} onClick={pair}>{t("sync.connect")}</Button>
             </div>
             {note && <div className={`mt-1 text-[11px] ${note.ok ? "text-primary" : "text-destructive"}`}>{note.text}</div>}
           </div>
           {st?.devices && st.devices.length > 0 && (
             <div className="py-2">
-              <div className="mb-1 text-[11px] font-medium text-muted-foreground">연결된 기기</div>
+              <div className="mb-1 text-[11px] font-medium text-muted-foreground">{t("sync.connectedDevices")}</div>
               {st.devices.map((d) => (
                 <div key={d.id} className="flex items-center gap-2 py-0.5 text-[11px]">
                   <span className={`size-2 rounded-full ${d.connected ? "bg-primary" : "bg-muted-foreground/40"}`} />
                   <span className="truncate font-mono">{d.name || d.id.slice(0, 7)}</span>
-                  <span className="text-muted-foreground">{d.connected ? "연결됨" : "대기"}</span>
+                  <span className="text-muted-foreground">{d.connected ? t("sync.connected") : t("sync.waiting")}</span>
                 </div>
               ))}
             </div>
           )}
           <div className="py-2 text-[11px] leading-relaxed text-muted-foreground">
-            양쪽 기기에서 서로의 코드를 넣고 연결하면 <code className="rounded bg-muted px-1">~/.claude/projects</code>가 자동 동기돼요. 상대 앱에 "새 기기/폴더 요청"이 뜨면 수락하세요.
-            <br />· 첫 연결 때 <b>방화벽 허용 팝업</b>이 뜨면 <b>허용</b>하세요(네트워크 통신에 필요).
-            <br />· 삭제·덮어쓰기는 자동으로 <b>이력 보존(최대 1년)</b>되어 실수해도 복구할 수 있어요.
+            <Trans i18nKey="sync.pairHelp" components={{ code: <code className="rounded bg-muted px-1" />, b: <b />, br: <br /> }} />
           </div>
         </>
       )}
@@ -346,10 +351,11 @@ function SyncthingSection() {
 
 // 항목별 실패 목록(색인/정제) — 조용히 스턱되는 항목을 사용자가 보게.
 function Errs({ errors }: { errors?: string[] }) {
+  const { t } = useTranslation()
   if (!errors || errors.length === 0) return null
   return (
     <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
-      <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5" />일부 항목 실패 {errors.length}건(최근)</div>
+      <div className="mb-1 flex items-center gap-1.5 font-medium"><AlertTriangle className="size-3.5" />{t("settings.errsSome", { count: errors.length })}</div>
       <ul className="list-disc space-y-0.5 pl-4">
         {errors.map((e, i) => <li key={i} className="truncate" title={e}>{e.replace(/^ERROR\s*/, "")}</li>)}
       </ul>
@@ -359,14 +365,14 @@ function Errs({ errors }: { errors?: string[] }) {
 
 // 진행률 유틸 + 진행바(청크·파일 공용). ETA는 현재 모델 cps(청크/초)로 추정.
 function pct(done: number, total: number) { return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0 }
-function etaText(done: number, total: number, cps?: number): string {
-  if (!cps || cps <= 0 || total <= 0 || done >= total) return ""
-  const sec = (total - done) / cps
-  return sec < 60 ? `약 ${Math.ceil(sec)}초 남음` : `약 ${Math.ceil(sec / 60)}분 남음`
-}
 function BarProgress({ done, total, unit, cps }: { done: number; total: number; unit: string; cps?: number }) {
+  const { t } = useTranslation()
   const p = pct(done, total)
-  const eta = etaText(done, total, cps)
+  let eta = ""
+  if (cps && cps > 0 && total > 0 && done < total) {
+    const sec = (total - done) / cps
+    eta = sec < 60 ? t("settings.etaSec", { n: Math.ceil(sec) }) : t("settings.etaMin", { n: Math.ceil(sec / 60) })
+  }
   return (
     <div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
@@ -382,32 +388,33 @@ function BarProgress({ done, total, unit, cps }: { done: number; total: number; 
 
 // 공유 폴더 동기 상태 한 줄. 수신(내가 받음)과 전송(상대가 받음)을 합쳐 '진짜 최신'을 판정.
 function SyncStateLine({ sync }: { sync?: SyncthingSync | null }) {
+  const { t } = useTranslation()
   let dot = "bg-muted-foreground/40"
-  let text: React.ReactNode = "공유 폴더 준비 중 — 상대 기기를 연결하면 자동 공유돼요"
+  let text: React.ReactNode = t("sync.folderPreparing")
   if (sync) {
     const receiving = sync.state === "syncing" || sync.need_items > 0 || sync.need_bytes > 0
     const sending = sync.remote_complete != null && sync.remote_complete < 100
     if (sync.state === "error") {
-      dot = "bg-destructive"; text = <span className="text-destructive">동기화 오류 — 아래 방화벽·폴더 설정을 확인하세요</span>
+      dot = "bg-destructive"; text = <span className="text-destructive">{t("sync.stateError")}</span>
     } else if (sync.state === "scanning") {
-      dot = "bg-amber-500"; text = "스캔 중… (파일 점검)"
+      dot = "bg-amber-500"; text = t("sync.stateScanning")
     } else if (receiving) {
       dot = "bg-amber-500"
-      text = <>받는 중 <b className="text-foreground tabular-nums">{sync.completion}%</b>{sync.need_items > 0 ? ` · 남은 항목 ${sync.need_items.toLocaleString()}개` : ""}</>
+      text = <>{t("sync.receiving")} <b className="text-foreground tabular-nums">{sync.completion}%</b>{sync.need_items > 0 ? t("sync.remainingItems", { n: sync.need_items.toLocaleString() }) : ""}</>
     } else if (sending) {
       dot = "bg-amber-500"
-      text = <>상대 기기로 전송 중 <b className="text-foreground tabular-nums">{sync.remote_complete}%</b></>
+      text = <>{t("sync.sending")} <b className="text-foreground tabular-nums">{sync.remote_complete}%</b></>
     } else if ((sync.peers_connected ?? 0) === 0) {
       // 이 기기는 최신이지만 상대가 연결 안 돼 있어 '양쪽 최신'은 확인 불가.
-      dot = "bg-muted-foreground/40"; text = <>이 기기 최신 · <span className="text-muted-foreground">상대 기기 미연결(전송 대기)</span></>
+      dot = "bg-muted-foreground/40"; text = <>{t("sync.thisLatest")} · <span className="text-muted-foreground">{t("sync.peerOffline")}</span></>
     } else {
-      dot = "bg-emerald-500"; text = <span className="text-emerald-600 dark:text-emerald-400">양쪽 최신 ✓</span>
+      dot = "bg-emerald-500"; text = <span className="text-emerald-600 dark:text-emerald-400">{t("sync.bothLatest")}</span>
     }
   }
   return (
     <div className="flex items-center gap-2 py-2 text-[11px] text-muted-foreground">
       <span className={`size-2 shrink-0 rounded-full ${dot}`} />
-      <span className="font-medium text-foreground/80">동기화 상태:</span>
+      <span className="font-medium text-foreground/80">{t("sync.stateLabel")}</span>
       <span>{text}</span>
     </div>
   )
@@ -415,19 +422,20 @@ function SyncStateLine({ sync }: { sync?: SyncthingSync | null }) {
 
 // 색인 상태 행(프레젠테이션). 자동(프리즈) 또는 수동 색인이 돌 때 노출.
 function AutoIndexRow({ ix }: { ix: IndexStatus | null }) {
+  const { t } = useTranslation()
   if (!ix || (!ix.enabled && !ix.running)) return null
   return (
     <Row label={
-      <span className="flex items-center gap-2">색인
+      <span className="flex items-center gap-2">{t("settings.indexingLabel")}
         {ix.running
-          ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">진행 중</span>
-          : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">대기</span>}
+          ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t("settings.inProgress")}</span>
+          : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("settings.waiting")}</span>}
       </span>
     }>
       <span className="text-xs text-muted-foreground tabular-nums">
-        {ix.last_error ? `오류: ${ix.last_error}`
-          : ix.running && ix.total_chunks > 0 ? `자가복구 ${ix.done_chunks}/${ix.total_chunks} 청크 (${pct(ix.done_chunks, ix.total_chunks)}%)`
-          : ix.running && ix.total_files > 0 ? `색인 중 ${ix.done_files}/${ix.total_files} 파일`
+        {ix.last_error ? t("settings.errorInline", { error: ix.last_error })
+          : ix.running && ix.total_chunks > 0 ? t("settings.selfHealChunks", { done: ix.done_chunks, total: ix.total_chunks, pct: pct(ix.done_chunks, ix.total_chunks) })
+          : ix.running && ix.total_files > 0 ? t("settings.indexingFiles", { done: ix.done_files, total: ix.total_files })
           : ix.phase}
       </span>
     </Row>
@@ -435,7 +443,9 @@ function AutoIndexRow({ ix }: { ix: IndexStatus | null }) {
 }
 
 export function SettingsView() {
+  const { t } = useTranslation()
   const [mode, setMode] = useState<ThemeMode>(getThemeMode())
+  const [lang, setLangState] = useState<Lang>(getLang())
   const [stats, setStats] = useState<Stats | null>(null)
   const [cfg, setCfg] = useState<Config | null>(null)
   const [srcBusy, setSrcBusy] = useState<string | null>(null)   // 색인 소스 토글 진행 중인 소스명
@@ -490,16 +500,16 @@ export function SettingsView() {
   }, [])
 
   async function doRunIndex() {
-    setIxStatus((s) => s ? { ...s, running: true, phase: "시작…" } : s)
+    setIxStatus((s) => s ? { ...s, running: true, phase: t("settings.starting") } : s)
     try { await runIndex() } catch { /* noop */ }
   }
   async function doEnrich() {
     setEnrichErr("")
     try {
       const r = await runEnrich(false)
-      if (!r.ok) setEnrichErr(r.error || "정제 실행 실패")
-      else setEnrichSt((s) => ({ ...(s ?? { done_sessions: 0, total_sessions: 0, enriched: 0, last_error: null }), running: true, phase: "시작…" }))
-    } catch (e) { setEnrichErr(e instanceof Error ? e.message : "정제 실행 실패") }
+      if (!r.ok) setEnrichErr(r.error || t("settings.enrichRunFailed"))
+      else setEnrichSt((s) => ({ ...(s ?? { done_sessions: 0, total_sessions: 0, enriched: 0, last_error: null }), running: true, phase: t("settings.starting") }))
+    } catch (e) { setEnrichErr(e instanceof Error ? e.message : t("settings.enrichRunFailed")) }
   }
 
   // 색인 소스 on/off. 낙관적 반영(깜빡임 방지) → 서버 확정, 실패 시 되돌림 + 에러 표시.
@@ -513,7 +523,7 @@ export function SettingsView() {
       if (!r.ok) throw new Error("toggle failed")
       const fresh = await getConfig(); setCfg(fresh)   // 서버 진실로 확정
     } catch {
-      setSrcErr(`${label} 전환에 실패했어요 — 잠시 후 다시 시도해 주세요`)
+      setSrcErr(t("settings.sourceToggleFailed", { label }))
       getConfig().then(setCfg).catch(() => {})          // 서버 상태로 되돌림
     } finally {
       setSrcBusy(null)
@@ -592,7 +602,7 @@ export function SettingsView() {
     setBlockMsg("")
     // 키가 필요한 백엔드인데 입력도 없고 저장된 것도 없으면 → 저장 차단.
     if (be.key && !apiKey && !cfg?.keys[be.key]) {
-      setBlockMsg("이 백엔드는 API 키가 필요합니다. 키를 입력한 뒤 저장하세요.")
+      setBlockMsg(t("settings.needApiKey"))
       return
     }
     // 검증 통과해야 저장. 실패 시 경고만 두고 '그래도 저장'으로 강제 가능.
@@ -621,39 +631,41 @@ export function SettingsView() {
     if (!confirmModel) return
     const m = confirmModel.model
     const fast = fastReindex
-    setConfirmModel(null); setReindexing(true); setReindexMsg("시작…")
+    setConfirmModel(null); setReindexing(true); setReindexMsg(t("settings.starting"))
     await reindex(m, fast ? { fast, parallel: parallelN } : {}); startPoll()
   }
 
-  const themes: { v: ThemeMode; icon: React.ReactNode; label: string }[] = [
-    { v: "light", icon: <Sun className="size-4" />, label: "라이트" },
-    { v: "dark", icon: <Moon className="size-4" />, label: "다크" },
-    { v: "system", icon: <Monitor className="size-4" />, label: "시스템" },
+  const themes: { v: ThemeMode; icon: React.ReactNode; labelKey: string }[] = [
+    { v: "light", icon: <Sun className="size-4" />, labelKey: "settings.themeLight" },
+    { v: "dark", icon: <Moon className="size-4" />, labelKey: "settings.themeDark" },
+    { v: "system", icon: <Monitor className="size-4" />, labelKey: "settings.themeSystem" },
   ]
+  const langs: Lang[] = ["ko", "en"]
 
   // 대기 집계 표시용 문구.
   const p = ixStatus?.pending
-  const idxPendingText = p && p.files > 0
-    ? [p.new_sessions ? `새 대화 ${p.new_sessions}개` : "", p.updated_sessions ? `갱신 ${p.updated_sessions}개` : ""]
-        .filter(Boolean).join(" · ") + " 대기"
-    : "새 대화 없음 — 모두 색인됨"
+  const pendingParts = p && p.files > 0
+    ? [p.new_sessions ? t("settings.pendingNew", { n: p.new_sessions }) : "", p.updated_sessions ? t("settings.pendingUpdated", { n: p.updated_sessions }) : ""]
+        .filter(Boolean).join(" · ")
+    : ""
+  const idxPendingText = p && p.files > 0 ? t("settings.pendingWaiting", { items: pendingParts }) : t("settings.allIndexed")
   const enrichPending = enrichSt?.pending_turns ?? 0
   const curCps = embed.find((e) => e.current)?.cps   // 현재 모델 처리량(청크/초) — ETA 추정용
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-5">
-      <h2 className="mb-4 text-lg font-semibold">설정</h2>
+      <h2 className="mb-4 text-lg font-semibold">{t("settings.title")}</h2>
 
       <div className="flex flex-col gap-5 md:flex-row md:items-start">
         {/* 큰 메뉴 네비게이션 — 넓은 화면=좌측 세로, 좁은 화면=상단 가로 스크롤 */}
-        <nav aria-label="설정 메뉴"
+        <nav aria-label={t("settings.menuAria")}
           className="flex shrink-0 gap-1 overflow-x-auto pb-1 md:w-40 md:flex-col md:overflow-visible md:pb-0">
-          {TABS.map((t) => (
-            <button key={t.key} type="button" onClick={() => setTab(t.key)}
-              aria-current={tab === t.key ? "page" : undefined}
+          {TABS.map((item) => (
+            <button key={item.key} type="button" onClick={() => setTab(item.key)}
+              aria-current={tab === item.key ? "page" : undefined}
               className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                tab === t.key ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              {t.icon}{t.label}
+                tab === item.key ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
+              {item.icon}{t(item.labelKey)}
             </button>
           ))}
         </nav>
@@ -662,58 +674,68 @@ export function SettingsView() {
           {/* ── 일반: 테마 + 로그 폴더 + 저장소 현황 ── */}
           {tab === "general" && (
             <>
-              <Section title="모양">
-                <Row label="테마">
+              <Section title={t("settings.appearance")}>
+                <Row label={t("settings.theme")}>
                   <div className="inline-flex overflow-hidden rounded-lg border">
-                    {themes.map((t) => (
-                      <button key={t.v} onClick={() => { setMode(t.v); setThemeMode(t.v) }}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${mode === t.v ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
-                        {t.icon}{t.label}
+                    {themes.map((th) => (
+                      <button key={th.v} onClick={() => { setMode(th.v); setThemeMode(th.v) }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${mode === th.v ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+                        {th.icon}{t(th.labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+                <Row label={t("settings.language")}>
+                  <div className="inline-flex overflow-hidden rounded-lg border">
+                    {langs.map((l) => (
+                      <button key={l} onClick={() => { setLang(l); setLangState(l) }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${lang === l ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
+                        {l === "ko" ? t("settings.langKo") : t("settings.langEn")}
                       </button>
                     ))}
                   </div>
                 </Row>
               </Section>
 
-              <Section title="로그 폴더">
+              <Section title={t("settings.logFolder")}>
                 <FolderRow
                   label="Claude Code"
                   chip={!cfg
-                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />확인 중</StatusChip>
+                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />{t("settings.checking")}</StatusChip>
                     : cfg.projects_exists
-                      ? <StatusChip tone="ok"><Check className="size-3" />대화 {cfg.jsonl_count}개 감지</StatusChip>
-                      : <StatusChip tone="warn"><AlertTriangle className="size-3" />폴더 없음</StatusChip>}
+                      ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: cfg.jsonl_count })}</StatusChip>
+                      : <StatusChip tone="warn"><AlertTriangle className="size-3" />{t("settings.folderMissing")}</StatusChip>}
                   path={projectsDir} onPathChange={setProjectsDir} onSave={saveProjects} saved={projSaved}
                   placeholder="~/.claude/projects"
-                  help="Claude Code 대화 기록이 저장된 폴더예요. 보통 자동으로 찾으며, 다른 위치에 있을 때만 지정하면 됩니다."
+                  help={t("settings.claudeFolderHelp")}
                 />
                 <FolderRow
                   label="Codex"
                   chip={!cfg
-                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />확인 중</StatusChip>
+                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />{t("settings.checking")}</StatusChip>
                     : cfg.codex_exists
-                      ? <StatusChip tone="ok"><Check className="size-3" />대화 {(cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0}개 감지</StatusChip>
-                      : <StatusChip tone="muted">안 씀</StatusChip>}
+                      ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: (cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0 })}</StatusChip>
+                      : <StatusChip tone="muted">{t("settings.notUsed")}</StatusChip>}
                   path={codexDir} onPathChange={setCodexDir} onSave={saveCodex} saved={codexSaved}
                   placeholder="~/.codex/sessions"
-                  help="Codex 대화 기록 폴더예요. Codex를 쓰지 않으면 비워둬도 됩니다."
+                  help={t("settings.codexFolderHelp")}
                 />
               </Section>
 
-              <Section title="저장소 현황">
-                <Row label="세션">{stats?.sessions ?? "—"}개</Row>
-                <Row label="턴">{stats?.turns ?? "—"}개</Row>
-                <Row label="벡터">{stats?.vectors ?? "—"}개</Row>
-                <Row label="정제 완료">{stats?.enriched ?? "—"}개</Row>
+              <Section title={t("settings.storageStatus")}>
+                <Row label={t("settings.sessions")}>{stats?.sessions ?? "—"}{t("settings.countSuffix")}</Row>
+                <Row label={t("settings.turns")}>{stats?.turns ?? "—"}{t("settings.countSuffix")}</Row>
+                <Row label={t("settings.vectors")}>{stats?.vectors ?? "—"}{t("settings.countSuffix")}</Row>
+                <Row label={t("settings.enrichedDone")}>{stats?.enriched ?? "—"}{t("settings.countSuffix")}</Row>
                 <AutoIndexRow ix={ixStatus} />
               </Section>
 
-              <Section title="색인 소스">
+              <Section title={t("settings.indexSources")}>
                 <div className="space-y-1.5 py-2">
                   {(cfg?.sources ?? []).map((s) => {
                     const enabled = !s.disabled
                     const on = s.exists && enabled            // 실제 색인 중(색상·배지 일관)
-                    const status = !s.exists ? "폴더 없음" : s.disabled ? "꺼짐" : `색인 중 · ${s.count}개`
+                    const status = !s.exists ? t("settings.folderMissing") : s.disabled ? t("common.off") : t("settings.indexingCount", { count: s.count })
                     const label = s.name === "codex" ? "Codex CLI" : s.name === "claude-code" ? "Claude Code" : s.name
                     const busy = srcBusy === s.name
                     return (
@@ -724,11 +746,11 @@ export function SettingsView() {
                         <code className="cm-inline min-w-0 flex-1 truncate text-[11px] text-muted-foreground">{s.root ?? "—"}</code>
                         <button type="button" role="switch" aria-checked={enabled}
                           disabled={!s.exists || busy}
-                          aria-label={`${label} 색인 ${enabled ? "끄기" : "켜기"}`}
+                          aria-label={t("settings.sourceToggleAria", { label, action: enabled ? t("sync.turnOff") : t("sync.turnOn") })}
                           aria-describedby={`src-status-${s.name}`}
                           onClick={() => toggleSourceRow(s.name, !enabled)}
                           className={`ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${enabled ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
-                          {busy && <Loader2 className="size-3 animate-spin" />}{enabled ? "켜짐" : "꺼짐"}
+                          {busy && <Loader2 className="size-3 animate-spin" />}{enabled ? t("common.on") : t("common.off")}
                         </button>
                       </div>
                     )
@@ -736,34 +758,34 @@ export function SettingsView() {
                   {srcErr && <div className="text-[11px] text-destructive">{srcErr}</div>}
                   {(cfg?.sources ?? []).length > 0 && (cfg?.sources ?? []).every((x) => !x.exists || x.disabled) && (
                     <div className="flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
-                      <AlertTriangle className="size-3.5 shrink-0" />모든 소스가 꺼져 있어요 — 새 대화가 색인되지 않아요.
+                      <AlertTriangle className="size-3.5 shrink-0" />{t("settings.allSourcesOff")}
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    끄면 그 소스는 <b>다음 색인부터 건너뜁니다</b>. 이미 저장된 대화는 검색에 그대로 남아요.
+                    <Trans i18nKey="settings.sourcesNote" components={{ b: <b /> }} />
                   </p>
                 </div>
               </Section>
 
-              <Section title="앱">
+              <Section title={t("settings.appSection")}>
                 <div className="py-3.5">
                   {quitState === "done" ? (
-                    <div className="text-sm text-muted-foreground">앱을 종료했어요. 이 브라우저 탭을 닫으세요. (새 버전은 exe를 다시 실행)</div>
+                    <div className="text-sm text-muted-foreground">{t("settings.quitDone")}</div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
                       {quitState === "idle" ? (
-                        <Button variant="outline" size="sm" onClick={() => setQuitState("confirm")}>앱 종료</Button>
+                        <Button variant="outline" size="sm" onClick={() => setQuitState("confirm")}>{t("settings.quitApp")}</Button>
                       ) : (
                         <>
                           <Button variant="destructive" size="sm"
                             onClick={async () => { try { await quitApp() } catch { /* 종료되며 응답 끊길 수 있음 */ } setQuitState("done") }}>
-                            정말 종료
+                            {t("settings.quitConfirm")}
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setQuitState("idle")}>취소</Button>
+                          <Button variant="ghost" size="sm" onClick={() => setQuitState("idle")}>{t("common.cancel")}</Button>
                         </>
                       )}
                       <span className="text-[11px] text-muted-foreground">
-                        창·트레이가 없는 앱이라 여기서 종료해요. <b>새 버전 exe로 교체</b>하려면 먼저 종료 후 새 exe 실행.
+                        <Trans i18nKey="settings.quitHint" components={{ b: <b /> }} />
                       </span>
                     </div>
                   )}
@@ -777,57 +799,56 @@ export function SettingsView() {
           {/* ── 정제 AI: 백엔드/모델/키/시각 + 저장 + 지금 정제 ── */}
           {tab === "enrich" && (
             <>
-              <Section title="정제 AI">
-                <Row label="백엔드">
-                  <select value={backend} onChange={(e) => onBackendChange(e.target.value)} aria-label="정제 AI 백엔드"
+              <Section title={t("settings.tabEnrich")}>
+                <Row label={t("settings.backend")}>
+                  <select value={backend} onChange={(e) => onBackendChange(e.target.value)} aria-label={t("settings.backendAria")}
                     className="rounded-md border bg-background px-2 py-1.5 outline-none">
-                    {BACKENDS.map((b) => <option key={b.v} value={b.v}>{b.label}</option>)}
+                    {BACKENDS.map((b) => <option key={b.v} value={b.v}>{t(b.labelKey)}</option>)}
                   </select>
                 </Row>
                 {be.modelEnv && (
-                  <Row label="모델">
-                    <select value={customModel ? CUSTOM : model} aria-label="정제 모델"
+                  <Row label={t("settings.model")}>
+                    <select value={customModel ? CUSTOM : model} aria-label={t("settings.modelAria")}
                       onChange={(e) => { if (e.target.value === CUSTOM) { setCustomModel(true) } else { setCustomModel(false); setModel(e.target.value) } }}
                       className="rounded-md border bg-background px-2 py-1.5 outline-none">
                       {be.models.map((m) => <option key={m} value={m}>{m}</option>)}
-                      <option value={CUSTOM}>기타(직접 입력)</option>
+                      <option value={CUSTOM}>{t("settings.modelCustom")}</option>
                     </select>
                     {customModel && (
-                      <Input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-44" placeholder="모델명 입력" />
+                      <Input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-44" placeholder={t("settings.modelPlaceholder")} />
                     )}
                   </Row>
                 )}
                 {be.key && (
-                  <Row label={`API 키 ${cfg?.keys[be.key] ? "(설정됨)" : ""}`}>
-                    <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} aria-label="API 키"
-                      className="h-8 w-56" placeholder={cfg?.keys[be.key] ? "변경하려면 입력" : be.keyEx} />
+                  <Row label={`${t("settings.apiKey")} ${cfg?.keys[be.key] ? t("settings.apiKeySet") : ""}`}>
+                    <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} aria-label={t("settings.apiKey")}
+                      className="h-8 w-56" placeholder={cfg?.keys[be.key] ? t("settings.apiKeyChangePlaceholder") : (be.keyExKey ? t(be.keyExKey) : "")} />
                   </Row>
                 )}
                 {backend === "ollama" && (
                   <>
-                    <Row label="Ollama 서버 주소">
-                      <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} aria-label="Ollama 서버 주소"
+                    <Row label={t("settings.ollamaUrl")}>
+                      <Input value={ollamaUrl} onChange={(e) => setOllamaUrl(e.target.value)} aria-label={t("settings.ollamaUrl")}
                         className="h-8 w-56" placeholder="http://localhost:11434/v1" />
                     </Row>
                     <div className="border-b py-3 text-xs text-muted-foreground last:border-0">
-                      ⚠️ Ollama가 실행 중이어야 하고, 위 모델을 미리 받아둬야 합니다: <code className="cm-inline">ollama pull {model || "llama3.1"}</code>.
-                      모델 파일 경로는 Ollama가 관리하므로 따로 지정할 필요 없습니다.
+                      <Trans i18nKey="settings.ollamaHint" values={{ model: model || "llama3.1" }} components={{ code: <code className="cm-inline" /> }} />
                     </div>
                   </>
                 )}
-                <Row label="정제 시각 (매일)">
-                  <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" aria-label="정제 시각(매일)" />
+                <Row label={t("settings.enrichTime")}>
+                  <Input type="time" value={enrichTime} onChange={(e) => setEnrichTime(e.target.value)} className="h-8 w-32 tabular-nums" aria-label={t("settings.enrichTime")} />
                 </Row>
               </Section>
 
               <div className="mb-2 flex flex-wrap items-center gap-3">
                 {backend !== "off" && (
                   <Button variant="outline" onClick={runTest} disabled={testing}>
-                    {testing ? <><Loader2 className="size-4 animate-spin" />테스트 중…</> : "연결 테스트"}
+                    {testing ? <><Loader2 className="size-4 animate-spin" />{t("settings.testing")}</> : t("settings.testConnection")}
                   </Button>
                 )}
-                <Button onClick={save} disabled={testing}>저장</Button>
-                {saved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨 · 스케줄 반영</span>}
+                <Button onClick={save} disabled={testing}>{t("common.save")}</Button>
+                {saved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />{t("settings.savedScheduled")}</span>}
               </div>
               {blockMsg && (
                 <div className="mb-4 flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -838,12 +859,12 @@ export function SettingsView() {
                 <div className={`mb-4 rounded-lg border px-3 py-2 text-sm ${verify.ok ? "border-primary/40 bg-primary/5 text-primary" : "border-destructive/40 bg-destructive/5 text-destructive"}`}>
                   <div className="flex items-center gap-2">
                     {verify.ok ? <Check className="size-4 shrink-0" /> : <X className="size-4 shrink-0" />}
-                    {verify.ok ? "연결 확인됨" : `연결 실패: ${verify.msg}`}
+                    {verify.ok ? t("settings.connOk") : t("settings.connFail", { msg: verify.msg })}
                   </div>
                   {!verify.ok && (
                     <div className="mt-2 flex items-center gap-2">
-                      <Button size="sm" variant="outline" onClick={commitSave}>그래도 저장</Button>
-                      <span className="text-xs text-muted-foreground">Ollama를 나중에 켜거나 일시 오류인 경우</span>
+                      <Button size="sm" variant="outline" onClick={commitSave}>{t("settings.saveAnyway")}</Button>
+                      <span className="text-xs text-muted-foreground">{t("settings.saveAnywayHint")}</span>
                     </div>
                   )}
                 </div>
@@ -852,98 +873,98 @@ export function SettingsView() {
               <div className="mb-3 border-t py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Button variant="outline" size="sm" disabled={backend === "off" || !!enrichSt?.running} onClick={doEnrich}>
-                    {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}지금 정제
+                    {enrichSt?.running && <Loader2 className="mr-1 size-4 animate-spin" />}{t("settings.enrichNow")}
                   </Button>
                   <span className={`text-[11px] ${enrichErr && !enrichSt?.running ? "text-destructive" : "text-muted-foreground"}`}>
                     {enrichSt?.running
-                      ? `정제 중… ${enrichSt.total_sessions > 0 ? `${enrichSt.done_sessions}/${enrichSt.total_sessions} 세션` : enrichSt.phase}`
+                      ? (enrichSt.total_sessions > 0 ? t("settings.enrichingSessions", { done: enrichSt.done_sessions, total: enrichSt.total_sessions }) : t("settings.enrichingPhase", { phase: enrichSt.phase }))
                       : enrichErr
                         ? enrichErr
-                        : <>정제 안 된 턴 <Pending n={enrichPending} unit="개" /> · 지금 누르면 요약·태그를 만듭니다(백엔드 설정·연결 필요).</>}
+                        : <>{t("settings.unenrichedTurns")} <Pending n={enrichPending} unit={t("settings.unitTurns")} /> · {t("settings.enrichNowHint")}</>}
                   </span>
                 </div>
                 {enrichSt?.running && enrichSt.total_sessions > 0 && (
                   <div className="mt-2">
-                    <BarProgress done={enrichSt.done_sessions} total={enrichSt.total_sessions} unit="세션" />
+                    <BarProgress done={enrichSt.done_sessions} total={enrichSt.total_sessions} unit={t("settings.unitSessions")} />
                   </div>
                 )}
                 <Errs errors={enrichSt?.errors} />
               </div>
-              <p className="mb-2 text-xs text-muted-foreground">저장한 키는 다음 정제 실행(스케줄/수동)부터 적용됩니다.</p>
+              <p className="mb-2 text-xs text-muted-foreground">{t("settings.keyApplyHint")}</p>
             </>
           )}
 
           {/* ── 색인·임베딩: 증분 간격 + 증분 색인(대기 수) + 임베딩 모델/재색인 ── */}
           {tab === "index" && (
             <>
-              <Section title="증분 색인">
-                <Row label="증분 색인 간격 (분)">
-                  <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label="증분 색인 간격(분)"
+              <Section title={t("settings.incrementalIndex")}>
+                <Row label={t("settings.indexInterval")}>
+                  <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label={t("settings.indexInterval")}
                     onWheel={(e) => (e.target as HTMLInputElement).blur()} className="h-8 w-24 tabular-nums" />
-                  <Button size="sm" variant="outline" onClick={saveInterval}>저장</Button>
-                  {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />저장됨</span>}
+                  <Button size="sm" variant="outline" onClick={saveInterval}>{t("common.save")}</Button>
+                  {intervalSaved && <span className="inline-flex items-center gap-1 text-sm text-primary"><Check className="size-4" />{t("common.saved")}</span>}
                 </Row>
                 {/* 지금 색인 + 대기(새 대화) 수 + 자가복구 진행 */}
                 <div className="border-b py-3 last:border-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" disabled={!!ixStatus?.running || reindexing} onClick={doRunIndex}>
-                      {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}증분 색인
+                      {ixStatus?.running && <Loader2 className="mr-1 size-4 animate-spin" />}{t("settings.indexNow")}
                     </Button>
                     <span className="text-[11px] text-muted-foreground">
                       {ixStatus?.running
                         ? (ixStatus.total_chunks > 0
-                            ? "자가복구 중 — 빠졌던 벡터 채우는 중"
-                            : ixStatus.total_files > 0 ? `색인 중… ${ixStatus.done_files}/${ixStatus.total_files} 파일` : "색인 중…")
-                        : <><b className="text-foreground">{idxPendingText}</b> · 새 대화만 빠르게 색인합니다.</>}
+                            ? t("settings.selfHealing")
+                            : ixStatus.total_files > 0 ? t("settings.indexingFilesEta", { done: ixStatus.done_files, total: ixStatus.total_files }) : t("settings.indexingShort"))
+                        : <><b className="text-foreground">{idxPendingText}</b> · {t("settings.indexNewHint")}</>}
                     </span>
                   </div>
                   {ixStatus?.running && ixStatus.total_chunks > 0 && (
                     <div className="mt-2">
-                      <BarProgress done={ixStatus.done_chunks} total={ixStatus.total_chunks} unit="청크" cps={curCps} />
+                      <BarProgress done={ixStatus.done_chunks} total={ixStatus.total_chunks} unit={t("settings.unitChunks")} cps={curCps} />
                     </div>
                   )}
                   <Errs errors={ixStatus?.errors} />
                 </div>
               </Section>
 
-              <Section title="임베딩 모델">
+              <Section title={t("settings.embedModel")}>
                 <div className="border-b py-2.5 text-[11px] text-muted-foreground">
-                  처음부터 다시 임베딩하려면 현재 모델의 「전체 재색인」, 다른 모델로 바꾸려면 「변경」.
+                  {t("settings.embedHint")}
                 </div>
                 {reindexing && (
                   <div className="border-b py-3.5">
                     <div className="mb-1.5 flex items-center gap-2 text-sm text-primary">
-                      <Loader2 className="size-4 animate-spin" />재색인 중… {reindexMsg}
+                      <Loader2 className="size-4 animate-spin" />{t("settings.reindexing", { msg: reindexMsg })}
                     </div>
                     {reindexProg.totalChunks > 0
-                      ? <BarProgress done={reindexProg.doneChunks} total={reindexProg.totalChunks} unit="청크" cps={curCps} />
+                      ? <BarProgress done={reindexProg.doneChunks} total={reindexProg.totalChunks} unit={t("settings.unitChunks")} cps={curCps} />
                       : reindexProg.totalFiles > 0
-                        ? <BarProgress done={reindexProg.doneFiles} total={reindexProg.totalFiles} unit="파일" />
-                        : <div className="text-[11px] text-muted-foreground">준비 중… (첫 배치 임베딩 시작하면 진행률이 표시됩니다)</div>}
+                        ? <BarProgress done={reindexProg.doneFiles} total={reindexProg.totalFiles} unit={t("settings.unitFiles")} />
+                        : <div className="text-[11px] text-muted-foreground">{t("settings.reindexPreparing")}</div>}
                   </div>
                 )}
                 <div className="border-b py-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                  💡 기기가 느리거나 RAM이 부족하면 <b className="text-foreground/80">가벼운 모델(MiniLM)</b>을 권장해요 — 예상 시간·RAM이 훨씬 적습니다(품질은 약간 낮음). RAM 여유가 큰 고성능 기기라면 재색인 시 「빠른 재색인(병렬)」로 시간을 줄일 수 있어요.
+                  💡 <Trans i18nKey="settings.embedTip" components={{ b: <b className="text-foreground/80" /> }} />
                 </div>
                 {embed.map((m) => (
                   <Row key={m.model} label={
                     <span className="flex flex-col">
                       <span className="flex items-center gap-1.5 font-mono text-[13px]">
                         {m.model.split("/").pop()}
-                        {m.ram_gb <= 1.5 && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-sans text-[10px] font-medium text-primary">저사양 추천</span>}
+                        {m.ram_gb <= 1.5 && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-sans text-[10px] font-medium text-primary">{t("settings.lowSpecRec")}</span>}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {m.note} · 디스크 {m.size_gb}GB · <b className="text-foreground/80">RAM 약 {m.ram_gb}GB</b>
-                        {m.est_reindex_min != null && <> · 예상 재색인 <b className="text-foreground/80 tabular-nums">약 {m.est_reindex_min}분</b></>}
+                        {m.note} · {t("settings.diskLabel", { gb: m.size_gb })} · <b className="text-foreground/80">{t("settings.ramApprox", { gb: m.ram_gb })}</b>
+                        {m.est_reindex_min != null && <> · {t("settings.estReindexLabel")} <b className="text-foreground/80 tabular-nums">{t("settings.estReindexMin", { min: m.est_reindex_min })}</b></>}
                       </span>
                     </span>
                   }>
                     {m.current
                       ? <span className="inline-flex items-center gap-2">
-                          <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />사용 중</span>
-                          <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>전체 재색인</Button>
+                          <span className="inline-flex items-center gap-1 text-xs text-primary"><Check className="size-3.5" />{t("settings.inUse")}</span>
+                          <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>{t("settings.fullReindex")}</Button>
                         </span>
-                      : <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>변경</Button>}
+                      : <Button variant="outline" size="sm" disabled={reindexing || !!ixStatus?.running} onClick={() => setConfirmModel(m)}>{t("settings.change")}</Button>}
                   </Row>
                 ))}
               </Section>
@@ -953,14 +974,14 @@ export function SettingsView() {
           {/* ── 동기화: 내장 엔진 + 멀티기기 세션 동기화 ── */}
           {tab === "sync" && (
             <>
-              <Section title="기기 연결">
+              <Section title={t("sync.deviceConnectSection")}>
                 <SyncthingSection />
               </Section>
-              <Section title="동기화 충돌 정리">
+              <Section title={t("sync.conflictSection")}>
                 <SyncSection />
               </Section>
 
-              <Section title="기기 간 기록 병합">
+              <Section title={t("sync.mergeSection")}>
                 <div className="py-3.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <Button variant="outline" size="sm" disabled={archiving}
@@ -969,19 +990,17 @@ export function SettingsView() {
                         try {
                           const r = await archiveSync()
                           setArchiveMsg(r.imported > 0
-                            ? `✓ 다른 기기에서 ${r.imported.toLocaleString()}개 대화 가져옴 — 곧 색인/임베딩됩니다`
-                            : "이미 최신 — 가져올 새 기록 없음")
-                        } catch (e) { setArchiveMsg(e instanceof Error ? e.message : "병합 실패") }
+                            ? t("sync.mergeImported", { count: r.imported.toLocaleString() })
+                            : t("sync.mergeUpToDate"))
+                        } catch (e) { setArchiveMsg(e instanceof Error ? e.message : t("sync.mergeFailed")) }
                         finally { setArchiving(false) }
                       }}>
-                      {archiving && <Loader2 className="mr-1 size-4 animate-spin" />}지금 병합
+                      {archiving && <Loader2 className="mr-1 size-4 animate-spin" />}{t("sync.mergeNow")}
                     </Button>
                     {archiveMsg && <span className="text-[11px] text-muted-foreground">{archiveMsg}</span>}
                   </div>
                   <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                    Claude Code는 오래된 로그(~30일)를 지우지만, 각 기기 Engram은 그 이전 대화를 보존해요.
-                    이 병합으로 <b>다른 기기가 보존한 옛 대화까지 서로 가져와</b> 검색 기록을 맞춥니다(연결된 기기끼리 자동으로도 수행).
-                    원본이 삭제된 세션은 재개(resume)는 안 되지만 <b>검색·열람</b>은 됩니다.
+                    <Trans i18nKey="sync.mergeHelp" components={{ b: <b /> }} />
                   </p>
                 </div>
               </Section>
@@ -990,7 +1009,7 @@ export function SettingsView() {
 
           {/* ── MCP 연동 ── */}
           {tab === "mcp" && (
-            <Section title="MCP 연동 (다른 AI가 과거 대화 검색)">
+            <Section title={t("mcp.sectionTitle")}>
               <McpSection />
             </Section>
           )}
@@ -1000,15 +1019,18 @@ export function SettingsView() {
       <AlertDialog open={!!confirmModel} onOpenChange={(o) => !o && setConfirmModel(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{confirmModel?.current ? "전체 재색인 (현재 모델)" : "임베딩 모델 변경 = 전체 재색인"}</AlertDialogTitle>
+            <AlertDialogTitle>{confirmModel?.current ? t("settings.reindexTitleCurrent") : t("settings.reindexTitleChange")}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmModel?.current
-                ? <><b>{confirmModel?.model.split("/").pop()}</b>(현재 모델)로 기존 벡터를 모두 버리고 전 대화를 처음부터 다시 임베딩합니다. 모델은 그대로라 다운로드는 없습니다.</>
-                : <><b>{confirmModel?.model.split("/").pop()}</b>로 바꾸면 기존 벡터를 모두 버리고 전 대화를 다시 임베딩합니다. 벡터가 모델마다 다른 좌표계라 섞을 수 없어 전체 재색인이 필요합니다.</>}
+                ? <Trans i18nKey="settings.reindexDescCurrent" values={{ model: confirmModel?.model.split("/").pop() }} components={{ b: <b /> }} />
+                : <Trans i18nKey="settings.reindexDescChange" values={{ model: confirmModel?.model.split("/").pop() }} components={{ b: <b /> }} />}
               <br /><br />
-              예상: 재색인 <b>약 {confirmModel?.est_reindex_min}분</b>(이 기기 기준)
-              {!confirmModel?.current && <> + 새 모델 최초 다운로드 약 {confirmModel?.size_gb}GB</>}.
-              임베딩 중 RAM 약 {confirmModel?.ram_gb}GB를 씁니다. 그동안 검색 품질이 일시적으로 떨어질 수 있습니다. 계속할까요?
+              <Trans i18nKey="settings.reindexTail"
+                values={{
+                  min: confirmModel?.est_reindex_min, ram: confirmModel?.ram_gb,
+                  download: confirmModel?.current ? "" : t("settings.reindexDownload", { size: confirmModel?.size_gb }),
+                }}
+                components={{ b: <b /> }} />
             </AlertDialogDescription>
           </AlertDialogHeader>
           {(() => {
@@ -1025,28 +1047,27 @@ export function SettingsView() {
                   <input type="checkbox" checked={fastReindex} onChange={(e) => setFastReindex(e.target.checked)}
                     className="mt-0.5 size-4 shrink-0 accent-primary" />
                   <span className="text-muted-foreground">
-                    <b className="text-foreground">빠른 재색인(병렬)</b> — 재파싱 없이 여러 프로세스로 나눠 더 빠르게.
-                    프로세스마다 모델을 로드하므로 <b>RAM을 많이</b> 씁니다.
+                    <Trans i18nKey="settings.fastReindexDesc" components={{ b: <b className="text-foreground" /> }} />
                   </span>
                 </label>
                 {fastReindex && (
                   <div className="mt-2.5 space-y-1.5 border-t pt-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="text-foreground">병렬 프로세스</span>
+                      <span className="text-foreground">{t("settings.parallelProcs")}</span>
                       <input type="number" min={1} max={16} value={parallelN}
                         onChange={(e) => setParallelN(Math.max(1, Math.min(16, +e.target.value || 1)))}
                         onWheel={(e) => (e.target as HTMLInputElement).blur()}
                         className="h-7 w-16 rounded-md border bg-background px-2 tabular-nums outline-none" />
-                      <span className="text-muted-foreground">개 · 권장 최대 <b className="text-foreground tabular-nums">{recMax}</b></span>
+                      <span className="text-muted-foreground">{t("settings.recMaxLabel")} <b className="text-foreground tabular-nums">{recMax}</b></span>
                     </div>
                     <div className="tabular-nums text-muted-foreground">
-                      이 기기 RAM {totalGb != null ? <>전체 <b className="text-foreground">{totalGb.toFixed(1)}GB</b></> : "정보 없음"}
-                      {availGb != null && <> · 가용 <b className="text-foreground">{availGb.toFixed(1)}GB</b></>}
-                      {" · "}예상 사용 <b className={over ? "text-destructive" : "text-foreground"}>{willUse}GB</b>
+                      {t("settings.deviceRam")} {totalGb != null ? <>{t("settings.ramTotal")} <b className="text-foreground">{totalGb.toFixed(1)}GB</b></> : t("settings.ramNoInfo")}
+                      {availGb != null && <> · {t("settings.ramAvail")} <b className="text-foreground">{availGb.toFixed(1)}GB</b></>}
+                      {" · "}{t("settings.ramWillUse")} <b className={over ? "text-destructive" : "text-foreground"}>{willUse}GB</b>
                     </div>
                     {over && (
                       <div className="flex items-center gap-1.5 text-destructive">
-                        <AlertTriangle className="size-3.5 shrink-0" />가용 RAM을 초과해요 — 병렬 수를 {recMax} 이하로 낮추세요(초과 시 자동으로 제한됩니다).
+                        <AlertTriangle className="size-3.5 shrink-0" />{t("settings.ramOver", { recMax })}
                       </div>
                     )}
                   </div>
@@ -1055,8 +1076,8 @@ export function SettingsView() {
             )
           })()}
           <AlertDialogFooter>
-            <AlertDialogCancel>취소</AlertDialogCancel>
-            <AlertDialogAction onClick={doReindex}>재색인 시작</AlertDialogAction>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction onClick={doReindex}>{t("settings.reindexStart")}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
