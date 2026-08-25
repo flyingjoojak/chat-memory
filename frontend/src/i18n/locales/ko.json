@@ -259,23 +259,15 @@
   },
   "onboarding": {
     "title": "임베딩 모델 선택",
-    "descIntro": "대화를 의미로 검색하려면 임베딩 모델이 필요해요.",
-    "descEmphasis": "기기 성능에 맞게",
-    "descRest": "하나 고르면 그 모델로 색인을 시작합니다. 나중에 설정에서 언제든 바꿀 수 있어요(전체 재색인).",
+    "desc": "대화를 의미로 검색하려면 임베딩 모델이 필요해요. <b>기기 성능에 맞는</b> 모델을 고르면 그 모델로 색인을 시작하고, 나중에 설정에서 언제든 바꿀 수 있어요(전체 재색인).",
     "errorTitle": "모델 목록을 불러오지 못했어요",
     "errorDetail": "앱(백엔드)이 아직 준비 중일 수 있어요. 잠시 후 다시 시도해 주세요.",
     "recommendedBadge": "이 기기 권장",
     "modelMeta": "다운로드 {{size}}GB · 임베딩 중 RAM 약 {{ram}}GB",
     "selectButton": "선택",
-    "helpIntro": "고르면 그 모델을 내려받아(가벼운 모델일수록 빠름) 색인을 시작해요. 잘 모르겠으면",
-    "helpBadge": "「이 기기 권장」 배지",
-    "helpPickSuffix": "모델을 고르면 됩니다",
-    "ramNote": " (이 기기 RAM {{v}}GB)",
-    "helpRamLead": ". RAM",
-    "help32Plus": "32GB 이상",
-    "help32Detail": "은 int8 e5-large(품질↑·설치본 동봉),",
-    "helpBelow": "그 미만",
-    "helpBelowDetail": "은 경량(MiniLM)을 권장해요."
+    "help1": "고르면 그 모델을 내려받아(가벼울수록 빠름) 색인을 시작해요. 잘 모르겠으면 <b>「이 기기 권장」</b> 배지가 붙은 모델을 고르면 됩니다.",
+    "ramLead": "이 기기 RAM은 {{v}}GB예요.",
+    "help2": "RAM <b>32GB 이상</b>은 int8 e5-large(품질↑·설치본 동봉), <b>그 미만</b>은 경량 모델(MiniLM)을 권장해요."
   },
   "browse": {
     "sessionsTitle": "세션",

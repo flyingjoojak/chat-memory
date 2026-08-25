@@ -259,23 +259,15 @@
   },
   "onboarding": {
     "title": "Choose an embedding model",
-    "descIntro": "To search your conversations by meaning, you need an embedding model. Pick one",
-    "descEmphasis": "that fits your device",
-    "descRest": "and indexing starts with that model. You can change it anytime in settings (full re-index).",
+    "desc": "To search your conversations by meaning, you need an embedding model. Pick the one that <b>fits your device</b> — indexing starts with it, and you can change it anytime in settings (a full re-index).",
     "errorTitle": "Couldn't load the model list",
     "errorDetail": "The app (backend) may still be starting up. Please try again in a moment.",
     "recommendedBadge": "Recommended for this device",
     "modelMeta": "Download {{size}}GB · ~{{ram}}GB RAM while embedding",
     "selectButton": "Select",
-    "helpIntro": "Once you pick, that model downloads (lighter models are faster) and indexing begins. If you're unsure, go with the",
-    "helpBadge": "\"Recommended for this device\" badge",
-    "helpPickSuffix": "model.",
-    "ramNote": " (this device has {{v}}GB RAM)",
-    "helpRamLead": ".",
-    "help32Plus": "For 32GB+ RAM",
-    "help32Detail": " we recommend int8 e5-large (higher quality, bundled);",
-    "helpBelow": "below that",
-    "helpBelowDetail": " a lightweight model (MiniLM)."
+    "help1": "Once you pick, that model downloads (lighter models are faster) and indexing begins. If you are unsure, just pick the model with the <b>\"Recommended for this device\"</b> badge.",
+    "ramLead": "This device has {{v}}GB of RAM.",
+    "help2": "For <b>32GB or more</b>, we recommend int8 e5-large (higher quality, bundled); <b>below that</b>, a lightweight model (MiniLM)."
   },
   "browse": {
     "sessionsTitle": "Sessions",
