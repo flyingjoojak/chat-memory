@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { ArrowLeft } from "lucide-react"
 import * as THREE from "three"
 import { getGraph3D, type Graph3DData, type GraphPoint3D } from "@/lib/api"
@@ -22,6 +23,7 @@ function hueOf(s: string): number {
 
 // onOpenTurn: 지도에서 대화(턴)를 클릭하면 그 탭(3분할·왼쪽 검색창)으로 이동해 대화를 연다.
 export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
+  const { t } = useTranslation()
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
   const [showLines, setShowLines] = useState(false)   // 기본 OFF — 연결선은 사용자가 켤 때만 표시
@@ -88,7 +90,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
     renderer.domElement.setAttribute("role", "img")
     renderer.domElement.setAttribute(
       "aria-label",
-      `의미 지도 3D 시각화 — 임베딩 ${data.points.length.toLocaleString()}개, 주제 군집 ${data.clusters.length}개. 상세 목록은 우측 '주제 군집' 패널 참고.`,
+      t("graph.canvasAria", { count: data.points.length.toLocaleString(), clusters: data.clusters.length }),
     )
     wrap.appendChild(renderer.domElement)
 
@@ -524,7 +526,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-2 px-6 pt-5">
-        <h2 className="text-lg font-semibold">의미 지도 3D</h2>
+        <h2 className="text-lg font-semibold">{t("graph.title")}</h2>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -533,35 +535,35 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
               showLines ? "border-primary/40 bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
             }`}
           >
-            세션 선 {showLines ? "켜짐" : "꺼짐"}
+            {t("graph.sessionLines")} {showLines ? t("common.on") : t("common.off")}
           </button>
           <button
             type="button"
             onClick={regenerate}
             disabled={refreshing}
-            title="군집·라벨을 다시 계산(정제 후 태그가 바뀌었을 때)"
+            title={t("graph.regenTitle")}
             className="rounded-md border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
-            {refreshing ? "재계산 중…" : "지도 재생성"}
+            {refreshing ? t("graph.recalculating") : t("graph.regenerate")}
           </button>
           <span className="text-xs text-muted-foreground">
-            {data ? `${data.points.length.toLocaleString()}개 임베딩 · ${clusters.length}개 주제 · ` : ""}
-            좌드래그 회전 / 휠클릭·우드래그 이동 / 휠 커서줌 / 점 클릭→대화 / 군집 클릭→대화목록
+            {data ? `${t("graph.stats", { count: data.points.length.toLocaleString(), clusters: clusters.length })} · ` : ""}
+            {t("graph.controls")}
           </span>
         </div>
       </div>
 
       <div className="relative flex-1 px-4 pb-4 pt-3">
-        {!data ? <div className="grid h-full place-items-center text-muted-foreground">불러오는 중… (첫 계산은 수십 초 걸릴 수 있어요)</div>
-          : err ? <div className="grid h-full place-items-center px-6 text-center text-destructive">지도를 불러오지 못했습니다: {err}</div>
-          : !hasData ? <div className="grid h-full place-items-center text-muted-foreground">아직 벡터가 없습니다. 먼저 인덱싱을 진행하세요.</div>
+        {!data ? <div className="grid h-full place-items-center text-muted-foreground">{t("graph.loadingFirst")}</div>
+          : err ? <div className="grid h-full place-items-center px-6 text-center text-destructive">{t("graph.loadError", { err })}</div>
+          : !hasData ? <div className="grid h-full place-items-center text-muted-foreground">{t("graph.empty")}</div>
             : (
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
                 {/* 떠다니는 라벨은 큰 군집 상위 18개만(과밀 방지) — 전체 목록은 우측 범례에 */}
                 {clusters.slice(0, 18).map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
-                    onClick={() => openCluster(c.id)} title={`${c.label}로 이동`}
-                    role="button" tabIndex={0} aria-label={`${c.label} 군집으로 이동`}
+                    onClick={() => openCluster(c.id)} title={t("graph.goToLabel", { label: c.label })}
+                    role="button" tabIndex={0} aria-label={t("graph.goToCluster", { label: c.label })}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); openCluster(c.id) } }}
                     className="absolute z-10 flex -translate-x-1/2 -translate-y-1/2 cursor-pointer select-none items-center gap-1.5 whitespace-nowrap text-[12px] font-bold"
                     style={{
@@ -578,7 +580,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                     // ── 군집 대화 목록 ──
                     <>
                       <div className="flex items-center gap-1.5 border-b px-2 py-2">
-                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="격리 해제">
+                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label={t("graph.clearIsolation")}>
                           <ArrowLeft className="size-3.5" />
                         </button>
                         <span className="size-2.5 shrink-0 rounded-full" style={{ background: colorOf(selCluster) }} />
@@ -589,8 +591,8 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                         {clusterTurns.map((it) => (
                           <button key={it.t} type="button" onClick={() => openTurn(it)}
                             className="w-full rounded-md px-1.5 py-1.5 text-left hover:bg-muted">
-                            <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
-                            <span className="block truncate text-[10px] text-muted-foreground">세션 {it.s.slice(0, 8)}</span>
+                            <span className="block truncate text-foreground">{it.h || t("graph.untitled")}</span>
+                            <span className="block truncate text-[10px] text-muted-foreground">{t("graph.sessionLabel", { id: it.s.slice(0, 8) })}</span>
                           </button>
                         ))}
                       </div>
@@ -599,10 +601,10 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                     // ── 세션 대화 목록(점 클릭) — 클릭한 턴 강조 ──
                     <>
                       <div className="flex items-center gap-1.5 border-b px-2 py-2">
-                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label="격리 해제">
+                        <button type="button" onClick={clearAll} className="grid size-6 shrink-0 place-items-center rounded-md hover:bg-muted" aria-label={t("graph.clearIsolation")}>
                           <ArrowLeft className="size-3.5" />
                         </button>
-                        <span className="min-w-0 flex-1 truncate font-medium">세션 {selSession.slice(0, 8)}</span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{t("graph.sessionLabel", { id: selSession.slice(0, 8) })}</span>
                         <span className="shrink-0 tabular-nums text-muted-foreground">{sessionTurns.length}</span>
                       </div>
                       <div ref={listScrollRef} className="overflow-y-auto p-1.5">
@@ -610,8 +612,8 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                           <button key={it.t} type="button" onClick={() => openTurn(it)}
                             ref={clickedTurn === it.t ? clickedRef : undefined}
                             className={`w-full rounded-md px-1.5 py-1.5 text-left ${clickedTurn === it.t ? "bg-primary/10 ring-1 ring-primary/40" : "hover:bg-muted"}`}>
-                            <span className="block truncate text-foreground">{it.h || "(제목 없음)"}</span>
-                            {clickedTurn === it.t && <span className="text-[9.5px] font-medium text-primary">방금 클릭</span>}
+                            <span className="block truncate text-foreground">{it.h || t("graph.untitled")}</span>
+                            {clickedTurn === it.t && <span className="text-[9.5px] font-medium text-primary">{t("graph.justClicked")}</span>}
                           </button>
                         ))}
                       </div>
@@ -619,7 +621,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                   ) : (
                     // ── 범례(주제 군집) ──
                     <>
-                      <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">주제 군집 · 클릭하면 확대+대화</div>
+                      <div className="border-b px-2.5 py-2 font-medium text-muted-foreground">{t("graph.legendTitle")}</div>
                       <div className="overflow-y-auto p-1.5">
                         {clusters.map((c) => (
                           <button key={c.id} type="button" onClick={() => openCluster(c.id)}
@@ -637,8 +639,8 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
                   <div role="status" aria-live="polite"
                     className="pointer-events-none fixed z-50 max-w-xs rounded-lg border bg-popover px-3 py-2 text-xs shadow-md"
                     style={{ left: tip.sx + 14, top: tip.sy + 14 }}>
-                    <div className="font-medium text-foreground line-clamp-2">{tip.p.h || "(제목 없음)"}</div>
-                    <div className="mt-1 tabular-nums text-muted-foreground">세션 {tip.p.s.slice(0, 8)}</div>
+                    <div className="font-medium text-foreground line-clamp-2">{tip.p.h || t("graph.untitled")}</div>
+                    <div className="mt-1 tabular-nums text-muted-foreground">{t("graph.sessionLabel", { id: tip.p.s.slice(0, 8) })}</div>
                   </div>
                 )}
               </div>

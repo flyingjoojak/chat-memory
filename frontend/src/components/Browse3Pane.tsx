@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { AlertTriangle, ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -12,8 +13,8 @@ const PALETTE = [
   "#5bc0de", "#b58a63", "#9aa0ff", "#4fb477", "#e05c5c", "#a3c644", "#c96bb3", "#59b0a3", "#d98a5b",
 ]
 const colorOf = (c: number) => PALETTE[((c % PALETTE.length) + PALETTE.length) % PALETTE.length]
-const MODES: { v: SearchMode; label: string }[] = [
-  { v: "hybrid", label: "🔀 하이브리드" }, { v: "semantic", label: "🧠 의미기반" }, { v: "keyword", label: "🔤 키워드기반" },
+const MODES: { v: SearchMode; key: string }[] = [
+  { v: "hybrid", key: "browse.modeHybrid" }, { v: "semantic", key: "browse.modeSemantic" }, { v: "keyword", key: "browse.modeKeyword" },
 ]
 function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) {
   const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
@@ -29,6 +30,7 @@ type Conv = { t: string; s: string; h: string }
 export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   kind: "sessions" | "clusters"; initialSel?: string | null; initialTurn?: { turn: string; session: string } | null
 }) {
+  const { t } = useTranslation()
   const [groups, setGroups] = useState<Group[] | null>(null)
   const [groupsErr, setGroupsErr] = useState(false)   // 목록 로드 실패 — '빈 목록'과 구분
   const [pointsByCluster, setPointsByCluster] = useState<Map<number, Conv[]>>(new Map())
@@ -70,7 +72,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     // clipboard API는 비보안 컨텍스트(평문 http 비-localhost 등)에서 없을 수 있음 → 가드 + 폴백 안내.
     const clip = typeof navigator !== "undefined" ? navigator.clipboard : undefined
     if (!clip?.writeText) {
-      flashMsg({ ok: false, text: "클립보드를 쓸 수 없어요 — 커맨드를 직접 선택해 복사하세요" })
+      flashMsg({ ok: false, text: t("browse.clipboardUnavailable") })
       return
     }
     try {
@@ -79,7 +81,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
       if (copyTimer.current) clearTimeout(copyTimer.current)
       copyTimer.current = setTimeout(() => setCopied(false), 1500)
     } catch {
-      flashMsg({ ok: false, text: "복사 실패 — 커맨드를 직접 선택해 복사하세요" })
+      flashMsg({ ok: false, text: t("browse.copyFailed") })
     }
   }
   // 이 PC에서 새 터미널로 바로 재개(로컬 백엔드가 프로세스 실행).
@@ -90,15 +92,15 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     try {
       let r = await resumeSession(sel)
       if (!r.ok && r.active) {   // 최근 수정됨 → 확인 후 강제 재개
-        const go = window.confirm(`${r.warning ?? "다른 기기에서 진행 중일 수 있어요."}\n\n그래도 재개할까요? (분기될 수 있음)`)
+        const go = window.confirm(`${r.warning ?? t("browse.resumeActiveWarning")}\n\n${t("browse.resumeConfirm")}`)
         if (!go) return
         r = await resumeSession(sel, true)
       }
       // 성공 여부는 r.ok 로만 판단(missing·실행실패 등은 경고로). '거짓 성공' 방지.
-      if (r.ok) flashMsg({ ok: true, text: "새 터미널에서 재개 실행됨" })
-      else flashMsg({ ok: false, text: r.warning ?? "세션을 열 수 없어요" })
+      if (r.ok) flashMsg({ ok: true, text: t("browse.resumeStarted") })
+      else flashMsg({ ok: false, text: r.warning ?? t("browse.resumeCannotOpen") })
     } catch (e) {
-      flashMsg({ ok: false, text: e instanceof Error ? e.message : "실행 실패" })
+      flashMsg({ ok: false, text: e instanceof Error ? e.message : t("browse.execFailed") })
     } finally {
       setOpening(false)
     }
@@ -117,8 +119,8 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     setGroupsErr(false); setGroups(null)
     if (kind === "sessions") {
       listSessions().then((r) => setGroups((r.sessions || []).map((s) => ({
-        id: s.session, label: s.headline || "(제목 없음)", count: s.count,
-        sub: `${s.count}턴 · ${fmtTime(s.started)} → ${fmtTime(s.ended)}`,
+        id: s.session, label: s.headline || t("browse.untitled"), count: s.count,
+        sub: t("browse.sessionSub", { count: s.count, start: fmtTime(s.started), end: fmtTime(s.ended) }),
       })))).catch(() => setGroupsErr(true))
     } else {
       getGraph3D().then((g) => {
@@ -130,7 +132,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
         }
         setPointsByCluster(m)
         setGroups((g.clusters || []).map((c) => ({
-          id: String(c.id), label: c.label, count: c.n, sub: `${c.n}개 대화`, color: colorOf(c.id),
+          id: String(c.id), label: c.label, count: c.n, sub: t("browse.clusterSub", { count: c.n }), color: colorOf(c.id),
         })))
       }).catch(() => setGroupsErr(true))
     }
@@ -145,7 +147,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
       let cancelled = false   // 다른 세션으로 빠르게 전환 시, 늦게 온 응답이 덮어쓰지 않게
       getSession(sel).then((d) => {
         if (cancelled) return
-        setConvs(d.turns.map((t) => ({ t: t.id, s: sel, h: t.summary || t.question || "" })))
+        setConvs(d.turns.map((turn) => ({ t: turn.id, s: sel, h: turn.summary || turn.question || "" })))
         setDetail(d)
       }).catch(() => { if (!cancelled) { setConvs([]); setDetailErr(true) } })
       return () => { cancelled = true }
@@ -175,7 +177,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
 
   function pickGroup(id: string) { setSel(id); setSelTurn(null) }
   const selGroup = groups?.find((g) => g.id === sel)
-  const title = kind === "sessions" ? "세션" : "주제 군집"
+  const title = kind === "sessions" ? t("browse.sessionsTitle") : t("browse.clustersTitle")
 
   // 그룹 아이콘: 세션=말풍선 / 군집=색점.
   const groupIcon = (g: Group) => g.color
@@ -187,9 +189,9 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
     <div className={compact ? "min-h-0 flex-1 space-y-1 overflow-y-auto p-3" : "mx-auto w-full max-w-2xl space-y-2.5 p-4"}>
       {groupsErr && (
         <div className="flex flex-col items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-center text-sm">
-          <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="size-4" />목록을 불러오지 못했어요</span>
-          <span className="text-muted-foreground">앱이 준비 중일 수 있어요.</span>
-          <button onClick={loadGroups} className="rounded-md border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">다시 시도</button>
+          <span className="inline-flex items-center gap-1.5 text-destructive"><AlertTriangle className="size-4" />{t("browse.loadFailed")}</span>
+          <span className="text-muted-foreground">{t("browse.appMayBeStarting")}</span>
+          <button onClick={loadGroups} className="rounded-md border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">{t("common.retry")}</button>
         </div>
       )}
       {!groups && !groupsErr && <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
@@ -221,7 +223,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
       <div className="flex h-full flex-col">
         <div className="shrink-0 px-6 pt-5">
           <h2 className="text-lg font-semibold">{title}</h2>
-          <p className="text-xs text-muted-foreground">{groups ? `${groups.length}개 · 클릭하면 대화` : ""}</p>
+          <p className="text-xs text-muted-foreground">{groups ? t("browse.groupCount", { count: groups.length }) : ""}</p>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{groupList(false)}</div>
       </div>
@@ -246,7 +248,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
           {kind === "sessions" && sel && (
             <div className="mb-2 rounded-lg border bg-muted/40 p-2">
               <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                <RotateCcw className="size-3.5" />해당 세션 재개하기
+                <RotateCcw className="size-3.5" />{t("browse.resumeSession")}
                 {sourceLabel && (
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-foreground/70">{sourceLabel}</span>
                 )}
@@ -254,45 +256,45 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
               <div className="flex items-center gap-1.5">
                 <code className="min-w-0 flex-1 truncate rounded bg-background px-1.5 py-1 font-mono text-[11px]" title={resumeCmd}>{resumeCmd}</code>
                 <button type="button" onClick={openResume} disabled={opening || !ready || !fileExists}
-                  title={ready && !fileExists ? "원문 로그가 없어 열 수 없어요" : undefined}
-                  aria-label={ready && !fileExists ? "열기 — 원문 로그가 없어 열 수 없음" : "열기 — 이 PC에서 새 터미널로 세션 재개"}
+                  title={ready && !fileExists ? t("browse.cannotOpenNoLog") : undefined}
+                  aria-label={ready && !fileExists ? t("browse.openAriaDisabled") : t("browse.openAriaEnabled")}
                   aria-describedby={ready && !fileExists ? "resume-missing-note" : undefined}
                   className="inline-flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-60">
-                  {opening ? <Loader2 className="size-3.5 animate-spin" /> : <TerminalSquare className="size-3.5" />}열기
+                  {opening ? <Loader2 className="size-3.5 animate-spin" /> : <TerminalSquare className="size-3.5" />}{t("browse.open")}
                 </button>
-                <button type="button" onClick={copyResume} disabled={!ready} aria-label="재개 커맨드 복사"
+                <button type="button" onClick={copyResume} disabled={!ready} aria-label={t("browse.copyCommandAria")}
                   className="inline-flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1 text-[11px] transition-colors hover:bg-muted disabled:opacity-60">
                   {copied ? <Check className="size-3.5 text-primary" /> : <Copy className="size-3.5" />}
-                  {copied ? "복사됨" : "복사"}
+                  {copied ? t("browse.copied") : t("browse.copy")}
                 </button>
               </div>
               {resumeMsg && (
                 <div className={`mt-1 text-[10.5px] ${resumeMsg.ok ? "text-muted-foreground" : "text-destructive"}`}>{resumeMsg.text}</div>
               )}
               {detailErr && !resumeMsg && (
-                <div className="mt-1 text-[10.5px] text-destructive">세션 정보를 불러오지 못했어요 — 재개 가능 여부를 확인할 수 없어요.</div>
+                <div className="mt-1 text-[10.5px] text-destructive">{t("browse.detailLoadFailed")}</div>
               )}
               {ready && !fileExists && !resumeMsg && (
-                <div id="resume-missing-note" className="mt-1 text-[10.5px] text-destructive">원문 로그가 없어 이 세션은 열 수 없어요 (검색·조회는 그대로 가능).</div>
+                <div id="resume-missing-note" className="mt-1 text-[10.5px] text-destructive">{t("browse.noLogNote")}</div>
               )}
             </div>
           )}
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-[16px] -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => runSearch(e.target.value)} placeholder={`이 ${title} 안에서 검색…`} className="h-9 rounded-lg pl-9 text-sm" />
+            <Input value={q} onChange={(e) => runSearch(e.target.value)} placeholder={t("browse.searchPlaceholder", { title })} className="h-9 rounded-lg pl-9 text-sm" />
             {searching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <div className="inline-flex rounded-full border bg-card p-0.5">
               {MODES.map((m) => (
                 <button key={m.v} type="button" onClick={() => { setMode(m.v); runSearch(q, m.v) }}
-                  className={`rounded-full px-2 py-1 transition-colors ${mode === m.v ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>{m.label}</button>
+                  className={`rounded-full px-2 py-1 transition-colors ${mode === m.v ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>{t(m.key)}</button>
               ))}
             </div>
-            <label className="inline-flex items-center gap-1">이후
+            <label className="inline-flex items-center gap-1">{t("browse.since")}
               <input type="date" value={since} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setSince(e.target.value); runSearch() }}
                 className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
-            <label className="inline-flex items-center gap-1">이전
+            <label className="inline-flex items-center gap-1">{t("browse.until")}
               <input type="date" value={until} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setUntil(e.target.value); runSearch() }}
                 className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
           </div>
@@ -301,15 +303,15 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
           {!convs && <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
           {hits !== null ? (
             <>
-              {!searching && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">결과 없음</div>}
+              {!searching && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">{t("browse.noResults")}</div>}
               {hits.map((h) => (
                 <button key={h.id} onClick={() => setSelTurn({ session: h.session_full, turn: h.id })}
                   className={`cm-cv-row w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === h.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
                   <div className="mb-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground tabular-nums">
                     {h.sources.map((s) => <Badge key={s} variant={s === "키워드" ? "secondary" : "default"} className="h-4 px-1.5 text-[9.5px]">{s}</Badge>)}
-                    <span>{h.cosine != null ? `cos ${h.cosine.toFixed(2)}` : "키워드"}</span><span className="opacity-40">·</span><span>{fmtTime(h.timestamp)}</span>
+                    <span>{h.cosine != null ? `cos ${h.cosine.toFixed(2)}` : t("browse.keywordMatch")}</span><span className="opacity-40">·</span><span>{fmtTime(h.timestamp)}</span>
                   </div>
-                  <div className="line-clamp-2 text-[13px] font-medium leading-snug">{h.summary || h.question || "(제목 없음)"}</div>
+                  <div className="line-clamp-2 text-[13px] font-medium leading-snug">{h.summary || h.question || t("browse.untitled")}</div>
                 </button>
               ))}
             </>
@@ -317,8 +319,8 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
             convs?.map((it) => (
               <button key={it.t} onClick={() => setSelTurn({ session: it.s, turn: it.t })}
                 className={`cm-cv-row w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === it.t ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>
-                <div className="line-clamp-2 text-[13px] font-medium leading-snug">{it.h || "(제목 없음)"}</div>
-                <div className="mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">세션 {it.s.slice(0, 8)}</div>
+                <div className="line-clamp-2 text-[13px] font-medium leading-snug">{it.h || t("browse.untitled")}</div>
+                <div className="mt-0.5 text-[10.5px] text-muted-foreground tabular-nums">{t("browse.sessionId", { id: it.s.slice(0, 8) })}</div>
               </button>
             ))
           )}
@@ -329,12 +331,12 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
       <div className="min-h-0 overflow-hidden">
         {selTurn
           ? <ChatThread key={`${selTurn.session}:${selTurn.turn}`} session={selTurn.session} focusTurn={selTurn.turn} />
-          : <div className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground">왼쪽 대화를 클릭하세요.</div>}
+          : <div className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground">{t("browse.selectPrompt")}</div>}
       </div>
 
       {/* 오른쪽: 그룹 목록(전환용) */}
       <div className="flex min-h-0 flex-col border-l">
-        <div className="shrink-0 border-b px-3 py-2.5 text-xs font-medium text-muted-foreground">{title} 목록</div>
+        <div className="shrink-0 border-b px-3 py-2.5 text-xs font-medium text-muted-foreground">{t("browse.groupListTitle", { title })}</div>
         {groupList(true)}
       </div>
     </div>

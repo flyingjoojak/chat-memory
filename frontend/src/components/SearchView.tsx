@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Search, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -9,13 +10,6 @@ import { fmtTime } from "@/lib/format"
 import { sourceLabel } from "@/lib/source"
 import type { Hit } from "@/lib/types"
 
-const EXAMPLES = ["어제 뭐 했지", "에러 해결", "어떻게 구현했더라", "설정 방법", "결정한 내용"]
-const MODES: { v: SearchMode; label: string }[] = [
-  { v: "hybrid", label: "🔀 하이브리드" },
-  { v: "semantic", label: "🧠 의미기반" },
-  { v: "keyword", label: "🔤 키워드기반" },
-]
-
 // 날짜 input 클릭 시 네이티브 달력을 강제로 연다(웹뷰에서 안 뜨는 문제 대응).
 function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) {
   const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
@@ -23,6 +17,13 @@ function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTM
 }
 
 export function SearchView() {
+  const { t } = useTranslation()
+  const EXAMPLES = [t("search.ex1"), t("search.ex2"), t("search.ex3"), t("search.ex4"), t("search.ex5")]
+  const MODES: { v: SearchMode; label: string }[] = [
+    { v: "hybrid", label: `🔀 ${t("search.modeHybrid")}` },
+    { v: "semantic", label: `🧠 ${t("search.modeSemantic")}` },
+    { v: "keyword", label: `🔤 ${t("search.modeKeyword")}` },
+  ]
   const [q, setQ] = useState("")
   const [mode, setMode] = useState<SearchMode>("hybrid")
   const [k, setK] = useState(15)
@@ -84,7 +85,7 @@ export function SearchView() {
             <Input
               autoFocus value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
-              placeholder="대화 검색…" className="h-11 rounded-lg pl-10 text-[15px] shadow-sm"
+              placeholder={t("search.placeholder")} className="h-11 rounded-lg pl-10 text-[15px] shadow-sm"
             />
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -96,7 +97,7 @@ export function SearchView() {
                 </button>
               ))}
             </div>
-            <label className="inline-flex items-center gap-1">표시
+            <label className="inline-flex items-center gap-1">{t("search.show")}
               <select value={k} onChange={(e) => { setK(+e.target.value); run() }}
                 className="rounded-md border bg-card px-1.5 py-1 outline-none shadow-sm">
                 {[8, 15, 30].map((n) => <option key={n}>{n}</option>)}
@@ -108,24 +109,24 @@ export function SearchView() {
             )}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <label className="inline-flex items-center gap-1">이후
+            <label className="inline-flex items-center gap-1">{t("search.since")}
               <input type="date" value={since} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setSince(e.target.value); run() }}
                 className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
-            <label className="inline-flex items-center gap-1">이전
+            <label className="inline-flex items-center gap-1">{t("search.until")}
               <input type="date" value={until} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setUntil(e.target.value); run() }}
                 className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
             {(since || until) && (
               <button onClick={() => { setSince(""); setUntil(""); run() }}
                 className="inline-flex items-center gap-1 rounded-md border bg-card px-2 py-1 hover:text-foreground">
-                <X className="size-3" />초기화
+                <X className="size-3" />{t("search.reset")}
               </button>)}
           </div>
           {state === "done" && (
-            <div className="mt-2 text-xs text-muted-foreground tabular-nums">결과 <b className="text-foreground">{hits.length}</b>개</div>
+            <div className="mt-2 text-xs text-muted-foreground tabular-nums">{t("search.resultsPrefix")}<b className="text-foreground">{hits.length}</b>{t("search.resultsSuffix")}</div>
           )}
           {/* 스크린리더용 상태 안내(비시각 사용자에 검색 진행/결과 알림) */}
           <div className="sr-only" role="status" aria-live="polite">
-            {state === "loading" ? "검색 중" : state === "done" ? `검색 결과 ${hits.length}건` : state === "error" ? "검색 실패" : ""}
+            {state === "loading" ? t("search.srSearching") : state === "done" ? t("search.srResults", { n: hits.length }) : state === "error" ? t("search.srFailed") : ""}
           </div>
         </div>
 
@@ -140,23 +141,23 @@ export function SearchView() {
 
           {state === "done" && hits.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              <div className="mb-2 text-3xl">∅</div>결과가 없어요.
+              <div className="mb-2 text-3xl">∅</div>{t("search.emptyResults")}
             </div>
           )}
 
           {state === "error" && (
             <div className="py-12 text-center text-sm">
               <div className="mb-2 text-3xl">⚠️</div>
-              <div className="text-destructive">검색에 실패했어요</div>
-              <div className="mt-1 text-muted-foreground">앱이 준비 중이거나 색인 전일 수 있어요.</div>
-              <button onClick={() => run()} className="mt-3 rounded-lg border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">다시 시도</button>
+              <div className="text-destructive">{t("search.errorTitle")}</div>
+              <div className="mt-1 text-muted-foreground">{t("search.errorHint")}</div>
+              <button onClick={() => run()} className="mt-3 rounded-lg border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">{t("common.retry")}</button>
             </div>
           )}
 
           {state === "idle" && (
             <div className="py-10 text-center text-muted-foreground">
               <div className="mb-3 text-4xl opacity-80">🔎</div>
-              <div className="mb-4 text-sm">대화에서 찾을 내용을 입력하세요.</div>
+              <div className="mb-4 text-sm">{t("search.idleHint")}</div>
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {EXAMPLES.map((e) => (
                   <button key={e} onClick={() => pick(e)}
@@ -180,14 +181,14 @@ export function SearchView() {
                   {h.sources.map((s) => (
                     <Badge key={s} variant={s === "키워드" ? "secondary" : "default"} className="h-4 px-1.5 text-[9.5px]">{s}</Badge>
                   ))}
-                  <span>{h.cosine != null ? `cos ${h.cosine.toFixed(2)}` : "키워드"}</span>
+                  <span>{h.cosine != null ? `cos ${h.cosine.toFixed(2)}` : t("search.keywordMatch")}</span>
                   <span className="opacity-40">·</span>
                   <span>{fmtTime(h.timestamp)}</span>
                   <span className="opacity-40">·</span>
-                  <span>세션 {h.session}</span>
+                  <span>{t("search.session", { n: h.session })}</span>
                 </div>
                 <div className="line-clamp-2 text-[13.5px] font-medium leading-snug text-balance">
-                  {h.summary || h.question || "(제목 없음)"}
+                  {h.summary || h.question || t("search.untitled")}
                 </div>
               </button>
             )
@@ -200,7 +201,7 @@ export function SearchView() {
         {sel
           ? <ChatThread key={`${sel.session}:${sel.turn}`} session={sel.session} focusTurn={sel.turn} />
           : <div className="grid h-full place-items-center px-6 text-center text-sm text-muted-foreground">
-              왼쪽 결과를 클릭하면 그 대화가 여기에 채팅으로 열립니다.
+              {t("search.detailPlaceholder")}
             </div>}
       </div>
     </div>

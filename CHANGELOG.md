@@ -18,6 +18,7 @@ GitHub 릴리스가 만들어지고, **그 릴리스 본문이 앱의 업데이�
 - 3-OS(Windows·Linux·macOS) 릴리스 빌드 CI + 테스트 CI(GitHub Actions).
 - macOS Homebrew cask 배포 — 서명 없이도 `brew install/upgrade --cask`로 설치·업데이트(격리 해제로 Gatekeeper 경고 없음).
 - 미서명 macOS용 '안내형 업데이트' — 새 버전 감지 시 배너로 알리고 다운로드 페이지를 열어줌(자동 교체는 서명 필요).
+- 다국어(i18n) — 한국어·영어 지원. OS 로케일 자동 감지(한국어 아니면 영어), 설정 → 모양에서 언어 전환, 선택 저장. 모든 화면 UI 문자열을 번역 리소스로 전환(react-i18next).
 
 ### Changed
 - Electron 32 → 43 상향(최신 Chromium으로 창 리사이즈 매끄러움 개선).
