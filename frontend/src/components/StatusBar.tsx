@@ -44,14 +44,14 @@ export function StatusBar() {
 
   return (
     <footer className="fixed inset-x-0 bottom-0 z-20 flex h-7 items-center gap-x-3 overflow-hidden border-t bg-sidebar px-3 text-[11px] text-muted-foreground tabular-nums">
-      {/* 왼쪽: 색인 활동 */}
+      {/* 왼쪽: 색인 활동 — 공간 부족 시 이쪽(서술 텍스트)만 truncate(오른쪽 통계는 온전히 유지) */}
       {ix?.running
-        ? <span className="inline-flex items-center gap-1 text-foreground/80"><Loader2 className="size-3 animate-spin" />{t("statusbar.indexing")}</span>
+        ? <span className="inline-flex min-w-0 shrink items-center gap-1 truncate text-foreground/80"><Loader2 className="size-3 shrink-0 animate-spin" />{t("statusbar.indexing")}</span>
         : pending > 0
-          ? <span className="text-foreground/80">{t("statusbar.pendingNew", { n: pending })}</span>
-          : <span>{t("statusbar.upToDate")}</span>}
-      {/* 오른쪽: 저장소 현황 + 동기화 상태 */}
-      <span className="ml-auto flex flex-wrap items-center gap-x-3">
+          ? <span className="min-w-0 shrink truncate text-foreground/80">{t("statusbar.pendingNew", { n: pending })}</span>
+          : <span className="min-w-0 shrink truncate">{t("statusbar.upToDate")}</span>}
+      {/* 오른쪽: 저장소 현황 + 동기화 상태 — nowrap+shrink-0으로 항상 한 줄에 온전히(고정 h-7에서 2번째 줄 잘림 방지) */}
+      <span className="ml-auto flex shrink-0 items-center gap-x-3 whitespace-nowrap">
         <span>{t("statusbar.sessions", { n: n(stats?.sessions) })}</span>
         <span>{t("statusbar.turns", { n: n(stats?.turns) })}</span>
         <span>{t("statusbar.vectors", { n: n(stats?.vectors) })}</span>

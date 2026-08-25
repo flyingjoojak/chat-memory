@@ -659,13 +659,13 @@ export function SettingsView() {
       <div className="flex flex-col gap-5 md:flex-row md:items-start">
         {/* 큰 메뉴 네비게이션 — 넓은 화면=좌측 세로, 좁은 화면=상단 가로 스크롤 */}
         <nav aria-label={t("settings.menuAria")}
-          className="flex shrink-0 gap-1 overflow-x-auto pb-1 md:w-40 md:flex-col md:overflow-visible md:pb-0">
+          className="flex shrink-0 gap-1 overflow-x-auto pb-1 md:w-52 md:flex-col md:overflow-visible md:pb-0">
           {TABS.map((item) => (
             <button key={item.key} type="button" onClick={() => setTab(item.key)}
               aria-current={tab === item.key ? "page" : undefined}
-              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+              className={`inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm leading-tight transition-colors ${
                 tab === item.key ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              {item.icon}{t(item.labelKey)}
+              <span className="shrink-0">{item.icon}</span>{t(item.labelKey)}
             </button>
           ))}
         </nav>
