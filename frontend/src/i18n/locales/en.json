@@ -23,7 +23,10 @@
     "mismatchReindex": "Re-index in settings",
     "driftMsg": "Can't read {{sources}} logs — the format seems to have changed. One click to report it helps us fix it fast (your conversations are never sent).",
     "driftReport": "Report now",
-    "driftOpenSettings": "Open settings"
+    "driftOpenSettings": "Open settings",
+    "backendDownTitle": "Can't reach the backend",
+    "backendDownBody": "The app may still be starting up or has shut down. It'll continue automatically once connected.",
+    "backendDownRetry": "Retry"
   },
   "update": {
     "available": "Update {{version}} is available.",
@@ -167,6 +170,7 @@
     "embedHint": "To re-embed from scratch, use \"Full re-index\" on the current model; to switch models, use \"Change\".",
     "reindexing": "Re-indexing… {{msg}}",
     "reindexPreparing": "Preparing… (progress shows once the first embedding batch starts)",
+    "reindexFailed": "Couldn't start re-indexing. Please try again.",
     "embedTip": "If your device is slow or low on RAM, we recommend a <b>lighter model (MiniLM)</b> — far less time and RAM (slightly lower quality). On a high-end device with plenty of RAM, \"Fast re-index (parallel)\" can cut the time when re-indexing.",
     "lowSpecRec": "Low-spec pick",
     "diskLabel": "Disk {{gb}}GB",
@@ -259,6 +263,8 @@
     "ex4": "how to set it up",
     "ex5": "what we decided",
     "keywordMatch": "keyword",
+    "srcSemantic": "semantic",
+    "srcKeyword": "keyword",
     "session": "Session {{n}}",
     "untitled": "(untitled)",
     "detailPlaceholder": "Click a result on the left to open that conversation here as a chat.",

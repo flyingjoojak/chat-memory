@@ -63,7 +63,7 @@ def test_hybrid_surfaces_keyword_only_turn(tmp_path):
     ids = [h.turn.id for h in hits]
     assert "s1:u1" in ids
     top = next(h for h in hits if h.turn.id == "s1:u1")
-    assert "키워드" in top.sources
+    assert "keyword" in top.sources
 
 
 def test_date_range_since_until(tmp_path):
@@ -107,5 +107,5 @@ def test_semantic_only_flag_disables_keyword(tmp_path):
     _seed(db, vi, [_turn("s1:u1", "질문 내용입니다", "포트 8088 관련 답변")])
     e = FakeEmbedder()
     hits = search("8088", db, vi, e, k=5, keyword=False)
-    # 키워드 끄면 소스에 '키워드' 없음.
-    assert all("키워드" not in h.sources for h in hits)
+    # 키워드 끄면 소스에 'keyword' 없음.
+    assert all("keyword" not in h.sources for h in hits)

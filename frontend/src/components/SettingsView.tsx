@@ -477,6 +477,7 @@ export function SettingsView() {
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [reindexing, setReindexing] = useState(false)
   const [reindexMsg, setReindexMsg] = useState("")
+  const [reindexErr, setReindexErr] = useState("")
   const [reindexProg, setReindexProg] = useState({ doneFiles: 0, totalFiles: 0, doneChunks: 0, totalChunks: 0 })
   const [fastReindex, setFastReindex] = useState(false)   // 병렬(고RAM 기기) 빠른 재색인
   const [parallelN, setParallelN] = useState(2)           // 병렬 프로세스 수(사용자 지정)
@@ -640,8 +641,14 @@ export function SettingsView() {
     if (!confirmModel) return
     const m = confirmModel.model
     const fast = fastReindex
-    setConfirmModel(null); setReindexing(true); setReindexMsg(t("settings.starting"))
-    await reindex(m, fast ? { fast, parallel: parallelN } : {}); startPoll()
+    setConfirmModel(null); setReindexErr(""); setReindexing(true); setReindexMsg(t("settings.starting"))
+    try {
+      const r = await reindex(m, fast ? { fast, parallel: parallelN } : {})
+      if (!r.ok) { setReindexing(false); setReindexErr(errText(t, r, "settings.reindexFailed")); return }
+      startPoll()
+    } catch (e) {
+      setReindexing(false); setReindexErr(errText(t, e, "settings.reindexFailed"))
+    }
   }
 
   const themes: { v: ThemeMode; icon: React.ReactNode; labelKey: string }[] = [
@@ -973,6 +980,9 @@ export function SettingsView() {
                         ? <BarProgress done={reindexProg.doneFiles} total={reindexProg.totalFiles} unit={t("settings.unitFiles")} />
                         : <div className="text-[11px] text-muted-foreground">{t("settings.reindexPreparing")}</div>}
                   </div>
+                )}
+                {reindexErr && (
+                  <div role="alert" className="border-b py-3 text-sm text-destructive">{reindexErr}</div>
                 )}
                 <div className="border-b py-2.5 text-[11px] leading-relaxed text-muted-foreground">
                   💡 <Trans i18nKey="settings.embedTip" components={{ b: <b className="text-foreground/80" /> }} />

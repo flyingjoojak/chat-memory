@@ -46,7 +46,7 @@ class SearchHit:
     turn: Turn
     score: float                 # RRF 융합 점수(정렬용)
     cosine: float | None = None  # 의미 유사도(의미검색에 잡혔을 때)
-    sources: tuple[str, ...] = ()  # "의미" / "키워드"
+    sources: tuple[str, ...] = ()  # 안정 코드: "semantic" / "keyword" (표시 라벨은 프론트에서 번역)
     summary: str | None = None
     tags: tuple[str, ...] = ()
     thread: tuple[Turn, ...] = ()
@@ -94,10 +94,10 @@ def search(
     srcs: dict[str, set] = {}
     for rank, tid in enumerate(sem_order, 1):
         fused[tid] = fused.get(tid, 0.0) + 1.0 / (_RRF_K + rank)
-        srcs.setdefault(tid, set()).add("의미")
+        srcs.setdefault(tid, set()).add("semantic")
     for rank, tid in enumerate(kw_order, 1):
         fused[tid] = fused.get(tid, 0.0) + 1.0 / (_RRF_K + rank)
-        srcs.setdefault(tid, set()).add("키워드")
+        srcs.setdefault(tid, set()).add("keyword")
 
     ranked = sorted(fused, key=lambda t: -fused[t])
 

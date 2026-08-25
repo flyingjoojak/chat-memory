@@ -85,10 +85,10 @@ export default function App() {
       <div className="grid h-full place-items-center bg-background px-6">
         <div className="flex max-w-sm flex-col items-center gap-3 text-center">
           <AlertTriangle className="size-6 text-amber-500" />
-          <div className="text-sm font-medium">백엔드에 연결할 수 없어요</div>
-          <div className="text-[13px] text-muted-foreground">앱이 아직 준비 중이거나 종료됐을 수 있어요. 연결되면 자동으로 넘어갑니다.</div>
+          <div className="text-sm font-medium">{t("app.backendDownTitle")}</div>
+          <div className="text-[13px] text-muted-foreground">{t("app.backendDownBody")}</div>
           <button onClick={checkOnboard} className="mt-1 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground">
-            <Loader2 className="size-4 animate-spin" />다시 시도
+            <Loader2 className="size-4 animate-spin" />{t("app.backendDownRetry")}
           </button>
         </div>
       </div>
