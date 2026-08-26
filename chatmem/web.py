@@ -85,7 +85,9 @@ def _maybe_unload_embedder() -> None:
 
 
 _FULL_SWEEP_SECS = 300   # realtime 모드에서 peer 병합·자가복구 전체 스윕 최소 간격(초)
+_QUICK_HEAVY_MIN_SECS = 60   # realtime 모드에서 무거운 색인 경로(벡터 로드+풀스캔) 최소 간격(초)
 _last_full_sweep = [0.0]
+_last_heavy_run = [0.0]
 
 
 def _run_incremental(quick: bool = False) -> bool:
@@ -104,13 +106,18 @@ def _run_incremental(quick: bool = False) -> bool:
         db = ArchiveDB()
         if quick:
             # 값싼 게이트: 로컬 세션 파일 stat만 확인(벡터 로드·풀스캔 없음).
-            # 새 대화가 없고 peer 병합/자가복구 전체 스윕 주기도 아니면 무거운 작업을 건너뛴다.
-            sweep_due = (_time.time() - _last_full_sweep[0]) >= _FULL_SWEEP_SECS
-            if not has_new_data(db) and not sweep_due:
+            now = _time.time()
+            sweep_due = (now - _last_full_sweep[0]) >= _FULL_SWEEP_SECS
+            heavy_due = (now - _last_heavy_run[0]) >= _QUICK_HEAVY_MIN_SECS
+            # 무거운 경로(벡터 로드+turns 풀스캔+피어 재파싱)는 최소 간격을 둔다.
+            # 진행 중 턴은 파일이 계속 자라 has_new_data=True가 유지되지만, 마지막 턴은
+            # IDLE_SECS(120s)까지 홀드백되어 실제로 색인할 게 없으므로 10초마다 재로드하지 않는다.
+            # sweep_due면(피어 병합/자가복구 주기) 무조건 통과.
+            if not sweep_due and not (has_new_data(db) and heavy_due):
                 _autoindex_state.update(running=False, phase="새 대화 없음")
                 return True
         vi = make_index()
-        _last_full_sweep[0] = _time.time()
+        _last_heavy_run[0] = _time.time()   # 무거운 경로 진입 시각(quick 스로틀용)
         with contextlib.suppress(Exception):
             reconcile(db, vi, log_fn=lambda m: None)   # 고아 벡터 정리(값쌈)
         # 기기 간 아카이브 병합: 다른 기기가 보존한 세션(삭제된 원본 포함)을 먼저 가져온다.
@@ -122,6 +129,7 @@ def _run_incremental(quick: bool = False) -> bool:
         chunk_count = db.conn.execute("SELECT COUNT(*) c FROM chunks").fetchone()["c"]
         missing = len(vi) < chunk_count
         if not new and not missing:
+            _last_full_sweep[0] = _time.time()   # 전체 스윕 성공 완료(peer 병합·고아 정리까지)
             _autoindex_state.update(running=False, phase="새 대화 없음")
             return True
         if _state.get("needs_onboarding"):
@@ -155,10 +163,12 @@ def _run_incremental(quick: bool = False) -> bool:
             with contextlib.suppress(Exception):
                 export_archive(db, C.PROJECTS_DIR, device_id(db))
 
+        _last_full_sweep[0] = _time.time()   # 전체 스윕(색인 포함) 성공 완료
         done_msg = f"최근 완료(+{total}턴" + (f", 복구 {filled}청크)" if filled else ")")
         _autoindex_state.update(running=False, phase=done_msg, done_chunks=0, total_chunks=0)
         return True
     except Exception as ex:                       # 한 번의 오류로 죽지 않게
+        _last_full_sweep[0] = 0.0                  # 실패 시 다음 tick에서 스윕 재시도(성공 시에만 주기 리셋)
         _autoindex_state.update(running=False, phase="오류", last_error=str(ex))
         return True
     finally:
@@ -236,9 +246,14 @@ async def _lifespan(app: FastAPI):
     # 판정은 시작 시 1회만(태스크 조회 subprocess 1회) — 매 틱 비용 없음.
     _self_index = getattr(_sys, "frozen", False)
     if not _self_index:
-        with contextlib.suppress(Exception):
+        try:
             from . import scheduler
             _self_index = not scheduler.index_scheduled()
+        except Exception as ex:
+            # 스케줄러 상태를 확인 못 하면 "OS 스케줄러 확정"으로 오해해 색인이 아예 안 도는
+            # 최악을 피한다 → 인프로세스 루프가 담당(색인 안 도는 것보다 안전). 흔적은 남긴다.
+            _self_index = True
+            print(f"[autoindex] scheduler probe failed, self-indexing: {ex}", file=_sys.stderr)
     if _self_index:
         threading.Thread(target=_autoindex, daemon=True).start()
     else:

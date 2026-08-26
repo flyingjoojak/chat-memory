@@ -35,6 +35,8 @@ const BACKENDS = [
 const CUSTOM = "__custom__"
 
 type TabKey = "general" | "enrich" | "index" | "sync" | "mcp"
+type IndexMode = "off" | "interval" | "realtime" | "scheduled"
+const INDEX_MODES = ["off", "interval", "realtime", "scheduled"] as const
 const TABS: { key: TabKey; labelKey: string; icon: React.ReactNode }[] = [
   { key: "general", labelKey: "settings.tabGeneral", icon: <SlidersHorizontal className="size-4" /> },
   { key: "enrich", labelKey: "settings.tabEnrich", icon: <Sparkles className="size-4" /> },
@@ -78,9 +80,9 @@ function StatusChip({ tone, children }: { tone: "ok" | "warn" | "muted"; childre
 
 // 로그 폴더 지정: 평소엔 한 줄(이름 + 상태 + 「변경」)만. 「변경」을 눌러야 입력칸이 펼쳐진다
 // → 화면 공간을 거의 안 쓰면서, 대부분(자동 감지된) 사용자는 상태만 확인하면 된다.
-function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder, help }: {
+function FolderRow({ label, chip, path, onPathChange, onSave, saved, err, placeholder, help }: {
   label: string; chip: React.ReactNode; path: string; onPathChange: (v: string) => void
-  onSave: () => void; saved: boolean; placeholder: string; help: React.ReactNode
+  onSave: () => void; saved: boolean; err?: string; placeholder: string; help: React.ReactNode
 }) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -103,6 +105,7 @@ function FolderRow({ label, chip, path, onPathChange, onSave, saved, placeholder
             <Button size="sm" variant="outline" onClick={onSave}>{t("common.save")}</Button>
           </div>
           <p className="mt-1.5 text-[11px] text-muted-foreground">{help}</p>
+          {err && <p role="alert" className="mt-1 text-[11px] text-destructive">{err}</p>}
         </div>
       )}
     </div>
@@ -458,7 +461,7 @@ export function SettingsView() {
   const [apiKey, setApiKey] = useState("")
   const [enrichTime, setEnrichTime] = useState("04:00")
   const [interval, setIntervalMin] = useState(10)
-  const [indexMode, setIndexMode] = useState("interval")   // off|interval|realtime|scheduled
+  const [indexMode, setIndexMode] = useState<IndexMode>("interval")
   const [indexTime, setIndexTime] = useState("03:00")       // scheduled 색인 시각
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434/v1")
   const [saved, setSaved] = useState(false)
@@ -467,8 +470,10 @@ export function SettingsView() {
   const [blockMsg, setBlockMsg] = useState("")
   const [projectsDir, setProjectsDir] = useState("")
   const [projSaved, setProjSaved] = useState(false)
+  const [projErr, setProjErr] = useState("")
   const [codexDir, setCodexDir] = useState("")
   const [codexSaved, setCodexSaved] = useState(false)
+  const [codexErr, setCodexErr] = useState("")
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
   const [indexErr, setIndexErr] = useState("")
@@ -546,14 +551,17 @@ export function SettingsView() {
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
       setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir); setCodexDir(c.codex_dir)
-      setIndexMode(c.index_mode || "interval"); setIndexTime(c.index_time || "03:00")
+      setIndexMode((c.index_mode as IndexMode) || "interval"); setIndexTime(c.index_time || "03:00")
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
       setModel(cur); setCustomModel(!!cur && !(opts as readonly string[]).includes(cur))
     }).catch(() => {})
     loadEmbed()
     getSystem().then(setSys).catch(() => {})
-    return () => { if (poll.current) window.clearInterval(poll.current) }
+    return () => {
+      if (poll.current) window.clearInterval(poll.current)
+      if (indexModeTimer.current) window.clearTimeout(indexModeTimer.current)
+    }
   }, [])
 
   function loadEmbed() {
@@ -625,24 +633,30 @@ export function SettingsView() {
   }
 
   async function saveProjects() {
+    setProjErr("")
     try {
       const r = await putConfig({ CLAUDE_PROJECTS_DIR: projectsDir })
-      if (!r.ok) return
-    } catch { return }
+      if (!r.ok) { setProjErr(errText(t, r, "settings.saveFailed")); return }
+    } catch (e) { setProjErr(errText(t, e, "settings.saveFailed")); return }
     setProjSaved(true); setTimeout(() => setProjSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
 
   async function saveCodex() {
+    setCodexErr("")
     try {
       const r = await putConfig({ CODEX_SESSIONS_DIR: codexDir })
-      if (!r.ok) return
-    } catch { return }
+      if (!r.ok) { setCodexErr(errText(t, r, "settings.saveFailed")); return }
+    } catch (e) { setCodexErr(errText(t, e, "settings.saveFailed")); return }
     setCodexSaved(true); setTimeout(() => setCodexSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
 
-  async function saveIndex(mode = indexMode) {
+  // 저장 실패 시 서버 진실로 되돌림(낙관적으로 바꾼 indexMode가 미저장 상태로 남지 않게).
+  function resyncIndex() {
+    getConfig().then((c) => { setCfg(c); setIndexMode((c.index_mode as IndexMode) || "interval") }).catch(() => {})
+  }
+  async function saveIndex(mode: IndexMode = indexMode) {
     setIndexMode(mode); setIndexErr("")
     try {
       const r = await putConfig({
@@ -650,10 +664,18 @@ export function SettingsView() {
         CHATMEM_INDEX_INTERVAL: String(interval),
         CHATMEM_INDEX_TIME: indexTime,
       })
-      if (!r.ok) { setIndexErr(errText(t, r, "settings.saveFailed")); return }
-    } catch (e) { setIndexErr(errText(t, e, "settings.saveFailed")); return }
+      if (!r.ok) { setIndexErr(errText(t, r, "settings.saveFailed")); resyncIndex(); return }
+    } catch (e) { setIndexErr(errText(t, e, "settings.saveFailed")); resyncIndex(); return }
     setIntervalSaved(true); setTimeout(() => setIntervalSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
+  }
+  // 색인 모드 세그먼트: 표시(선택)는 즉시, 백엔드 커밋은 디바운스 —
+  // radiogroup 화살표 이동이 키 입력마다 putConfig를 쏘지 않게(WCAG 3.2.2 컨텍스트 변경 방지).
+  const indexModeTimer = useRef<number | null>(null)
+  function onIndexModeChange(m: IndexMode) {
+    setIndexMode(m); setIndexErr("")
+    if (indexModeTimer.current) window.clearTimeout(indexModeTimer.current)
+    indexModeTimer.current = window.setTimeout(() => saveIndex(m), 400)
   }
 
   async function doReindex() {
@@ -736,7 +758,7 @@ export function SettingsView() {
                     : cfg.projects_exists
                       ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: cfg.jsonl_count })}</StatusChip>
                       : <StatusChip tone="warn"><AlertTriangle className="size-3" />{t("settings.folderMissing")}</StatusChip>}
-                  path={projectsDir} onPathChange={setProjectsDir} onSave={saveProjects} saved={projSaved}
+                  path={projectsDir} onPathChange={setProjectsDir} onSave={saveProjects} saved={projSaved} err={projErr}
                   placeholder="~/.claude/projects"
                   help={t("settings.claudeFolderHelp")}
                 />
@@ -747,7 +769,7 @@ export function SettingsView() {
                     : cfg.codex_exists
                       ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: (cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0 })}</StatusChip>
                       : <StatusChip tone="muted">{t("settings.notUsed")}</StatusChip>}
-                  path={codexDir} onPathChange={setCodexDir} onSave={saveCodex} saved={codexSaved}
+                  path={codexDir} onPathChange={setCodexDir} onSave={saveCodex} saved={codexSaved} err={codexErr}
                   placeholder="~/.codex/sessions"
                   help={t("settings.codexFolderHelp")}
                 />
@@ -933,8 +955,8 @@ export function SettingsView() {
                   <SegmentedRadioGroup
                     label={t("settings.indexMode")}
                     value={indexMode}
-                    onChange={(m) => saveIndex(m)}
-                    options={(["off", "interval", "realtime", "scheduled"] as const).map((m) => ({ value: m, label: t(`settings.indexMode_${m}`) }))}
+                    onChange={onIndexModeChange}
+                    options={INDEX_MODES.map((m) => ({ value: m, label: t(`settings.indexMode_${m}`) }))}
                   />
                 </Row>
                 {indexErr && <Row label=""><span role="alert" className="text-sm text-destructive">{indexErr}</span></Row>}

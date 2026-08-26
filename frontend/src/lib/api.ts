@@ -336,6 +336,7 @@ export async function reindex(
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+  if (!r.ok) return failure(r)   // 실제 HTTP 에러는 failure()가 detail.code/msg를 ApiError로 추출
   return r.json()
 }
 
