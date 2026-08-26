@@ -84,7 +84,7 @@ export function ChatThread({ session, focusTurn }: { session: string; focusTurn?
             <button onClick={() => setRange((r) => ({ ...r, s: Math.max(0, r.s - 50) }))}
               className="mx-auto block rounded-md border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">{t("chat.loadPrev", { count: range.s })}</button>
           )}
-          {turns.slice(range.s, range.e).map((t, j) => <Turn key={t.id} t={t} i={range.s + j} highlight={t.id === focusTurn} />)}
+          {turns.slice(range.s, range.e).map((turn, j) => <Turn key={turn.id} t={turn} i={range.s + j} highlight={turn.id === focusTurn} />)}
           {data && range.e < turns.length && (
             <button onClick={() => setRange((r) => ({ ...r, e: Math.min(turns.length, r.e + 50) }))}
               className="mx-auto block rounded-md border bg-card px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">{t("chat.loadNext", { count: turns.length - range.e })}</button>

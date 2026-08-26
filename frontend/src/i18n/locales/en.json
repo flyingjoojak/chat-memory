@@ -45,6 +45,7 @@
     "installOnQuit": "Installs automatically the next time you quit"
   },
   "statusbar": {
+    "ariaLabel": "Index and sync status",
     "indexing": "Indexing",
     "pendingNew": "{{n}} new conversation(s) pending",
     "upToDate": "Index up to date",
@@ -104,6 +105,8 @@
     "indexNewHint": "Quickly indexes only new conversations.",
     "indexNow": "Index now",
     "starting": "Starting…",
+    "saveFailed": "Couldn't save settings. Please try again.",
+    "indexRunFailed": "Couldn't start indexing. Please try again.",
     "enrichRunFailed": "Enrichment run failed",
     "sourceToggleFailed": "Couldn't toggle {{label}} — please try again in a moment",
     "needApiKey": "This backend requires an API key. Enter the key, then save.",
@@ -422,6 +425,7 @@
     "enrich_already_running": "Enrichment is already running.",
     "enrich_unavailable": "Enrichment is unavailable: {{detail}}",
     "unknown_model": "Unknown model.",
-    "reindex_already_running": "Indexing/re-indexing is already running."
+    "reindex_already_running": "Indexing/re-indexing is already running.",
+    "invalid_config_value": "Some settings had invalid values and weren't saved."
   }
 }

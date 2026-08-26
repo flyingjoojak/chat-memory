@@ -87,11 +87,8 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
     renderer.domElement.style.width = "100%"
     renderer.domElement.style.height = "100%"
     // 접근성: 캔버스가 무엇인지 스크린리더에 알림(상세는 우측 '주제 군집' 패널이 텍스트로 제공).
+    // aria-label 문구는 별도 경량 effect에서 t/data 변경 시 갱신(여기서 t를 참조하면 언어 전환마다 씬 전체 재빌드).
     renderer.domElement.setAttribute("role", "img")
-    renderer.domElement.setAttribute(
-      "aria-label",
-      t("graph.canvasAria", { count: data.points.length.toLocaleString(), clusters: data.clusters.length }),
-    )
     wrap.appendChild(renderer.domElement)
 
     // 같은 세션 점을 시간순으로 잇는 선(성좌) — 세션마다 다른 색, 흐리게. 점은 그대로(끌어당김 없음).
@@ -364,7 +361,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
       setGlow(-1)
       av.x = 0; av.y = 0
       if (e.button !== 0) e.preventDefault()
-      try { renderer.domElement.setPointerCapture(e.pointerId) } catch (_) { /* noop */ }
+      try { renderer.domElement.setPointerCapture(e.pointerId) } catch { /* noop */ }
     }
     function onMove(e: PointerEvent) {
       if (drag) {
@@ -382,7 +379,7 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
       const click = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) <= 5
       const wasRotate = drag === "rotate"
       drag = null
-      try { renderer.domElement.releasePointerCapture(e.pointerId) } catch (_) { /* noop */ }
+      try { renderer.domElement.releasePointerCapture(e.pointerId) } catch { /* noop */ }
       if (click && wasRotate) {
         const i = hitIndex(e.clientX, e.clientY)
         if (i >= 0) pointClickRef.current(pts[i].s, pts[i].t)   // 점 클릭 → 그 세션 격리+우측 대화목록
@@ -475,6 +472,13 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
 
   // 씬 재생성 없이 선 표시만 토글.
   useEffect(() => { if (linesRef.current) linesRef.current.visible = showLines }, [showLines])
+
+  // 캔버스 aria-label만 언어/데이터 변경 시 갱신(무거운 3D 씬 재빌드 없이 — 씬 effect는 [data]만 의존).
+  useEffect(() => {
+    if (!data) return
+    const canvas = wrapRef.current?.querySelector("canvas")
+    canvas?.setAttribute("aria-label", t("graph.canvasAria", { count: data.points.length.toLocaleString(), clusters: data.clusters.length }))
+  }, [t, data])
 
   const clusters = data?.clusters ?? []
   const hasData = data && data.points.length > 0
