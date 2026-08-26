@@ -205,12 +205,16 @@ async def _lifespan(app: FastAPI):
                 should = True
             elif mode == "scheduled":
                 dt = datetime.now()
+                hh, mm = 3, 0
                 try:
-                    hh, mm = (getattr(C, "INDEX_TIME", "03:00") or "03:00").split(":")
-                    hh, mm = int(hh), int(mm)
+                    _h, _m = (getattr(C, "INDEX_TIME", "03:00") or "03:00").split(":")
+                    _h, _m = int(_h), int(_m)
+                    if 0 <= _h <= 23 and 0 <= _m <= 59:   # 범위 밖("25:99")은 기본 03:00으로
+                        hh, mm = _h, _m
                 except (ValueError, AttributeError):
-                    hh, mm = 3, 0
-                if dt.hour == hh and dt.minute == mm and last_sched_day != dt.date():
+                    pass
+                # 미스드윈도우 캐치업: 예약 시각 지나 그날 아직 안 돌았으면 실행(정확 분을 놓쳐도).
+                if last_sched_day != dt.date() and (dt.hour, dt.minute) >= (hh, mm):
                     last_sched_day = dt.date()
                     should = True
             elif mode != "off":   # interval(기본)
@@ -225,7 +229,20 @@ async def _lifespan(app: FastAPI):
                 last_run = time.time()
             time.sleep(10 if mode == "realtime" else 20)
 
-    threading.Thread(target=_autoindex, daemon=True).start()
+    # OS 스케줄러(chatmem setup이 등록한 chatmem-index)와 이중 색인 방지:
+    #   - frozen(패키지 데스크톱 앱): OS 스케줄러 없음 → 웹앱이 자체 색인(INDEX_MODE 제어)
+    #   - pip + `chatmem setup`(OS 색인 태스크 등록됨): 그쪽이 색인 담당 → 인프로세스 루프 끔
+    #   - dev / --no-scheduler(OS 태스크 없음): 인프로세스 루프가 담당(INDEX_MODE 제어)
+    # 판정은 시작 시 1회만(태스크 조회 subprocess 1회) — 매 틱 비용 없음.
+    _self_index = getattr(_sys, "frozen", False)
+    if not _self_index:
+        with contextlib.suppress(Exception):
+            from . import scheduler
+            _self_index = not scheduler.index_scheduled()
+    if _self_index:
+        threading.Thread(target=_autoindex, daemon=True).start()
+    else:
+        _autoindex_state["enabled"] = False   # OS 스케줄러가 색인 담당 중
 
     # 유휴 언로더: 마지막 사용 후 IDLE_SECS 지나면 임베더를 내려 RAM 반환(상시 앱 렉 방지).
     def _idle_unloader():
@@ -936,6 +953,22 @@ def api_config_put(payload: dict):
     rejected = [k for k in raw if k not in updates]
     if not updates:
         return {"ok": True, "changed": [], "rejected": rejected}
+
+    # 값 검증: 잘못된 INDEX_MODE/INDEX_TIME이 조용히 스케줄 색인을 영영 멈추지 않게 저장 전에 거른다.
+    invalid: list[str] = []
+    _mode = updates.get("CHATMEM_INDEX_MODE")
+    if _mode not in (None, "") and _mode not in {"off", "interval", "realtime", "scheduled"}:
+        invalid.append("CHATMEM_INDEX_MODE")
+    _time = updates.get("CHATMEM_INDEX_TIME")
+    if _time not in (None, ""):
+        try:
+            _h, _m = str(_time).split(":")
+            if not (0 <= int(_h) <= 23 and 0 <= int(_m) <= 59):
+                invalid.append("CHATMEM_INDEX_TIME")
+        except (ValueError, AttributeError):
+            invalid.append("CHATMEM_INDEX_TIME")
+    if invalid:
+        return {"ok": False, "code": "invalid_config_value", "invalid": invalid, "rejected": rejected}
 
     C.write_config(updates)                       # 1) 파일 반영
     for k, v in updates.items():                  # 2) 실행 중 os.environ 반영

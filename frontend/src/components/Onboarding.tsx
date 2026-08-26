@@ -19,8 +19,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
 
   async function pick(m: EmbedModel) {
     setPicking(m.model)
-    try { await chooseModel(m.model); onDone() }
-    catch { setPicking(null) }
+    try {
+      const r = await chooseModel(m.model)
+      if (!r.ok) { setPicking(null); setErr(true); return }
+      onDone()
+    } catch { setPicking(null); setErr(true) }
   }
 
   return (
@@ -53,8 +56,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                   {m.recommended && <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">{t("onboarding.recommendedBadge")}</span>}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
-                  {m.tags.map((t) => (
-                    <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80">{t}</span>
+                  {m.tags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground/80">{tag}</span>
                   ))}
                 </div>
                 <div className="mt-1.5 text-[11.5px] text-muted-foreground tabular-nums">

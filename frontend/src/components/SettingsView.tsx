@@ -6,6 +6,7 @@ import {
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { SegmentedRadioGroup } from "@/components/ui/SegmentedRadioGroup"
 import { SchemaReportSection } from "@/components/SchemaReportSection"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -470,6 +471,7 @@ export function SettingsView() {
   const [codexSaved, setCodexSaved] = useState(false)
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
+  const [indexErr, setIndexErr] = useState("")
   const [quitState, setQuitState] = useState<"idle" | "confirm" | "done">("idle")
   const [archiveMsg, setArchiveMsg] = useState<string | null>(null)
   const [archiving, setArchiving] = useState(false)
@@ -505,7 +507,12 @@ export function SettingsView() {
 
   async function doRunIndex() {
     setIxStatus((s) => s ? { ...s, running: true, phase: t("settings.starting") } : s)
-    try { await runIndex() } catch { /* noop */ }
+    try {
+      const r = await runIndex()
+      if (r && r.ok === false) setIxStatus((s) => s ? { ...s, running: false, phase: errText(t, r, "settings.indexRunFailed") } : s)
+    } catch (e) {
+      setIxStatus((s) => s ? { ...s, running: false, phase: errText(t, e, "settings.indexRunFailed") } : s)
+    }
   }
   async function doEnrich() {
     setEnrichErr("")
@@ -598,7 +605,10 @@ export function SettingsView() {
     if (be.modelEnv && model) u[be.modelEnv] = model
     if (be.key && apiKey) u[be.key] = apiKey
     if (backend === "ollama" && ollamaUrl) u.CHATMEM_OLLAMA_URL = ollamaUrl
-    await putConfig(u)
+    try {
+      const r = await putConfig(u)
+      if (!r.ok) { setBlockMsg(errText(t, r, "settings.saveFailed")); return }
+    } catch (e) { setBlockMsg(errText(t, e, "settings.saveFailed")); return }
     setApiKey(""); setVerify(null); setBlockMsg(""); setSaved(true); setTimeout(() => setSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
@@ -615,24 +625,33 @@ export function SettingsView() {
   }
 
   async function saveProjects() {
-    await putConfig({ CLAUDE_PROJECTS_DIR: projectsDir })
+    try {
+      const r = await putConfig({ CLAUDE_PROJECTS_DIR: projectsDir })
+      if (!r.ok) return
+    } catch { return }
     setProjSaved(true); setTimeout(() => setProjSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
 
   async function saveCodex() {
-    await putConfig({ CODEX_SESSIONS_DIR: codexDir })
+    try {
+      const r = await putConfig({ CODEX_SESSIONS_DIR: codexDir })
+      if (!r.ok) return
+    } catch { return }
     setCodexSaved(true); setTimeout(() => setCodexSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
 
   async function saveIndex(mode = indexMode) {
-    setIndexMode(mode)
-    await putConfig({
-      CHATMEM_INDEX_MODE: mode,
-      CHATMEM_INDEX_INTERVAL: String(interval),
-      CHATMEM_INDEX_TIME: indexTime,
-    })
+    setIndexMode(mode); setIndexErr("")
+    try {
+      const r = await putConfig({
+        CHATMEM_INDEX_MODE: mode,
+        CHATMEM_INDEX_INTERVAL: String(interval),
+        CHATMEM_INDEX_TIME: indexTime,
+      })
+      if (!r.ok) { setIndexErr(errText(t, r, "settings.saveFailed")); return }
+    } catch (e) { setIndexErr(errText(t, e, "settings.saveFailed")); return }
     setIntervalSaved(true); setTimeout(() => setIntervalSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
@@ -692,24 +711,20 @@ export function SettingsView() {
             <>
               <Section title={t("settings.appearance")}>
                 <Row label={t("settings.theme")}>
-                  <div className="inline-flex overflow-hidden rounded-lg border">
-                    {themes.map((th) => (
-                      <button key={th.v} onClick={() => { setMode(th.v); setThemeMode(th.v) }}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${mode === th.v ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
-                        {th.icon}{t(th.labelKey)}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedRadioGroup
+                    label={t("settings.theme")}
+                    value={mode}
+                    onChange={(v) => { setMode(v); setThemeMode(v) }}
+                    options={themes.map((th) => ({ value: th.v, label: <>{th.icon}{t(th.labelKey)}</> }))}
+                  />
                 </Row>
                 <Row label={t("settings.language")}>
-                  <div className="inline-flex overflow-hidden rounded-lg border">
-                    {langs.map((l) => (
-                      <button key={l} onClick={() => { setLang(l); setLangState(l) }}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors ${lang === l ? "bg-primary/10 text-primary font-semibold" : "text-muted-foreground hover:text-foreground"}`}>
-                        {l === "ko" ? t("settings.langKo") : t("settings.langEn")}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedRadioGroup
+                    label={t("settings.language")}
+                    value={lang}
+                    onChange={(v) => { setLang(v); setLangState(v) }}
+                    options={langs.map((l) => ({ value: l, label: l === "ko" ? t("settings.langKo") : t("settings.langEn") }))}
+                  />
                 </Row>
               </Section>
 
@@ -915,16 +930,14 @@ export function SettingsView() {
             <>
               <Section title={t("settings.incrementalIndex")}>
                 <Row label={t("settings.indexMode")}>
-                  <div className="inline-flex overflow-hidden rounded-lg border">
-                    {(["off", "interval", "realtime", "scheduled"] as const).map((m) => (
-                      <button key={m} type="button" onClick={() => saveIndex(m)}
-                        aria-pressed={indexMode === m}
-                        className={`px-2.5 py-1.5 text-xs transition-colors ${indexMode === m ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-                        {t(`settings.indexMode_${m}`)}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentedRadioGroup
+                    label={t("settings.indexMode")}
+                    value={indexMode}
+                    onChange={(m) => saveIndex(m)}
+                    options={(["off", "interval", "realtime", "scheduled"] as const).map((m) => ({ value: m, label: t(`settings.indexMode_${m}`) }))}
+                  />
                 </Row>
+                {indexErr && <Row label=""><span role="alert" className="text-sm text-destructive">{indexErr}</span></Row>}
                 {indexMode === "interval" && (
                   <Row label={t("settings.indexInterval")}>
                     <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label={t("settings.indexInterval")}

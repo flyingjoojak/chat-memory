@@ -244,3 +244,19 @@ def uninstall(dry_run: bool = False) -> list[str]:
 def status() -> str:
     return {"windows": _win_status, "macos": _mac_status,
             "linux": _linux_status}[_platform()]()
+
+
+def index_scheduled() -> bool:
+    """OS 레벨 색인 태스크(chatmem-index)가 등록돼 있는지 값싸게 확인.
+    웹앱의 인프로세스 자동 색인 루프가 이 태스크와 이중으로 돌지 않게 판정하는 용도."""
+    plat = _platform()
+    try:
+        if plat == "windows":
+            r = subprocess.run(["schtasks", "/Query", "/TN", _WIN_INDEX],
+                               capture_output=True, text=True)
+            return r.returncode == 0
+        if plat == "macos":
+            return (_mac_dir() / "com.chatmem.index.plist").exists()
+        return _CRON_BEGIN in _cron_current()   # linux: 관리블록 존재 = index/sync cron 등록됨
+    except Exception:
+        return False   # 확인 실패 시 인프로세스 루프가 담당(색인이 아예 안 도는 것보다 안전)

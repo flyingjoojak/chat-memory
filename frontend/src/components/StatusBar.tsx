@@ -43,7 +43,7 @@ export function StatusBar() {
   const n = (v?: number) => (v ?? 0).toLocaleString()
 
   return (
-    <footer className="fixed inset-x-0 bottom-0 z-20 flex h-7 items-center gap-x-3 overflow-hidden border-t bg-sidebar px-3 text-[11px] text-muted-foreground tabular-nums">
+    <footer aria-label={t("statusbar.ariaLabel")} className="fixed inset-x-0 bottom-0 z-20 flex h-7 items-center gap-x-3 overflow-hidden border-t bg-sidebar px-3 text-[11px] text-muted-foreground tabular-nums">
       {/* 왼쪽: 색인 활동 — 공간 부족 시 이쪽(서술 텍스트)만 truncate(오른쪽 통계는 온전히 유지) */}
       {ix?.running
         ? <span className="inline-flex min-w-0 shrink items-center gap-1 truncate text-foreground/80"><Loader2 className="size-3 shrink-0 animate-spin" />{t("statusbar.indexing")}</span>
@@ -57,7 +57,7 @@ export function StatusBar() {
         <span>{t("statusbar.vectors", { n: n(stats?.vectors) })}</span>
         <span>{t("statusbar.enriched", { n: n(stats?.enriched) })}</span>
         <span className="opacity-30">·</span>
-        <span className={`inline-flex items-center gap-1.5 ${sync.tone}`}>
+        <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 ${sync.tone}`}>
           <span className={`size-2 rounded-full ${sync.dot}`} />{sync.text}
         </span>
       </span>

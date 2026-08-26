@@ -44,6 +44,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   const [until, setUntil] = useState("")
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [searching, setSearching] = useState(false)
+  const [searchErr, setSearchErr] = useState("")
   const [copied, setCopied] = useState(false)
   const [opening, setOpening] = useState(false)
   const [resumeMsg, setResumeMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -137,7 +138,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
         })))
       }).catch(() => setGroupsErr(true))
     }
-  }, [kind])
+  }, [kind, t])
   useEffect(() => { loadGroups() }, [loadGroups])
 
   // 선택 그룹의 대화 목록
@@ -161,15 +162,17 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   async function runSearch(v = q, m = mode) {
     setQ(v)
     const term = v.trim()
-    if (!term) { setHits(null); return }
-    setSearching(true)
+    if (!term) { setHits(null); setSearchErr(""); return }
+    setSearching(true); setSearchErr("")
     try {
       if (kind === "sessions") {
         const r = await search({ q: term, k: 20, session: sel!, mode: m, since: since || undefined, until: until || undefined })
+        if (r.code || r.error) { setHits([]); setSearchErr(errText(t, r, "browse.noResults")); return }
         const list = r.hits || []; setHits(list)
         if (list.length) setSelTurn({ session: sel!, turn: list[0].id })
       } else {
         const r = await search({ q: term, k: 100, mode: m, since: since || undefined, until: until || undefined })
+        if (r.code || r.error) { setHits([]); setSearchErr(errText(t, r, "browse.noResults")); return }
         const list = (r.hits || []).filter((h) => convSet.has(h.id)); setHits(list)
         if (list.length) setSelTurn({ session: list[0].session_full, turn: list[0].id })
       }
@@ -304,7 +307,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
           {!convs && <div className="grid h-full place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
           {hits !== null ? (
             <>
-              {!searching && hits.length === 0 && <div className="py-6 text-center text-muted-foreground">{t("browse.noResults")}</div>}
+              {!searching && hits.length === 0 && <div className={`py-6 text-center ${searchErr ? "text-destructive" : "text-muted-foreground"}`}>{searchErr || t("browse.noResults")}</div>}
               {hits.map((h) => (
                 <button key={h.id} onClick={() => setSelTurn({ session: h.session_full, turn: h.id })}
                   className={`cm-cv-row w-full rounded-lg border p-2.5 text-left transition-colors ${selTurn?.turn === h.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>

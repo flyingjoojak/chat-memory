@@ -8,6 +8,7 @@ import { SourceFilter } from "./SourceFilter"
 import { getSources, search, type SearchMode, type SourceOption } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
 import { sourceLabel } from "@/lib/source"
+import { errText } from "@/lib/errors"
 import type { Hit } from "@/lib/types"
 
 // 날짜 input 클릭 시 네이티브 달력을 강제로 연다(웹뷰에서 안 뜨는 문제 대응).
@@ -31,6 +32,7 @@ export function SearchView() {
   const [until, setUntil] = useState("")
   const [hits, setHits] = useState<Hit[]>([])
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle")
+  const [searchErr, setSearchErr] = useState("")
   // 선택한 결과 → 오른쪽 채팅 스레드로 표시(열고닫기 없이 클릭 전환).
   const [sel, setSel] = useState<{ session: string; turn: string } | null>(null)
   // 검색 소스 필터: 데이터 있는 출처만 목록에 뜬다(1종뿐이면 필터 자체를 숨김).
@@ -65,12 +67,15 @@ export function SearchView() {
     try {
       const r = await search({ q: term, k, mode: m, since: since || undefined, until: until || undefined, sources: sourcesParam(selSet) })
       if (myId !== reqId.current) return   // 더 새 요청이 진행 중 → 이 응답 폐기
+      if (r.code || r.error) {   // 200이지만 실패를 알림(예: no_embed_model) → '결과 없음'과 구분
+        setHits([]); setSearchErr(errText(t, r, "search.errorTitle")); setState("error"); setSel(null); return
+      }
       const list = r.hits || []
-      setHits(list); setState("done")
+      setHits(list); setSearchErr(""); setState("done")
       setSel(list.length ? { session: list[0].session_full, turn: list[0].id } : null)   // 첫 결과 자동 선택
     } catch {
       if (myId !== reqId.current) return
-      setHits([]); setState("error"); setSel(null)   // 실패는 '결과 없음'과 구분
+      setHits([]); setSearchErr(""); setState("error"); setSel(null)   // 실패는 '결과 없음'과 구분
     }
   }
   function pick(e: string) { setQ(e); run(e) }
@@ -148,8 +153,8 @@ export function SearchView() {
           {state === "error" && (
             <div className="py-12 text-center text-sm">
               <div className="mb-2 text-3xl">⚠️</div>
-              <div className="text-destructive">{t("search.errorTitle")}</div>
-              <div className="mt-1 text-muted-foreground">{t("search.errorHint")}</div>
+              <div className="text-destructive">{searchErr || t("search.errorTitle")}</div>
+              {!searchErr && <div className="mt-1 text-muted-foreground">{t("search.errorHint")}</div>}
               <button onClick={() => run()} className="mt-3 rounded-lg border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">{t("common.retry")}</button>
             </div>
           )}

@@ -20,6 +20,7 @@ export interface SearchResult {
   count: number
   hits: Hit[]
   error?: string
+  code?: string   // 검색이 200으로 실패를 알릴 때(예: no_embed_model) — errText로 표시
 }
 
 export interface SessionTurn {

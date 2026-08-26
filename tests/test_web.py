@@ -20,6 +20,19 @@ def test_index_returns_response():
     assert web.index() is not None
 
 
+def test_config_put_rejects_invalid_index_values():
+    # 잘못된 INDEX_MODE/INDEX_TIME은 저장(write_config) 전에 거부돼야 한다(조용히 스케줄 색인이 멈추지 않게).
+    r1 = web.api_config_put({"CHATMEM_INDEX_MODE": "bogus"})
+    assert r1["ok"] is False and r1["code"] == "invalid_config_value"
+    assert "CHATMEM_INDEX_MODE" in r1["invalid"]
+
+    r2 = web.api_config_put({"CHATMEM_INDEX_TIME": "25:99"})
+    assert r2["ok"] is False and "CHATMEM_INDEX_TIME" in r2["invalid"]
+
+    r3 = web.api_config_put({"CHATMEM_INDEX_TIME": "9"})   # 콜론 없음
+    assert r3["ok"] is False and "CHATMEM_INDEX_TIME" in r3["invalid"]
+
+
 def test_hit_to_dict_shape():
     from chatmem.models import Action, Turn
 

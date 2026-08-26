@@ -245,7 +245,7 @@ export async function toggleSource(source: string, enabled: boolean): Promise<{ 
   return r.json()
 }
 
-export async function putConfig(updates: Record<string, string>): Promise<{ ok: boolean; rescheduled?: boolean }> {
+export async function putConfig(updates: Record<string, string>): Promise<{ ok: boolean; rescheduled?: boolean; code?: string; invalid?: string[] }> {
   const r = await fetch(`/api/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
