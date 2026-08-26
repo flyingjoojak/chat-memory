@@ -3,7 +3,7 @@
 // 백엔드가 React 프론트를 / 에서 서빙하므로 창은 http://127.0.0.1:<port>/ 만 로드.
 // 셸이 담당: 단일 인스턴스 · 동적 포트 · 크래시 자동 재시작 · 트레이 · 로그 캡처 · 자동 업데이트.
 
-const { app, BrowserWindow, Tray, Menu, shell, nativeImage, nativeTheme, ipcMain } = require("electron")
+const { app, BrowserWindow, Tray, Menu, shell, nativeImage, nativeTheme, ipcMain, session } = require("electron")
 const { spawn } = require("child_process")
 const net = require("net")
 const http = require("http")
@@ -338,8 +338,26 @@ function setupAutoUpdate() {
   au.checkForUpdates().catch(() => { /* 오프라인·피드 없음 — 조용히 */ })
 }
 
+// 업데이트 시 캐시 자동 청소: 앱 버전이 바뀌면(=업데이트됨) HTTP/코드 캐시를 1회 비운다.
+// 백엔드 번들의 청크 해시가 바뀌므로, 캐시된 옛 index.html이 사라진 청크를 import하는
+// "Failed to fetch dynamically imported module"를 원천 차단(사용자가 수동으로 캐시 지울 필요 없음).
+async function clearCacheOnUpgrade() {
+  try {
+    const verFile = path.join(app.getPath("userData"), ".app-version")
+    const cur = app.getVersion()
+    let prev = null
+    try { prev = fs.readFileSync(verFile, "utf-8").trim() } catch (_) { /* 최초 실행 */ }
+    if (prev !== cur) {
+      await session.defaultSession.clearCache()
+      try { await session.defaultSession.clearCodeCaches({}) } catch (_) { /* 구버전 미지원 */ }
+      try { fs.writeFileSync(verFile, cur) } catch (_) { /* 쓰기 실패해도 다음 실행에 재시도 */ }
+    }
+  } catch (_) { /* 캐시 청소 실패해도 앱 기동은 계속 */ }
+}
+
 async function start() {
   port = await findFreePort()
+  await clearCacheOnUpgrade()
   createWindow()
   createTray()
   bootAndLoad()
