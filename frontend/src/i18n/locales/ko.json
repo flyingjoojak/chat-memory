@@ -47,7 +47,7 @@
   "statusbar": {
     "ariaLabel": "색인·동기화 상태",
     "indexing": "색인 중",
-    "pendingNew": "새 대화 {{n}}개 대기",
+    "pendingNew": "색인 대기 {{n}}개",
     "upToDate": "색인 최신",
     "sessions": "세션 {{n}}",
     "turns": "턴 {{n}}",
@@ -60,7 +60,7 @@
     "syncReceiving": "받는 중 {{pct}}%",
     "syncSending": "전송 중 {{pct}}%",
     "syncLatestPeerOff": "최신(상대 미연결)",
-    "syncBothLatest": "양쪽 최신"
+    "syncBothLatest": "동기화 최신"
   },
   "settings": {
     "title": "설정",
