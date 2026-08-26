@@ -168,7 +168,9 @@ def _run_incremental(quick: bool = False) -> bool:
         _autoindex_state.update(running=False, phase=done_msg, done_chunks=0, total_chunks=0)
         return True
     except Exception as ex:                       # 한 번의 오류로 죽지 않게
-        _last_full_sweep[0] = 0.0                  # 실패 시 다음 tick에서 스윕 재시도(성공 시에만 주기 리셋)
+        # 실패 시 재시도는 ~_QUICK_HEAVY_MIN_SECS(60s) 뒤로 미룬다(0으로 리셋하면 sweep_due가
+        # 즉시 True가 되어 heavy_due 스로틀을 우회 → realtime에서 10초마다 재시도 스톰).
+        _last_full_sweep[0] = _time.time() - _FULL_SWEEP_SECS + _QUICK_HEAVY_MIN_SECS
         _autoindex_state.update(running=False, phase="오류", last_error=str(ex))
         return True
     finally:

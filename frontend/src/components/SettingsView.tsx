@@ -494,6 +494,7 @@ export function SettingsView() {
   const [enrichSt, setEnrichSt] = useState<EnrichStatus | null>(null)   // 정제 상태
   const [enrichErr, setEnrichErr] = useState("")
   const poll = useRef<number | null>(null)
+  const indexModeTimer = useRef<number | null>(null)   // 색인 모드 세그먼트 디바운스 커밋 타이머
 
   // 색인·정제 상태 폴링(진행 표시 + 버튼 비활성).
   useEffect(() => {
@@ -656,26 +657,31 @@ export function SettingsView() {
   function resyncIndex() {
     getConfig().then((c) => { setCfg(c); setIndexMode((c.index_mode as IndexMode) || "interval") }).catch(() => {})
   }
-  async function saveIndex(mode: IndexMode = indexMode) {
-    setIndexMode(mode); setIndexErr("")
+  function clearIndexTimer() {
+    if (indexModeTimer.current) { window.clearTimeout(indexModeTimer.current); indexModeTimer.current = null }
+  }
+  async function commitIndex(updates: Record<string, string>) {
+    setIndexErr("")
     try {
-      const r = await putConfig({
-        CHATMEM_INDEX_MODE: mode,
-        CHATMEM_INDEX_INTERVAL: String(interval),
-        CHATMEM_INDEX_TIME: indexTime,
-      })
+      const r = await putConfig(updates)
       if (!r.ok) { setIndexErr(errText(t, r, "settings.saveFailed")); resyncIndex(); return }
     } catch (e) { setIndexErr(errText(t, e, "settings.saveFailed")); resyncIndex(); return }
     setIntervalSaved(true); setTimeout(() => setIntervalSaved(false), 1800)
     getConfig().then(setCfg).catch(() => {})
   }
+  // interval/time "저장" 버튼용: 세 값 함께 저장. 대기 중인 디바운스 커밋은 취소(중복 방지).
+  async function saveIndex(mode: IndexMode = indexMode) {
+    clearIndexTimer()
+    setIndexMode(mode)
+    await commitIndex({ CHATMEM_INDEX_MODE: mode, CHATMEM_INDEX_INTERVAL: String(interval), CHATMEM_INDEX_TIME: indexTime })
+  }
   // 색인 모드 세그먼트: 표시(선택)는 즉시, 백엔드 커밋은 디바운스 —
-  // radiogroup 화살표 이동이 키 입력마다 putConfig를 쏘지 않게(WCAG 3.2.2 컨텍스트 변경 방지).
-  const indexModeTimer = useRef<number | null>(null)
+  // radiogroup 화살표 이동이 키 입력마다 putConfig를 쏘지 않게(WCAG 3.2.2). 모드만 저장해
+  // interval/time을 stale 값으로 덮어쓰지 않게 한다(각 필드는 자기 저장 버튼이 담당).
   function onIndexModeChange(m: IndexMode) {
     setIndexMode(m); setIndexErr("")
-    if (indexModeTimer.current) window.clearTimeout(indexModeTimer.current)
-    indexModeTimer.current = window.setTimeout(() => saveIndex(m), 400)
+    clearIndexTimer()
+    indexModeTimer.current = window.setTimeout(() => { indexModeTimer.current = null; commitIndex({ CHATMEM_INDEX_MODE: m }) }, 400)
   }
 
   async function doReindex() {
@@ -959,7 +965,7 @@ export function SettingsView() {
                     options={INDEX_MODES.map((m) => ({ value: m, label: t(`settings.indexMode_${m}`) }))}
                   />
                 </Row>
-                {indexErr && <Row label=""><span role="alert" className="text-sm text-destructive">{indexErr}</span></Row>}
+                {indexErr && <Row label=""><span aria-live="polite" className="text-sm text-destructive">{indexErr}</span></Row>}
                 {indexMode === "interval" && (
                   <Row label={t("settings.indexInterval")}>
                     <Input type="number" min={1} value={interval} onChange={(e) => setIntervalMin(+e.target.value)} aria-label={t("settings.indexInterval")}
