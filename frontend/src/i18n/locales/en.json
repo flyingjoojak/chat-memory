@@ -47,7 +47,7 @@
   "statusbar": {
     "ariaLabel": "Index and sync status",
     "indexing": "Indexing",
-    "pendingNew": "{{n}} new conversation(s) pending",
+    "pendingNew": "{{n}} to index",
     "upToDate": "Index up to date",
     "sessions": "{{n}} sessions",
     "turns": "{{n}} turns",
@@ -60,7 +60,7 @@
     "syncReceiving": "Receiving {{pct}}%",
     "syncSending": "Sending {{pct}}%",
     "syncLatestPeerOff": "Up to date (peer offline)",
-    "syncBothLatest": "Both up to date"
+    "syncBothLatest": "Sync up to date"
   },
   "settings": {
     "title": "Settings",
