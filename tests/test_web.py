@@ -20,6 +20,13 @@ def test_index_returns_response():
     assert web.index() is not None
 
 
+def test_index_html_no_store():
+    # index.html은 no-store로 서빙돼야 한다(업데이트로 청크 해시가 바뀌어도 캐시된 옛 엔트리가
+    # 사라진 청크를 import하는 "Failed to fetch dynamically imported module" 방지).
+    resp = web.index()
+    assert "no-store" in resp.headers.get("cache-control", "").lower()
+
+
 def test_config_put_rejects_invalid_index_values():
     # 잘못된 INDEX_MODE/INDEX_TIME은 저장(write_config) 전에 거부돼야 한다(조용히 스케줄 색인이 멈추지 않게).
     r1 = web.api_config_put({"CHATMEM_INDEX_MODE": "bogus"})
