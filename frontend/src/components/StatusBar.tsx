@@ -6,6 +6,17 @@ import { getIndexStatus, getStats, getSyncthingStatus, type IndexStatus, type Sy
 import type { Stats } from "@/lib/types"
 
 // 하단 상태바(옵시디언식): 설정에 안 들어가도 저장소 현황·색인·동기화를 한눈에.
+// 색인은 필수 기능이라 오른쪽에 색상으로 표시하고, 동기화(옵션)는 켜졌을 때만 그 옆에 붙인다.
+function indexLabel(
+  ix: IndexStatus | null, pending: number, t: TFunction,
+): { text: string; dot: string; tone: string; spin: boolean } {
+  if (ix?.running)
+    return { text: t("statusbar.indexing"), dot: "bg-sky-500", tone: "text-sky-600 dark:text-sky-400", spin: true }
+  if (pending > 0)
+    return { text: t("statusbar.pendingNew", { n: pending }), dot: "bg-amber-500", tone: "text-amber-600 dark:text-amber-500", spin: false }
+  return { text: t("statusbar.upToDate"), dot: "bg-emerald-500", tone: "text-emerald-600 dark:text-emerald-400", spin: false }
+}
+
 function syncLabel(st: SyncthingStatus | null, t: TFunction): { text: string; dot: string; tone: string } {
   const g = "text-muted-foreground"
   if (!st || !st.running) return { text: t("statusbar.syncOff"), dot: "bg-muted-foreground/40", tone: g }
@@ -39,27 +50,36 @@ export function StatusBar() {
   }, [])
 
   const pending = ix?.pending?.files ?? 0
+  const idx = indexLabel(ix, pending, t)
   const sync = syncLabel(st, t)
+  const syncOn = !!st?.running   // 동기화는 켠 사람에게만 표시(옵션 기능)
   const n = (v?: number) => (v ?? 0).toLocaleString()
 
   return (
     <footer aria-label={t("statusbar.ariaLabel")} className="fixed inset-x-0 bottom-0 z-20 flex h-7 items-center gap-x-3 overflow-hidden border-t bg-sidebar px-3 text-[11px] text-muted-foreground tabular-nums">
-      {/* 왼쪽: 색인 활동 — 공간 부족 시 이쪽(서술 텍스트)만 truncate(오른쪽 통계는 온전히 유지) */}
-      {ix?.running
-        ? <span className="inline-flex min-w-0 shrink items-center gap-1 truncate text-foreground/80"><Loader2 className="size-3 shrink-0 animate-spin" />{t("statusbar.indexing")}</span>
-        : pending > 0
-          ? <span className="min-w-0 shrink truncate text-foreground/80">{t("statusbar.pendingNew", { n: pending })}</span>
-          : <span className="min-w-0 shrink truncate">{t("statusbar.upToDate")}</span>}
-      {/* 오른쪽: 저장소 현황 + 동기화 상태 — nowrap+shrink-0으로 항상 한 줄에 온전히(고정 h-7에서 2번째 줄 잘림 방지) */}
-      <span className="ml-auto flex shrink-0 items-center gap-x-3 whitespace-nowrap">
+      {/* 왼쪽: 저장소 현황 — 공간 부족 시 이쪽만 truncate(오른쪽 색인/동기화 상태는 온전히 유지) */}
+      <span className="flex min-w-0 shrink items-center gap-x-3 truncate">
         <span>{t("statusbar.sessions", { n: n(stats?.sessions) })}</span>
         <span>{t("statusbar.turns", { n: n(stats?.turns) })}</span>
         <span>{t("statusbar.vectors", { n: n(stats?.vectors) })}</span>
         <span>{t("statusbar.enriched", { n: n(stats?.enriched) })}</span>
-        <span className="opacity-30">·</span>
-        <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 ${sync.tone}`}>
-          <span className={`size-2 rounded-full ${sync.dot}`} />{sync.text}
+      </span>
+      {/* 오른쪽: 색인 상태(필수·색상) + 동기화 상태(옵션, 켜졌을 때만) — 항상 한 줄에 온전히 */}
+      <span className="ml-auto flex shrink-0 items-center gap-x-3 whitespace-nowrap">
+        <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 font-medium ${idx.tone}`}>
+          {idx.spin
+            ? <Loader2 className="size-3 shrink-0 animate-spin" />
+            : <span className={`size-2 rounded-full ${idx.dot}`} />}
+          {idx.text}
         </span>
+        {syncOn && (
+          <>
+            <span className="opacity-30">·</span>
+            <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 ${sync.tone}`}>
+              <span className={`size-2 rounded-full ${sync.dot}`} />{sync.text}
+            </span>
+          </>
+        )}
       </span>
     </footer>
   )
