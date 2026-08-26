@@ -10,20 +10,21 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [ramGb, setRamGb] = useState<number | null>(null)   // 기기 총 RAM(권장 근거 표시)
   const [picking, setPicking] = useState<string | null>(null)
   const [err, setErr] = useState(false)   // 목록 로드 실패(백엔드 미기동 등) — 막다른 길 대신 재시도 노출
+  const [pickErr, setPickErr] = useState(false)   // 모델 선택 실패 — 목록은 유지하고 인라인 안내(재선택 가능)
 
   function load() {
-    setErr(false); setModels(null)
+    setErr(false); setPickErr(false); setModels(null)
     getEmbedModels().then((r) => { setModels(r.models); setRamGb(r.ram_total_gb) }).catch(() => setErr(true))
   }
   useEffect(() => { load() }, [])
 
   async function pick(m: EmbedModel) {
-    setPicking(m.model)
+    setPicking(m.model); setPickErr(false)
     try {
       const r = await chooseModel(m.model)
-      if (!r.ok) { setPicking(null); setErr(true); return }
+      if (!r.ok) { setPicking(null); setPickErr(true); return }
       onDone()
-    } catch { setPicking(null); setErr(true) }
+    } catch { setPicking(null); setPickErr(true) }
   }
 
   return (
@@ -44,6 +45,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           )}
           {!models && !err && (
             <div className="grid h-32 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>
+          )}
+          {pickErr && (
+            <div role="alert" className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              <AlertTriangle className="size-4 shrink-0" />{t("onboarding.pickFailed")}
+            </div>
           )}
           {models?.map((m) => (
             <button key={m.model} type="button" disabled={!!picking} onClick={() => pick(m)}

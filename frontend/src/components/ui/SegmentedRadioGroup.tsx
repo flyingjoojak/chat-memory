@@ -22,6 +22,8 @@ export function SegmentedRadioGroup<T extends string>({ label, value, options, o
     let j = -1
     if (e.key === "ArrowRight" || e.key === "ArrowDown") j = (i + 1) % n
     else if (e.key === "ArrowLeft" || e.key === "ArrowUp") j = (i - 1 + n) % n
+    else if (e.key === "Home") j = 0
+    else if (e.key === "End") j = n - 1
     if (j >= 0) {
       e.preventDefault()
       onChange(options[j].value)
@@ -43,7 +45,7 @@ export function SegmentedRadioGroup<T extends string>({ label, value, options, o
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(o.value)}
             onKeyDown={(e) => handleKeyDown(e, i)}
-            className={`flex items-center gap-1 px-3 py-1.5 text-xs transition-colors ${active ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 ${active ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}
           >
             {o.label}
           </button>
