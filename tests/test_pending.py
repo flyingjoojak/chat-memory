@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import os
+import time
+
 from chatmem.indexer import count_pending, iter_jsonl
 
 
@@ -60,3 +64,36 @@ def test_count_pending_ignores_stversions(tmp_path):
     (stv / "backup.jsonl").write_bytes(b"x" * 100)    # 버전 백업 — 세면 안 됨
     r = count_pending(_FakeDB({}), tmp_path)
     assert r == {"new_sessions": 1, "updated_sessions": 0, "files": 1}
+
+
+def _write_turns(path, n: int) -> str:
+    """실제 Claude Code JSONL 포맷(테스트 픽스처와 동일) n턴 작성."""
+    lines = []
+    for i in range(n):
+        lines.append(json.dumps({
+            "type": "user", "uuid": f"u{i}", "parentUuid": None, "sessionId": "s1",
+            "cwd": "C:/p", "timestamp": f"2026-08-26T00:0{i}:00Z",
+            "message": {"role": "user", "content": f"질문 {i}"},
+        }))
+        lines.append(json.dumps({
+            "type": "assistant", "sessionId": "s1",
+            "message": {"role": "assistant", "content": [{"type": "text", "text": f"답 {i}"}]},
+        }))
+    path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+    return str(path)
+
+
+def test_active_session_single_inprogress_turn_not_pending(tmp_path):
+    # 활성(방금 수정) 세션에 진행 중 턴 하나뿐 → index_file이 홀드백 → 지금 색인 대상 아님 → 대기 아님(최신).
+    f = _write_turns(tmp_path / "s1.jsonl", 1)
+    assert count_pending(_FakeDB({}), tmp_path)["files"] == 0
+    # 같은 파일이 idle(오래 전 수정)이면 전량 색인 대상 → 대기 1.
+    old = time.time() - 10 * 60
+    os.utime(f, (old, old))
+    assert count_pending(_FakeDB({}), tmp_path)["files"] == 1
+
+
+def test_active_session_completed_turn_is_pending(tmp_path):
+    # 활성 세션에 완결 턴 + 진행 중 턴 → 완결 턴은 지금 색인 가능 → 대기 1.
+    _write_turns(tmp_path / "s2.jsonl", 2)
+    assert count_pending(_FakeDB({}), tmp_path)["files"] == 1

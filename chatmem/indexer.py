@@ -67,20 +67,49 @@ def has_new_data(db, projects_dir: str | Path | None = None) -> bool:
     return False
 
 
-def count_pending(db, projects_dir: str | Path | None = None) -> dict:
-    """값싼 대기 집계(모델 로드 없이 stat+커서 비교만). 활성 소스 전체 합산.
+def _held_back_only(adapter, path: str, offset: int) -> bool:
+    """커서 이후 남은 내용이 '진행 중인 마지막 턴 하나뿐'이면 True.
+    index_file은 활성(비-idle) 파일의 마지막 턴을 IDLE_SECS까지 홀드백하므로, 그 턴만 남은
+    경우 지금은 색인할 게 없다 → UI에서 "대기"로 세면 안 됨(색인 눌러도 안 사라져 혼란).
+    파싱 실패/불명확하면 False(=대기로 유지, 실제 대기를 놓치지 않게 보수적)."""
+    try:
+        recs = list(adapter.read_records(path, offset))
+    except Exception:  # noqa: BLE001 — 파싱 불가 파일은 바이트 기반 판정으로 폴백
+        return False
+    if not recs:
+        return False
+    last_up = None
+    for i, (obj, _end) in enumerate(recs):
+        if adapter.is_turn_start(obj):
+            last_up = i
+    # last_up>=1 이면 마지막 턴 앞에 완결 턴이 있어 지금 색인 가능 → 홀드백-only 아님.
+    # last_up==0 이면 커서 이후 turn-start가 진행 중 턴 하나뿐 → 홀드백-only.
+    return last_up == 0
+
+
+def count_pending(
+    db, projects_dir: str | Path | None = None, idle_secs: int = IDLE_SECS,
+) -> dict:
+    """대기(새 대화) 집계. 활성 소스 전체 합산. JSONL 파일 1개 = 세션(대화) 1개.
 
     반환: {"new_sessions": 아직 한 번도 색인 안 된 파일 수, "updated_sessions": 이어져 새
-    내용이 생긴 파일 수, "files": 새 바이트가 있는 파일 총수}. JSONL 파일 1개 = 세션(대화) 1개.
-    """
+    내용이 생긴 파일 수, "files": 지금 색인 가능한 파일 총수}.
+
+    활성 세션(최근 수정)의 마지막(진행 중) 턴은 index_file이 홀드백하므로, 그 턴만 남은
+    파일은 대기로 세지 않는다 → 증분 색인 직후 "최신"이 정확히 표시됨."""
     new = updated = 0
-    for _adapter, p in _iter_all(projects_dir):
+    now = time.time()
+    for adapter, p in _iter_all(projects_dir):
         try:
-            size = p.stat().st_size
+            stt = p.stat()
+            size, mtime = stt.st_size, stt.st_mtime
         except OSError:
             continue
         offset, _, _ = db.get_cursor(str(p))
         if size <= offset:
+            continue
+        # 활성(비-idle) 파일에서 남은 게 진행 중 턴 하나뿐이면 지금 색인 대상 아님 → 제외.
+        if (now - mtime) <= idle_secs and _held_back_only(adapter, str(p), offset):
             continue
         if offset == 0:
             new += 1
