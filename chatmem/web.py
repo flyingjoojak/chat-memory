@@ -1492,9 +1492,13 @@ def api_stats():
 @app.get("/")
 def index():
     # 빌드된 React 앱이 있으면 그것을, 없으면 기존 인라인 HTML을 서빙.
+    # index.html은 절대 캐시하지 않는다: 앱 업데이트로 청크 해시가 바뀌면 캐시된 옛 index가
+    # 사라진 청크를 동적 import → "Failed to fetch dynamically imported module". 엔트리는 항상
+    # 최신을 받게 하고, 해시된 /assets/* 만 캐시 가능(내용 해시라 불변).
+    _no_store = {"Cache-Control": "no-store, must-revalidate"}
     if (_DIST / "index.html").exists():
-        return FileResponse(str(_DIST / "index.html"))
-    return HTMLResponse(_HTML)
+        return FileResponse(str(_DIST / "index.html"), headers=_no_store)
+    return HTMLResponse(_HTML, headers=_no_store)
 
 
 _HTML = r"""<!doctype html>
