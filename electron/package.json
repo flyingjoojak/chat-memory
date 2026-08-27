@@ -26,7 +26,7 @@
       { "from": "../dist/chatmem-backend", "to": "backend" }
     ],
     "win": { "target": ["nsis", "zip"], "icon": "icon.png" },
-    "nsis": { "installerLanguages": ["en_US"] },
+    "nsis": { "installerLanguages": ["en_US"], "include": "installer.nsh" },
     "mac": { "target": "dmg", "category": "public.app-category.productivity", "icon": "icon.png" },
     "linux": { "target": "AppImage", "category": "Utility", "icon": "icon.png" },
     "publish": [
