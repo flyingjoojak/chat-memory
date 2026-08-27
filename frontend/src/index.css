@@ -190,8 +190,8 @@
 .cm-pt { animation: cm-pop .5s ease-out both }
 @media (prefers-reduced-motion: reduce) { .cm-pt { animation: none !important; opacity: var(--o, 0.9) } }
 
-/* 은은한 스크롤바 */
-* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 2px solid var(--background); }
-::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); }
+/* 스크롤바 — 배경과 대비되게(은은하되 확실히 보이도록) */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-foreground) 55%, transparent) transparent; }
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted-foreground) 55%, transparent); border-radius: 8px; border: 3px solid var(--background); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted-foreground); background-clip: padding-box; }
