@@ -52,7 +52,6 @@ export function StatusBar() {
   const pending = ix?.pending?.files ?? 0
   const idx = indexLabel(ix, pending, t)
   const sync = syncLabel(st, t)
-  const syncOn = !!st?.running   // 동기화는 켠 사람에게만 표시(옵션 기능)
   const n = (v?: number) => (v ?? 0).toLocaleString()
 
   return (
@@ -64,7 +63,7 @@ export function StatusBar() {
         <span>{t("statusbar.vectors", { n: n(stats?.vectors) })}</span>
         <span>{t("statusbar.enriched", { n: n(stats?.enriched) })}</span>
       </span>
-      {/* 오른쪽: 색인 상태(필수·색상) + 동기화 상태(옵션, 켜졌을 때만) — 항상 한 줄에 온전히 */}
+      {/* 오른쪽: 색인 상태(필수·색상) + 동기화 상태(꺼짐이면 회색으로 표시) — 항상 한 줄에 온전히 */}
       <span className="ml-auto flex shrink-0 items-center gap-x-3 whitespace-nowrap">
         <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 font-medium ${idx.tone}`}>
           {idx.spin
@@ -72,14 +71,10 @@ export function StatusBar() {
             : <span className={`size-2 rounded-full ${idx.dot}`} />}
           {idx.text}
         </span>
-        {syncOn && (
-          <>
-            <span className="opacity-30">·</span>
-            <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 ${sync.tone}`}>
-              <span className={`size-2 rounded-full ${sync.dot}`} />{sync.text}
-            </span>
-          </>
-        )}
+        <span className="opacity-30">·</span>
+        <span aria-live="polite" aria-atomic="true" className={`inline-flex items-center gap-1.5 ${sync.tone}`}>
+          <span className={`size-2 rounded-full ${sync.dot}`} />{sync.text}
+        </span>
       </span>
     </footer>
   )
