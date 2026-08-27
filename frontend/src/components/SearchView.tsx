@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, X } from "lucide-react"
+import { Search, X, Blend, Brain, Type } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
@@ -21,10 +21,10 @@ function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTM
 export function SearchView() {
   const { t } = useTranslation()
   const EXAMPLES = [t("search.ex1"), t("search.ex2"), t("search.ex3"), t("search.ex4"), t("search.ex5")]
-  const MODES: { value: SearchMode; label: string }[] = [
-    { value: "hybrid", label: t("search.modeHybrid") },
-    { value: "semantic", label: t("search.modeSemantic") },
-    { value: "keyword", label: t("search.modeKeyword") },
+  const MODES: { value: SearchMode; label: React.ReactNode }[] = [
+    { value: "hybrid", label: <><Blend className="size-3.5" />{t("search.modeHybrid")}</> },
+    { value: "semantic", label: <><Brain className="size-3.5" />{t("search.modeSemantic")}</> },
+    { value: "keyword", label: <><Type className="size-3.5" />{t("search.modeKeyword")}</> },
   ]
   const [q, setQ] = useState("")
   const [mode, setMode] = useState<SearchMode>("hybrid")
