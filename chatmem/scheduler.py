@@ -18,6 +18,7 @@ from pathlib import Path
 
 # 자동 축적 주기 — config(환경변수/config.env)에서 조정. 설정 변경 후 재등록하면 반영.
 from . import config as _C  # noqa: E402
+from .proc import NO_WINDOW  # 콘솔 창 깜빡임 방지(Windows)
 
 
 def _timing() -> tuple[int, int, int]:
@@ -78,7 +79,7 @@ def _win_install(dry_run: bool) -> list[str]:
         cmd = ["schtasks", "/Create", "/TN", name, "/TR", tr, *sched, "/F"]
         lines.append(" ".join(cmd))
         if not dry_run:
-            subprocess.run(cmd, check=True, capture_output=True, text=True, errors="replace")
+            subprocess.run(cmd, check=True, capture_output=True, text=True, errors="replace", creationflags=NO_WINDOW)
     return lines
 
 
@@ -88,7 +89,7 @@ def _win_uninstall(dry_run: bool) -> list[str]:
         cmd = ["schtasks", "/Delete", "/TN", name, "/F"]
         lines.append(" ".join(cmd))
         if not dry_run:
-            subprocess.run(cmd, capture_output=True, text=True, errors="replace")  # 없으면 무시
+            subprocess.run(cmd, capture_output=True, text=True, errors="replace", creationflags=NO_WINDOW)  # 없으면 무시
     return lines
 
 
@@ -96,7 +97,7 @@ def _win_status() -> str:
     out = []
     for name in (_WIN_INDEX, _WIN_ENRICH, _WIN_SYNC):
         r = subprocess.run(["schtasks", "/Query", "/TN", name],
-                           capture_output=True, text=True, errors="replace")
+                           capture_output=True, text=True, errors="replace", creationflags=NO_WINDOW)
         out.append(f"{name}: {'등록됨' if r.returncode == 0 else '없음'}")
     return " · ".join(out)
 
@@ -253,7 +254,7 @@ def index_scheduled() -> bool:
     try:
         if plat == "windows":
             r = subprocess.run(["schtasks", "/Query", "/TN", _WIN_INDEX],
-                               capture_output=True, text=True, errors="replace")
+                               capture_output=True, text=True, errors="replace", creationflags=NO_WINDOW)
             return r.returncode == 0
         if plat == "macos":
             return (_mac_dir() / "com.chatmem.index.plist").exists()

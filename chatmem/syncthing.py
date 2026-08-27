@@ -26,6 +26,7 @@ import zipfile
 from pathlib import Path
 
 from . import config as C
+from .proc import NO_WINDOW  # Windows 콘솔 창 깜빡임 방지
 
 SYNCTHING_VERSION = "v2.1.3"   # pin(재현성). 갱신 시 여기만 바꾸면 됨.
 # 공유 폴더 ID는 양쪽 기기가 같아야 연결됨 → 고정값 사용(우리가 관리하는 전용 폴더).
@@ -180,7 +181,7 @@ def _kill_tree(pid: int, log_fn=lambda m: None) -> None:
     try:
         if sys.platform.startswith("win"):
             subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)],  # noqa: S603,S607
-                           capture_output=True, timeout=10)
+                           capture_output=True, timeout=10, creationflags=NO_WINDOW)
             return
         # POSIX: 프로세스 그룹 우선, 안 되면 개별 pid.
         try:
@@ -221,7 +222,7 @@ def _syncthing_pids_for_home(home: Path, log_fn=lambda m: None) -> list[int]:
                   "ForEach-Object { \"$($_.ProcessId)`t$($_.CommandLine)\" }")
             out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],  # noqa: S603,S607
                                  capture_output=True, text=True,
-                                 encoding="utf-8", errors="replace", timeout=15)
+                                 encoding="utf-8", errors="replace", timeout=15, creationflags=NO_WINDOW)
             for ln in (out.stdout or "").splitlines():
                 pid_s, _, cmd = ln.partition("\t")
                 if home_s in cmd.lower():
@@ -293,9 +294,11 @@ class Syncthing:
         env["STNOUPGRADE"] = "1"                     # 자동 업그레이드 끔(번들 버전 고정)
         env["STNODEFAULTFOLDER"] = "1"               # 기본 ~/Sync 폴더 자동생성 안 함
         args = [str(exe), "serve", "--home", str(self.home), "--no-browser"]
-        kwargs: dict[str, bool] = {}
+        kwargs: dict = {}
         if not sys.platform.startswith("win"):
             kwargs["start_new_session"] = True       # 프로세스 그룹 분리 → 트리 종료 가능(posix)
+        elif NO_WINDOW:
+            kwargs["creationflags"] = NO_WINDOW      # Windows: syncthing 콘솔 창 안 뜨게
         self.proc = subprocess.Popen(  # noqa: S603
             args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **kwargs,
         )
