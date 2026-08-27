@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
 import { SourceFilter } from "./SourceFilter"
+import { SegmentedRadioGroup } from "@/components/ui/SegmentedRadioGroup"
 import { getSources, search, type SearchMode, type SourceOption } from "@/lib/api"
 import { fmtTime } from "@/lib/format"
 import { sourceLabel } from "@/lib/source"
@@ -20,10 +21,10 @@ function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTM
 export function SearchView() {
   const { t } = useTranslation()
   const EXAMPLES = [t("search.ex1"), t("search.ex2"), t("search.ex3"), t("search.ex4"), t("search.ex5")]
-  const MODES: { v: SearchMode; label: string }[] = [
-    { v: "hybrid", label: `🔀 ${t("search.modeHybrid")}` },
-    { v: "semantic", label: `🧠 ${t("search.modeSemantic")}` },
-    { v: "keyword", label: `🔤 ${t("search.modeKeyword")}` },
+  const MODES: { value: SearchMode; label: string }[] = [
+    { value: "hybrid", label: t("search.modeHybrid") },
+    { value: "semantic", label: t("search.modeSemantic") },
+    { value: "keyword", label: t("search.modeKeyword") },
   ]
   const [q, setQ] = useState("")
   const [mode, setMode] = useState<SearchMode>("hybrid")
@@ -94,14 +95,8 @@ export function SearchView() {
             />
           </div>
           <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <div className="inline-flex rounded-full border bg-card p-0.5">
-              {MODES.map((m) => (
-                <button key={m.v} type="button" onClick={() => { setMode(m.v); run(q, m.v) }}
-                  className={`rounded-full px-2.5 py-1.5 transition-colors ${mode === m.v ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-                  {m.label}
-                </button>
-              ))}
-            </div>
+            <SegmentedRadioGroup label={t("search.modeLabel")} value={mode}
+              onChange={(v) => { setMode(v); run(q, v) }} options={MODES} />
             <label className="inline-flex items-center gap-1">{t("search.show")}
               <select value={k} onChange={(e) => { setK(+e.target.value); run() }}
                 className="rounded-md border bg-card px-1.5 py-1 outline-none shadow-sm">
