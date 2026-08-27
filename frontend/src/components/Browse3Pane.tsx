@@ -287,7 +287,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
             </div>
           )}
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-[16px] -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-[17px] -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => runSearch(e.target.value)} placeholder={t("browse.searchPlaceholder", { title })} className="h-9 rounded-lg pl-9 text-sm" />
             {searching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
           </div>
