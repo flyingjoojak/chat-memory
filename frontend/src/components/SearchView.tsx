@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, X, Blend, Brain, Type } from "lucide-react"
+import { Search, X, Blend, Brain, Type, SearchX, AlertTriangle } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
@@ -141,13 +141,13 @@ export function SearchView() {
 
           {state === "done" && hits.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              <div className="mb-2 text-3xl">∅</div>{t("search.emptyResults")}
+              <SearchX className="mx-auto mb-2 size-8 text-muted-foreground/50" strokeWidth={1.5} />{t("search.emptyResults")}
             </div>
           )}
 
           {state === "error" && (
             <div className="py-12 text-center text-sm">
-              <div className="mb-2 text-3xl">⚠️</div>
+              <AlertTriangle className="mx-auto mb-2 size-7 text-destructive/70" strokeWidth={1.5} />
               <div className="text-destructive">{searchErr || t("search.errorTitle")}</div>
               {!searchErr && <div className="mt-1 text-muted-foreground">{t("search.errorHint")}</div>}
               <button onClick={() => run()} className="mt-3 rounded-lg border bg-card px-3 py-1.5 text-[13px] shadow-sm hover:text-foreground">{t("common.retry")}</button>
@@ -156,7 +156,7 @@ export function SearchView() {
 
           {state === "idle" && (
             <div className="py-10 text-center text-muted-foreground">
-              <div className="mb-3 text-4xl opacity-80">🔎</div>
+              <Search className="mx-auto mb-3 size-9 text-muted-foreground/50" strokeWidth={1.5} />
               <div className="mb-4 text-sm">{t("search.idleHint")}</div>
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {EXAMPLES.map((e) => (
