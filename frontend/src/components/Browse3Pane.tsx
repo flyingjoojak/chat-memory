@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next"
 import { AlertTriangle, ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { SegmentedRadioGroup } from "@/components/ui/SegmentedRadioGroup"
 import { ChatThread } from "./ChatThread"
 import { getGraph3D, getSession, listSessions, resumeSession, search, type SearchMode } from "@/lib/api"
 import { errText } from "@/lib/errors"
@@ -289,12 +290,9 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
             {searching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <div className="inline-flex rounded-full border bg-card p-0.5">
-              {MODES.map((m) => (
-                <button key={m.v} type="button" onClick={() => { setMode(m.v); runSearch(q, m.v) }}
-                  className={`rounded-full px-2 py-1 transition-colors ${mode === m.v ? "bg-primary/10 font-semibold text-primary" : "text-muted-foreground hover:text-foreground"}`}>{t(m.key)}</button>
-              ))}
-            </div>
+            <SegmentedRadioGroup label={t("search.modeLabel")} value={mode}
+              onChange={(v) => { setMode(v); runSearch(q, v) }}
+              options={MODES.map((m) => ({ value: m.v, label: t(m.key) }))} />
             <label className="inline-flex items-center gap-1">{t("browse.since")}
               <input type="date" value={since} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setSince(e.target.value); runSearch() }}
                 className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
