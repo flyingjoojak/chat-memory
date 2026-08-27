@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Download, RefreshCw, ChevronDown, ChevronUp, X, AlertTriangle } from "lucide-react"
+import { pickReleaseNotes } from "@/lib/releaseNotes"
 
 // Electron preload(preload.js)이 주입하는 업데이트 브리지. 브라우저에는 없다 → 배너 미표시.
 type UpdateInfo = {
@@ -30,7 +31,7 @@ declare global {
 type Phase = "idle" | "available" | "downloading" | "downloaded"
 
 export function UpdateBanner() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [phase, setPhase] = useState<Phase>("idle")
   const [info, setInfo] = useState<UpdateInfo | null>(null)
   const [percent, setPercent] = useState(0)
@@ -61,6 +62,8 @@ export function UpdateBanner() {
   if (!window.engramUpdater || phase === "idle" || dismissed) return null
 
   const version = info?.version ? `v${info.version}` : t("update.newVersion")
+  // 릴리스 노트는 앱 언어에 맞는 섹션만 표시(GitHub 본문에 <!--lang:en-->/<!--lang:ko--> 로 구분).
+  const notes = pickReleaseNotes(info?.releaseNotes, i18n.language)
   const startDownload = () => { setError(null); setPercent(0); setPhase("downloading"); window.engramUpdater?.download() }
 
   return (
@@ -71,7 +74,7 @@ export function UpdateBanner() {
         {phase === "available" && (
           <>
             <span>{t("update.available", { version })}</span>
-            {info?.releaseNotes && (
+            {notes && (
               <button
                 onClick={() => setShowNotes((s) => !s)}
                 aria-expanded={showNotes}
@@ -173,9 +176,9 @@ export function UpdateBanner() {
         </div>
       )}
 
-      {phase === "available" && showNotes && info?.releaseNotes && (
+      {phase === "available" && showNotes && notes && (
         <pre id="update-notes" className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-border/60 bg-background/60 p-2 text-[12px] leading-relaxed text-muted-foreground">
-          {info.releaseNotes}
+          {notes}
         </pre>
       )}
     </div>
