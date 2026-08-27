@@ -59,7 +59,7 @@
     "syncScanning": "스캔 중",
     "syncReceiving": "받는 중 {{pct}}%",
     "syncSending": "전송 중 {{pct}}%",
-    "syncLatestPeerOff": "최신(상대 미연결)",
+    "syncLatestPeerOff": "동기화 미연결",
     "syncBothLatest": "동기화 최신"
   },
   "settings": {

@@ -59,7 +59,7 @@
     "syncScanning": "Scanning",
     "syncReceiving": "Receiving {{pct}}%",
     "syncSending": "Sending {{pct}}%",
-    "syncLatestPeerOff": "Up to date (peer offline)",
+    "syncLatestPeerOff": "Not connected",
     "syncBothLatest": "Sync up to date"
   },
   "settings": {
