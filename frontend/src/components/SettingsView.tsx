@@ -37,6 +37,14 @@ const CUSTOM = "__custom__"
 type TabKey = "general" | "enrich" | "index" | "sync" | "mcp"
 type IndexMode = "off" | "interval" | "realtime" | "scheduled"
 const INDEX_MODES = ["off", "interval", "realtime", "scheduled"] as const
+
+// 긴 HuggingFace 경로 대신 짧고 읽기 쉬운 이름으로.
+function shortModelName(model: string): string {
+  const base = model.split("/").pop() ?? model
+  if (base.includes("e5-large")) return base.includes("int8") ? "e5-large int8" : "e5-large"
+  if (base.toLowerCase().includes("minilm")) return "MiniLM L12 v2"
+  return base
+}
 const TABS: { key: TabKey; labelKey: string; icon: React.ReactNode }[] = [
   { key: "general", labelKey: "settings.tabGeneral", icon: <SlidersHorizontal className="size-4" /> },
   { key: "enrich", labelKey: "settings.tabEnrich", icon: <Sparkles className="size-4" /> },
@@ -481,6 +489,7 @@ export function SettingsView() {
   const [archiving, setArchiving] = useState(false)
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
+  const [recommendedModel, setRecommendedModel] = useState("")
   const [reindexing, setReindexing] = useState(false)
   const [reindexMsg, setReindexMsg] = useState("")
   const [reindexErr, setReindexErr] = useState("")
@@ -566,7 +575,7 @@ export function SettingsView() {
 
   function loadEmbed() {
     getEmbedModels().then((r) => {
-      setEmbed(r.models); setReindexing(r.reindex.running); setReindexMsg(r.reindex.msg)
+      setEmbed(r.models); setRecommendedModel(r.recommended); setReindexing(r.reindex.running); setReindexMsg(r.reindex.msg)
       setReindexProg({ doneFiles: r.reindex.done_files, totalFiles: r.reindex.total_files, doneChunks: r.reindex.done_chunks, totalChunks: r.reindex.total_chunks })
       if (r.reindex.running && !poll.current) startPoll()
     }).catch(() => {})
@@ -923,7 +932,6 @@ export function SettingsView() {
                 )}
                 <Errs errors={enrichSt?.errors} />
               </div>
-              <p className="mb-2 text-xs text-muted-foreground">{t("settings.keyApplyHint")}</p>
             </>
           )}
 
@@ -968,7 +976,7 @@ export function SettingsView() {
                         ? (ixStatus.total_chunks > 0
                             ? t("settings.selfHealing")
                             : ixStatus.total_files > 0 ? t("settings.indexingFilesEta", { done: ixStatus.done_files, total: ixStatus.total_files }) : t("settings.indexingShort"))
-                        : <><b className="text-foreground">{idxPendingText}</b> · {t("settings.indexNewHint")}</>}
+                        : <b className="text-foreground">{idxPendingText}</b>}
                     </span>
                   </div>
                   {ixStatus?.running && ixStatus.total_chunks > 0 && (
@@ -999,18 +1007,16 @@ export function SettingsView() {
                 {reindexErr && (
                   <div role="alert" className="border-b py-3 text-sm text-destructive">{reindexErr}</div>
                 )}
-                <div className="border-b py-2.5 text-[11px] leading-relaxed text-muted-foreground">
-                  💡 <Trans i18nKey="settings.embedTip" components={{ b: <b className="text-foreground/80" /> }} />
-                </div>
                 {embed.map((m) => (
                   <Row key={m.model} label={
                     <span className="flex flex-col">
                       <span className="flex items-center gap-1.5 font-mono text-[13px]">
-                        {m.model.split("/").pop()}
-                        {m.ram_gb <= 1.5 && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-sans text-[10px] font-medium text-primary">{t("settings.lowSpecRec")}</span>}
+                        {shortModelName(m.model)}
+                        {m.model === recommendedModel && <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-sans text-[10px] font-medium text-primary">{t("settings.recommended")}</span>}
+                        {m.ram_gb <= 1.5 && <span className="rounded-full bg-muted px-1.5 py-0.5 font-sans text-[10px] font-medium text-muted-foreground">{t("settings.lowSpecRec")}</span>}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {m.note} · {t("settings.diskLabel", { gb: m.size_gb })} · <b className="text-foreground/80">{t("settings.ramApprox", { gb: m.ram_gb })}</b>
+                        {t("settings.diskLabel", { gb: m.size_gb })} · <b className="text-foreground/80">{t("settings.ramApprox", { gb: m.ram_gb })}</b>
                         {m.est_reindex_min != null && <> · {t("settings.estReindexLabel")} <b className="text-foreground/80 tabular-nums">{t("settings.estReindexMin", { min: m.est_reindex_min })}</b></>}
                       </span>
                     </span>
@@ -1078,8 +1084,8 @@ export function SettingsView() {
             <AlertDialogTitle>{confirmModel?.current ? t("settings.reindexTitleCurrent") : t("settings.reindexTitleChange")}</AlertDialogTitle>
             <AlertDialogDescription>
               {confirmModel?.current
-                ? <Trans i18nKey="settings.reindexDescCurrent" values={{ model: confirmModel?.model.split("/").pop() }} components={{ b: <b /> }} />
-                : <Trans i18nKey="settings.reindexDescChange" values={{ model: confirmModel?.model.split("/").pop() }} components={{ b: <b /> }} />}
+                ? <Trans i18nKey="settings.reindexDescCurrent" values={{ model: shortModelName(confirmModel?.model ?? "") }} components={{ b: <b /> }} />
+                : <Trans i18nKey="settings.reindexDescChange" values={{ model: shortModelName(confirmModel?.model ?? "") }} components={{ b: <b /> }} />}
               <br /><br />
               <Trans i18nKey="settings.reindexTail"
                 values={{
