@@ -14,25 +14,14 @@ const PALETTE = [
 const colorOf = (c: number) => PALETTE[((c % PALETTE.length) + PALETTE.length) % PALETTE.length]
 const EXTENT = 150
 
-// 세션 문자열 → 안정적인 색상 hue(세션마다 다른 색 선).
-function hueOf(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0
-  return h % 360
-}
-
 // onOpenTurn: 지도에서 대화(턴)를 클릭하면 그 탭(3분할·왼쪽 검색창)으로 이동해 대화를 연다.
 export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
   const { t } = useTranslation()
   const [data, setData] = useState<Graph3DData | null>(null)
   const [tip, setTip] = useState<{ sx: number; sy: number; p: GraphPoint3D } | null>(null)
-  const [showLines, setShowLines] = useState(false)   // 기본 OFF — 연결선은 사용자가 켤 때만 표시
   const [err, setErr] = useState<string | null>(null)   // 로드 실패를 '데이터 없음'과 구분
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const labelRefs = useRef<Map<number, HTMLDivElement | null>>(new Map())
-  const linesRef = useRef<THREE.LineSegments | null>(null)
-  const showLinesRef = useRef(showLines)
-  showLinesRef.current = showLines
   const flyToRef = useRef<((id: number) => void) | null>(null)   // 군집 클릭 → 중앙 이동+확대
   const focusClusterRef = useRef<((id: number | null) => void) | null>(null)   // 지도에서 그 군집만 밝게
   const focusSessionRef = useRef<((sid: string | null) => void) | null>(null)  // 지도에서 그 세션만 밝게
@@ -90,46 +79,6 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
     // aria-label 문구는 별도 경량 effect에서 t/data 변경 시 갱신(여기서 t를 참조하면 언어 전환마다 씬 전체 재빌드).
     renderer.domElement.setAttribute("role", "img")
     wrap.appendChild(renderer.domElement)
-
-    // 같은 세션 점을 시간순으로 잇는 선(성좌) — 세션마다 다른 색, 흐리게. 점은 그대로(끌어당김 없음).
-    const paths = data.paths ?? []
-    let segCount = 0
-    for (const pa of paths) segCount += Math.max(0, pa.length - 1)
-    let lineCol: Float32Array | null = null       // 라이브 선 색 버퍼(hover 시 갱신)
-    let lineColBase: Float32Array | null = null   // 원본 선 색(복원용)
-    const lineVertSess: string[] = []             // 선 정점별 세션(hover 매칭용)
-    let linesObj: THREE.LineSegments | null = null
-    if (segCount > 0) {
-      const lpos = new Float32Array(segCount * 2 * 3)
-      const lcol = new Float32Array(segCount * 2 * 3)
-      const lc = new THREE.Color()
-      let o = 0
-      for (const pa of paths) {
-        const sess = pts[pa[0]]?.s ?? ""
-        lc.setHSL(hueOf(sess) / 360, 0.55, dark ? 0.62 : 0.48)
-        for (let j = 0; j < pa.length - 1; j++) {
-          const a = at(pts[pa[j]]), b = at(pts[pa[j + 1]])
-          lpos[o] = a.x; lpos[o + 1] = a.y; lpos[o + 2] = a.z
-          lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
-          lpos[o] = b.x; lpos[o + 1] = b.y; lpos[o + 2] = b.z
-          lcol[o] = lc.r; lcol[o + 1] = lc.g; lcol[o + 2] = lc.b; o += 3
-          lineVertSess.push(sess, sess)
-        }
-      }
-      const lgeo = new THREE.BufferGeometry()
-      lgeo.setAttribute("position", new THREE.BufferAttribute(lpos, 3))
-      lgeo.setAttribute("color", new THREE.BufferAttribute(lcol, 3))
-      const lmat = new THREE.LineBasicMaterial({
-        vertexColors: true, transparent: true, opacity: dark ? 0.22 : 0.3,
-        depthWrite: false, blending: dark ? THREE.AdditiveBlending : THREE.NormalBlending,
-      })
-      const lines = new THREE.LineSegments(lgeo, lmat)
-      lines.renderOrder = -1   // 점 뒤에 깔리게
-      lines.visible = showLinesRef.current
-      scene.add(lines)
-      linesRef.current = lines
-      lineCol = lcol; lineColBase = lcol.slice(); linesObj = lines
-    }
 
     // 포인트 지오메트리 + 군집색.
     const geo = new THREE.BufferGeometry()
@@ -196,9 +145,6 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
     const _bg = new THREE.Color(0.97, 0.97, 0.98)
     try { _bg.setStyle(getComputedStyle(wrap).backgroundColor) } catch { /* oklch 등 파싱 불가 시 폴백 유지 */ }
     const dimPt = dark ? new THREE.Color(0, 0, 0) : _bg
-    const dimLn = dark ? new THREE.Color(0, 0, 0) : _bg.clone()
-    const lmat0 = linesObj ? (linesObj.material as THREE.LineBasicMaterial) : null
-    const lineOpBase = dark ? 0.22 : 0.3, lineOpHi = dark ? 0.5 : 0.65
 
     let focusSess: string | null = null   // 대상 세션(hover, 일시)
     let activeSess: string | null = null  // 페이드 동안 밝게 유지할 세션(hover)
@@ -242,21 +188,6 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
         }
       }
       geo.attributes.color.needsUpdate = true
-      if (lineCol && lineColBase && linesObj) {
-        for (let v = 0; v < lineVertSess.length; v++) {
-          const keepL = activeCluster == null && keepSess != null && lineVertSess[v] === keepSess
-          if (keepL) {
-            lineCol[v * 3] = lineColBase[v * 3]; lineCol[v * 3 + 1] = lineColBase[v * 3 + 1]; lineCol[v * 3 + 2] = lineColBase[v * 3 + 2]
-          } else {
-            lineCol[v * 3] = lineColBase[v * 3] * (1 - t) + dimLn.r * t
-            lineCol[v * 3 + 1] = lineColBase[v * 3 + 1] * (1 - t) + dimLn.g * t
-            lineCol[v * 3 + 2] = lineColBase[v * 3 + 2] * (1 - t) + dimLn.b * t
-          }
-        }
-        ;(linesObj.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true
-        if (lmat0) lmat0.opacity = lineOpBase + (lineOpHi - lineOpBase) * t
-        linesObj.visible = showLinesRef.current   // 선 토글 OFF면 hover해도 선 없음
-      }
     }
 
     // ── 커스텀 카메라 컨트롤 ──
@@ -461,17 +392,12 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
       renderer.domElement.removeEventListener("pointerup", onUp)
       renderer.domElement.removeEventListener("pointercancel", onUp)
       renderer.domElement.removeEventListener("contextmenu", onCtx)
-      const ln = linesRef.current
-      if (ln) { ln.geometry.dispose(); (ln.material as THREE.Material).dispose(); linesRef.current = null }
       flyToRef.current = null; focusClusterRef.current = null; focusSessionRef.current = null
       glowTex.dispose(); glowMat.dispose()
       dotTex.dispose(); geo.dispose(); material.dispose(); renderer.dispose()
       if (renderer.domElement.parentNode === wrap) wrap.removeChild(renderer.domElement)
     }
   }, [data])
-
-  // 씬 재생성 없이 선 표시만 토글.
-  useEffect(() => { if (linesRef.current) linesRef.current.visible = showLines }, [showLines])
 
   // 캔버스 aria-label만 언어/데이터 변경 시 갱신(무거운 3D 씬 재빌드 없이 — 씬 effect는 [data]만 의존).
   useEffect(() => {
@@ -534,15 +460,6 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => setShowLines((v) => !v)}
-            className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
-              showLines ? "border-primary/40 bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-            }`}
-          >
-            {t("graph.sessionLines")} {showLines ? t("common.on") : t("common.off")}
-          </button>
-          <button
-            type="button"
             onClick={regenerate}
             disabled={refreshing}
             title={t("graph.regenTitle")}
@@ -550,10 +467,6 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
           >
             {refreshing ? t("graph.recalculating") : t("graph.regenerate")}
           </button>
-          <span className="text-xs text-muted-foreground">
-            {data ? `${t("graph.stats", { count: data.points.length.toLocaleString(), clusters: clusters.length })} · ` : ""}
-            {t("graph.controls")}
-          </span>
         </div>
       </div>
 

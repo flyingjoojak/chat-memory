@@ -128,11 +128,6 @@
     "sourceToggleAria": "{{action}} indexing for {{label}}",
     "allSourcesOff": "All sources are off — new conversations won't be indexed.",
     "sourcesNote": "Turning one off means that source is <b>skipped from the next index on</b>. Conversations already stored stay searchable.",
-    "appSection": "App",
-    "quitDone": "The app has quit. Close this browser tab. (For a new version, run the exe again.)",
-    "quitApp": "Quit app",
-    "quitConfirm": "Really quit",
-    "quitHint": "This app has no window or tray icon, so you quit it here. To <b>replace it with a new exe</b>, quit first, then run the new exe.",
     "backend": "Backend",
     "backendAria": "Enrichment AI backend",
     "backendClaude": "Claude Code subscription",
@@ -225,12 +220,9 @@
   "graph": {
     "title": "Semantic Map 3D",
     "canvasAria": "Semantic Map 3D visualization — {{count}} embeddings, {{clusters}} topic clusters. See the 'Topic clusters' panel on the right for the full list.",
-    "sessionLines": "Session lines",
     "regenTitle": "Recompute clusters and labels (when tags change after enrichment)",
     "recalculating": "Recomputing…",
     "regenerate": "Regenerate map",
-    "stats": "{{count}} embeddings · {{clusters}} topics",
-    "controls": "Left-drag rotate / middle-click or right-drag pan / wheel zoom to cursor / click point → conversation / click cluster → list",
     "loadingFirst": "Loading… (the first computation can take tens of seconds)",
     "loadError": "Couldn't load the map: {{err}}",
     "empty": "No vectors yet. Run indexing first.",
@@ -240,7 +232,7 @@
     "untitled": "(Untitled)",
     "sessionLabel": "Session {{id}}",
     "justClicked": "Just clicked",
-    "legendTitle": "Topic clusters · click to zoom + open"
+    "legendTitle": "Topic clusters"
   },
   "search": {
     "placeholder": "Search conversations…",

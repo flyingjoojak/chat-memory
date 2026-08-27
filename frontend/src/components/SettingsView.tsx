@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
-  archiveSync, getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, quitApp, reindex, runEnrich, runIndex,
+  archiveSync, getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
   syncthingPair, syncthingStart, syncthingStop, toggleSource, toggleSync, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
   type SyncthingStatus, type SyncthingSync, type SystemInfo,
@@ -477,7 +477,6 @@ export function SettingsView() {
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
   const [indexErr, setIndexErr] = useState("")
-  const [quitState, setQuitState] = useState<"idle" | "confirm" | "done">("idle")
   const [archiveMsg, setArchiveMsg] = useState<string | null>(null)
   const [archiving, setArchiving] = useState(false)
 
@@ -823,31 +822,6 @@ export function SettingsView() {
                   <p className="text-xs text-muted-foreground">
                     <Trans i18nKey="settings.sourcesNote" components={{ b: <b /> }} />
                   </p>
-                </div>
-              </Section>
-
-              <Section title={t("settings.appSection")}>
-                <div className="py-3.5">
-                  {quitState === "done" ? (
-                    <div className="text-sm text-muted-foreground">{t("settings.quitDone")}</div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {quitState === "idle" ? (
-                        <Button variant="outline" size="sm" onClick={() => setQuitState("confirm")}>{t("settings.quitApp")}</Button>
-                      ) : (
-                        <>
-                          <Button variant="destructive" size="sm"
-                            onClick={async () => { try { await quitApp() } catch { /* 종료되며 응답 끊길 수 있음 */ } setQuitState("done") }}>
-                            {t("settings.quitConfirm")}
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setQuitState("idle")}>{t("common.cancel")}</Button>
-                        </>
-                      )}
-                      <span className="text-[11px] text-muted-foreground">
-                        <Trans i18nKey="settings.quitHint" components={{ b: <b /> }} />
-                      </span>
-                    </div>
-                  )}
                 </div>
               </Section>
 
