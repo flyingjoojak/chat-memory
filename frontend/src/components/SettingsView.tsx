@@ -53,12 +53,6 @@ const TABS: { key: TabKey; labelKey: string; icon: React.ReactNode }[] = [
   { key: "mcp", labelKey: "settings.tabMcp", icon: <Plug className="size-4" /> },
 ]
 
-// 대기 수 강조 배지(0이면 흐리게, 있으면 강조).
-function Pending({ n, unit }: { n: number; unit: string }) {
-  const { t } = useTranslation()
-  if (n <= 0) return <span className="text-muted-foreground">{t("settings.pendingNone")}</span>
-  return <span className="font-medium text-foreground">{t("settings.pendingCount", { n: n.toLocaleString(), unit })}</span>
-}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -922,7 +916,7 @@ export function SettingsView() {
                       ? (enrichSt.total_sessions > 0 ? t("settings.enrichingSessions", { done: enrichSt.done_sessions, total: enrichSt.total_sessions }) : t("settings.enrichingPhase", { phase: enrichSt.phase }))
                       : enrichErr
                         ? enrichErr
-                        : <>{t("settings.unenrichedTurns")} <Pending n={enrichPending} unit={t("settings.unitTurns")} /> · {t("settings.enrichNowHint")}</>}
+                        : <b className="text-foreground">{enrichPending > 0 ? t("settings.enrichPending", { n: enrichPending }) : t("settings.enrichUpToDate")}</b>}
                   </span>
                 </div>
                 {enrichSt?.running && enrichSt.total_sessions > 0 && (
