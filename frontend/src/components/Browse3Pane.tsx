@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, ArrowLeft, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Blend, Brain, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, Search, TerminalSquare, Type } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { SegmentedRadioGroup } from "@/components/ui/SegmentedRadioGroup"
@@ -15,8 +15,10 @@ const PALETTE = [
   "#5bc0de", "#b58a63", "#9aa0ff", "#4fb477", "#e05c5c", "#a3c644", "#c96bb3", "#59b0a3", "#d98a5b",
 ]
 const colorOf = (c: number) => PALETTE[((c % PALETTE.length) + PALETTE.length) % PALETTE.length]
-const MODES: { v: SearchMode; key: string }[] = [
-  { v: "hybrid", key: "browse.modeHybrid" }, { v: "semantic", key: "browse.modeSemantic" }, { v: "keyword", key: "browse.modeKeyword" },
+const MODES: { v: SearchMode; key: string; Icon: typeof Blend }[] = [
+  { v: "hybrid", key: "browse.modeHybrid", Icon: Blend },
+  { v: "semantic", key: "browse.modeSemantic", Icon: Brain },
+  { v: "keyword", key: "browse.modeKeyword", Icon: Type },
 ]
 function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) {
   const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void }
@@ -292,7 +294,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <SegmentedRadioGroup label={t("search.modeLabel")} value={mode}
               onChange={(v) => { setMode(v); runSearch(q, v) }}
-              options={MODES.map((m) => ({ value: m.v, label: t(m.key) }))} />
+              options={MODES.map((m) => ({ value: m.v, label: <><m.Icon className="size-3.5" />{t(m.key)}</> }))} />
             <label className="inline-flex items-center gap-1">{t("browse.since")}
               <input type="date" value={since} onClick={openPicker} onFocus={openPicker} onChange={(e) => { setSince(e.target.value); runSearch() }}
                 className="cursor-pointer rounded-md border bg-card px-1.5 py-1 tabular-nums outline-none shadow-sm [color-scheme:light_dark]" /></label>
