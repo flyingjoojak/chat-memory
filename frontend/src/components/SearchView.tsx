@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, X, Blend, Brain, Type, SearchX, AlertTriangle } from "lucide-react"
+import { X, Blend, Brain, Type, SearchX, AlertTriangle } from "lucide-react"
+import { Magnifier } from "@/components/ui/Magnifier"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ChatThread } from "./ChatThread"
@@ -87,7 +88,7 @@ export function SearchView() {
       <div className="flex min-h-0 flex-col border-r">
         <div className="shrink-0 border-b p-4">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-[17px] -translate-y-1/2 text-muted-foreground" />
+            <Magnifier className="pointer-events-none absolute left-3 top-1/2 size-[17px] -translate-y-1/2 text-muted-foreground" />
             <Input
               autoFocus value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
@@ -156,7 +157,7 @@ export function SearchView() {
 
           {state === "idle" && (
             <div className="py-10 text-center text-muted-foreground">
-              <Search className="mx-auto mb-3 size-8 text-muted-foreground/60" />
+              <Magnifier className="mx-auto mb-3 size-8 text-muted-foreground/60" />
               <div className="mb-4 text-sm">{t("search.idleHint")}</div>
               <div className="flex flex-wrap justify-center gap-2 px-2">
                 {EXAMPLES.map((e) => (
