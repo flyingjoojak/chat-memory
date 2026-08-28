@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, lazy, Suspense } from "react"
 import { useTranslation } from "react-i18next"
-import { Search, MessagesSquare, Layers, Box, Settings } from "lucide-react"
+import { MessagesSquare, Layers, Box, Settings } from "lucide-react"
+import { Magnifier } from "@/components/ui/Magnifier"
 import { Loader2 } from "lucide-react"
 import { SearchView } from "@/components/SearchView"
 import { Browse3Pane } from "@/components/Browse3Pane"
@@ -20,7 +21,7 @@ const GraphView3D = lazy(() => import("@/components/GraphView3D").then((m) => ({
 type View = "search" | "sessions" | "clusters" | "graph3d" | "settings"
 
 const NAV: { v: View; icon: React.ReactNode; labelKey: string }[] = [
-  { v: "search", icon: <Search className="size-[18px]" />, labelKey: "nav.search" },
+  { v: "search", icon: <Magnifier className="size-[18px]" />, labelKey: "nav.search" },
   { v: "sessions", icon: <MessagesSquare className="size-[18px]" />, labelKey: "nav.sessions" },
   { v: "clusters", icon: <Layers className="size-[18px]" />, labelKey: "nav.clusters" },
   { v: "graph3d", icon: <Box className="size-[18px]" />, labelKey: "nav.map" },
