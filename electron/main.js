@@ -140,7 +140,7 @@ function createWindow() {
   // SPA가 테마를 보고할 때까지의 첫 프레임 흰색 방지 → 기본 다크로 시작(theme.ts 기본과 일치).
   nativeTheme.themeSource = "dark"
   win = new BrowserWindow({
-    width: 1200, height: 820, minWidth: 820, minHeight: 560,
+    width: 1280, height: 800, minWidth: 960, minHeight: 600,
     backgroundColor: "#0c0d10", title: "Engram", show: false,
     autoHideMenuBar: true, icon: path.join(__dirname, "icon.png"),
     webPreferences: {
