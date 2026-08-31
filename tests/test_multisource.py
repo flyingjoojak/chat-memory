@@ -61,10 +61,11 @@ def test_active_sources_filters_by_root_existence(monkeypatch, tmp_path):
     assert active_sources() == []
     _claude_file(claude_root)
     names = [n for n, _a, _r in active_sources()]
-    assert names == ["claude-code"]   # codex 루트 없으면 제외
+    # subagent 루트 = PROJECTS_DIR(claude_root) 라 claude 루트가 생기면 함께 활성. codex 루트는 아직 없음.
+    assert set(names) == {"claude-code", "subagent"}
     _codex_file(codex_root)
     names = [n for n, _a, _r in active_sources()]
-    assert set(names) == {"claude-code", "codex"}
+    assert set(names) == {"claude-code", "codex", "subagent"}
 
 
 def test_enabled_source_names_env_override(monkeypatch, tmp_path):

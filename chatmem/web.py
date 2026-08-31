@@ -573,11 +573,15 @@ def api_session(id: str = Query(...), limit: int = 2000):
     stored = info[1] if info else None
     project = (info[2] if info else "") or ""
     src_file = _find_source_file(source, id, stored)
+    is_sub, parent = _subagent_info(stored)
     return {
         "session": id, "project": project, "count": len(turns), "turns": turns,
         "source": source,
-        "resume_cmd": _resume_cmd_str(source, id) if _SID_RE.fullmatch(id) else "",
+        # 배경 대화는 재개 명령이 없음(열기 차단) — 부모 세션 링크만 제공.
+        "resume_cmd": "" if is_sub else (_resume_cmd_str(source, id) if _SID_RE.fullmatch(id) else ""),
         "source_file_exists": src_file is not None,
+        "subagent": is_sub,
+        "parent": parent,
     }
 
 
@@ -592,13 +596,16 @@ def api_sessions(limit: int = 500):
     out = []
     for r in rows:
         head = db.conn.execute(
-            "SELECT summary, question, source FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
+            "SELECT summary, question, source, source_file FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
             (r["session_id"],)).fetchone()
+        is_sub, parent = _subagent_info(head["source_file"] if head else None)
         out.append({
             "session": r["session_id"], "count": r["n"],
             "started": r["started"], "ended": r["ended"],
             "headline": (head["summary"] or head["question"] or "") if head else "",
             "source": (head["source"] if head else None) or "claude-code",
+            "subagent": is_sub,      # 배경(서브에이전트) 대화 여부
+            "parent": parent,        # 파생된 부모 세션 id(있으면)
         })
     return {"sessions": out}
 
@@ -639,6 +646,21 @@ def _find_source_file(source: str, sid: str, stored: str | None) -> Path | None:
     return session_sync.find_session_file(sid)   # claude: PROJECTS_DIR/**/<sid>.jsonl
 
 
+def _subagent_info(stored: str | None) -> tuple[bool, str | None]:
+    """세션이 배경(서브에이전트) 대화인지 + 부모 세션 id 를 source_file 경로로 파생.
+
+    경로 형태: <projects>/<PARENT>/subagents/agent-<agentId>.jsonl
+    → subagents 폴더 안이면 배경 대화, 그 상위 폴더명이 부모 세션 id.
+    """
+    if not stored:
+        return False, None
+    p = Path(stored)
+    if p.parent.name != "subagents":
+        return False, None
+    parent = p.parent.parent.name or None
+    return True, parent
+
+
 @app.post("/api/resume")
 def api_resume(session: str = Query(...), force: bool = False):
     """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 출처별 재개 명령 실행
@@ -654,6 +676,13 @@ def api_resume(session: str = Query(...), force: bool = False):
     if info is None:
         raise HTTPException(status_code=404, detail={"code": "session_not_found", "msg": "세션을 찾을 수 없음"})
     source, stored, project = info
+
+    # 배경(서브에이전트) 대화는 agentId 로 재개할 수 없음 → 열기 차단(검색·조회만 가능).
+    is_sub, _parent = _subagent_info(stored)
+    if is_sub:
+        return {"ok": False, "subagent": True, "code": "resume_subagent",
+                "warning": "배경 에이전트 대화는 직접 열 수 없어요 (검색·조회만 가능)."}
+
     cwd = (project or "").strip() or None
     if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
         cwd = None

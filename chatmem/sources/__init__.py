@@ -11,6 +11,7 @@ from pathlib import Path
 from .base import SourceAdapter
 from .claude_code import ClaudeCodeAdapter
 from .codex import CodexAdapter
+from .subagent import SubagentAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 ADAPTERS: dict[str, SourceAdapter] = {
     ClaudeCodeAdapter.name: ClaudeCodeAdapter(),
     CodexAdapter.name: CodexAdapter(),
+    SubagentAdapter.name: SubagentAdapter(),
 }
 
 
@@ -32,6 +34,8 @@ def source_roots() -> dict[str, Path]:
     return {
         "claude-code": Path(C.PROJECTS_DIR),
         "codex": Path(C.CODEX_SESSIONS_DIR),
+        # 서브에이전트 대화는 Claude Code 프로젝트 폴더 안(<부모>/subagents/)에 있다.
+        "subagent": Path(C.PROJECTS_DIR),
     }
 
 
@@ -80,7 +84,7 @@ def active_sources() -> list[tuple[str, SourceAdapter, Path]]:
 
 
 __all__ = [
-    "SourceAdapter", "ClaudeCodeAdapter", "CodexAdapter",
+    "SourceAdapter", "ClaudeCodeAdapter", "CodexAdapter", "SubagentAdapter",
     "ADAPTERS", "default_adapter", "active_sources", "enabled_source_names",
     "source_roots", "disabled_sources",
 ]

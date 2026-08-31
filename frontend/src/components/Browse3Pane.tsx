@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { AlertTriangle, ArrowLeft, Blend, Brain, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, TerminalSquare, Type } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Blend, Bot, Brain, Check, ChevronRight, Copy, Loader2, MessagesSquare, RotateCcw, TerminalSquare, Type } from "lucide-react"
 import { Magnifier } from "@/components/ui/Magnifier"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -26,7 +26,7 @@ function openPicker(e: React.MouseEvent<HTMLInputElement> | React.FocusEvent<HTM
   try { el.showPicker?.() } catch { /* 미지원 */ }
 }
 
-type Group = { id: string; label: string; sub: string; count: number; color?: string }
+type Group = { id: string; label: string; sub: string; count: number; color?: string; subagent?: boolean }
 type Conv = { t: string; s: string; h: string }
 
 // 세션/군집 공통 3분할 브라우저. 초기=목록(가운데), 선택 후=[검색+대화목록 | 채팅 | 목록].
@@ -73,6 +73,8 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   const resumeCmd = detail?.resume_cmd || (sel ? `claude --resume ${sel}` : "")
   const fileExists = detail?.source_file_exists !== false   // 로드 후에만 의미(로드 전엔 버튼 비활성)
   const sourceLabel = detail?.source === "codex" ? "Codex" : detail?.source === "claude-code" ? "Claude Code" : ""
+  const isSubagent = detail?.subagent === true              // 배경(서브에이전트) 대화 — 직접 재개 불가
+  const parentSid = detail?.parent || null                  // 파생된 부모 세션(역링크)
   async function copyResume() {
     if (!resumeCmd) return
     // clipboard API는 비보안 컨텍스트(평문 http 비-localhost 등)에서 없을 수 있음 → 가드 + 폴백 안내.
@@ -127,6 +129,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
       listSessions().then((r) => setGroups((r.sessions || []).map((s) => ({
         id: s.session, label: s.headline || t("browse.untitled"), count: s.count,
         sub: t("browse.sessionSub", { count: s.count, start: fmtTime(s.started), end: fmtTime(s.ended) }),
+        subagent: s.subagent,   // 배경 에이전트 세션이면 목록에서 아이콘으로 구분
       })))).catch(() => setGroupsErr(true))
     } else {
       getGraph3D().then((g) => {
@@ -190,7 +193,9 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   // 그룹 아이콘: 세션=말풍선 / 군집=색점.
   const groupIcon = (g: Group) => g.color
     ? <span className="size-3 shrink-0 rounded-full" style={{ background: g.color }} />
-    : <MessagesSquare className="size-4 shrink-0 text-muted-foreground" />
+    : g.subagent
+      ? <Bot className="size-4 shrink-0 text-muted-foreground" aria-label={t("browse.subagentBadge")} />
+      : <MessagesSquare className="size-4 shrink-0 text-muted-foreground" />
 
   // 그룹 목록 — 초기(가운데)는 큼직한 카드(hover 떠오름), 오른쪽 패널은 compact.
   const groupList = (compact: boolean) => (
@@ -252,8 +257,23 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
               {selGroup?.label} · {convs?.length ?? 0}
             </span>
           </div>
+          {/* 배경(서브에이전트) 대화: 직접 열 수 없음 → 안내 + 부모 세션 역링크 */}
+          {kind === "sessions" && sel && isSubagent && (
+            <div className="mb-2 rounded-lg border bg-muted/40 p-2">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+                <Bot className="size-3.5" />{t("browse.subagentBadge")}
+              </div>
+              <div className="text-[10.5px] text-muted-foreground">{t("browse.subagentNote")}</div>
+              {parentSid && (
+                <button type="button" onClick={() => setSel(parentSid)}
+                  className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-1.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/15">
+                  <ArrowLeft className="size-3.5" />{t("browse.openParent")}
+                </button>
+              )}
+            </div>
+          )}
           {/* 세션 재개: 이 PC에서 새 터미널로 바로 열기 + 커맨드 복사 폴백 */}
-          {kind === "sessions" && sel && (
+          {kind === "sessions" && sel && !isSubagent && (
             <div className="mb-2 rounded-lg border bg-muted/40 p-2">
               <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
                 <RotateCcw className="size-3.5" />{t("browse.resumeSession")}
