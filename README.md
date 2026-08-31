@@ -13,15 +13,15 @@
 
 </div>
 
-You've solved hundreds of problems with **Claude Code** and **Codex** — that gnarly async bug, the exact
-Docker config, the prompt that *finally* worked. Then the session closes and it's gone. Next time you
+You've solved hundreds of problems with **Claude Code** and **Codex** - that gnarly async bug, the exact
+Docker config, the prompt that finally worked. Then the session closes and it's gone. Next time you
 need it, you scroll through endless history, or just ask again from scratch.
 
 **Engram is the long-term memory your AI assistant doesn't have.** It quietly keeps every conversation
-on your own machine and lets you find any of them in a second — by meaning, not just keywords.
+on your own machine and lets you find any of them in a second - by meaning, not just keywords.
 
 <!--
-  ▶ Drop a demo GIF/screenshot here — it's the single biggest thing that makes people "get it".
+  ▶ Drop a demo GIF/screenshot here - it's the single biggest thing that makes people "get it".
   Put the file in docs/assets/ and uncomment (see docs/assets/README.md for how + a privacy note):
 
   <div align="center"><img src="docs/assets/demo.gif" alt="Searching past AI conversations in Engram" width="860"></div>
@@ -35,18 +35,18 @@ on your own machine and lets you find any of them in a second — by meaning, no
 |---|---|
 | You know you fixed this before, but that chat is gone. | You **find the exact conversation in seconds.** |
 | You re-ask Claude the same question and burn tokens. | You **reuse the answer you already got.** |
-| You only find it if you remember the exact words. | You **search by a vague memory** — *"that flaky websocket test fix"* lands the right message. |
+| You only find it if you remember the exact words. | You **search by a vague memory** - "that flaky websocket test fix" lands the right message. |
 | Your history is scattered across hundreds of sessions. | You **see it all on one 3D map**, clustered by topic. |
 | Cloud tools read your conversations. | **Nothing leaves your machine.** No account, no cloud. |
 
 ## Features
 
-- 🔍 **Search that reads your mind** — finds by *meaning*, so half-remembered ideas still land the exact message (semantic + keyword, together).
-- ⚡ **Instant recall** — every Claude Code & Codex conversation in one search box. No more scrolling or re-asking.
-- 🗺️ **A map of your work** — a 3D view clusters everything you've done into topics you can fly through.
-- 🔒 **100% local & offline** — runs entirely on your computer. No account, no telemetry, works on a plane.
-- ↔️ **One memory across devices** — your laptop and desktop stay in sync, peer-to-peer (no cloud).
-- 🤖 **Give your AI its memory back** — via MCP, Claude can search its own past sessions for you.
+- 🔍 **Search that reads your mind** - finds by meaning, so half-remembered ideas still land the exact message (semantic + keyword, together).
+- ⚡ **Instant recall** - every Claude Code & Codex conversation in one search box. No more scrolling or re-asking.
+- 🗺️ **A map of your work** - a 3D view clusters everything you've done into topics you can fly through.
+- 🔒 **100% local & offline** - runs entirely on your computer. No account, no telemetry, works on a plane.
+- ↔️ **One memory across devices** - your laptop and desktop stay in sync, peer-to-peer (no cloud).
+- 🤖 **Give your AI its memory back** - via MCP, Claude can search its own past sessions for you.
 
 ## Download
 
@@ -54,15 +54,15 @@ Get the latest build from the [**Releases**](https://github.com/flyingjoojak/eng
 
 | Platform | Install |
 |---|---|
-| **Windows** | Download `Engram-Setup-<version>.exe` and run it. First launch → *More info → Run anyway* (not code-signed yet — it's safe). Prefer no install? Use the portable `.zip` and run `Engram.exe`. |
+| **Windows** | Download `Engram-Setup-<version>.exe` and run it. First launch → More info → Run anyway (not code-signed yet - it's safe). Prefer no install? Use the portable `.zip` and run `Engram.exe`. |
 | **macOS** | `brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram` → `brew install --cask flyingjoojak/engram/engram`. Update: `brew upgrade --cask engram`. |
 | **Linux** | Download the `.AppImage`, `chmod +x`, run. |
 
-**First launch:** pick an embedding model (a *low-spec* option is offered for slower machines). It downloads
+**First launch:** pick an embedding model (a low-spec option is offered for slower machines). It downloads
 once, then Engram indexes your conversations automatically and keeps up as you chat. Everything runs in the
-background — use the left rail for **Search · Sessions · 3D map · Settings**.
+background - use the left rail for **Search · Sessions · 3D map · Settings**.
 
-> **“Unknown publisher” warning?** The app isn't code-signed yet (certificates cost hundreds a year). Signing only removes the OS warning — it has nothing to do with safety.
+> **“Unknown publisher” warning?** The app isn't code-signed yet (certificates cost hundreds a year). Signing only removes the OS warning - it has nothing to do with safety.
 
 ## How it works
 
@@ -80,22 +80,22 @@ re-indexing or switching models is always lossless. Design notes: [SPEC.md](SPEC
 ---
 
 <details>
-<summary><b>🔐  Privacy — what stays, what can leave</b></summary>
+<summary><b>🔐  Privacy - what stays, what can leave</b></summary>
 
 <br>
 
 By default **everything is local** and nothing is sent anywhere. Data leaves your device **only via three features you turn on yourself:**
 
-1. **Cloud summaries** — if you choose a cloud AI (Anthropic/OpenAI/Gemini) for *optional* summaries, parts of conversations go to that API. The `claude` (subscription), `ollama` (local) and `off` options send nothing.
-2. **Device sync** — connecting devices syncs logs **peer-to-peer between your own machines**, encrypted, through no third-party server. The bundled Syncthing binary is verified via SHA-256.
-3. **MCP** — a tool you register can search/view your local conversations; if it's a cloud model, returned text may reach that model.
+1. **Cloud summaries** - if you use a cloud AI for optional summaries (`claude` subscription, Anthropic, OpenAI, or Gemini), parts of conversations go to that provider. Only `ollama` (local) and `off` send nothing.
+2. **Device sync** - connecting devices syncs logs **peer-to-peer between your own machines**, encrypted, through no third-party server. The bundled Syncthing binary is verified via SHA-256.
+3. **MCP** - a tool you register can search/view your local conversations; if it's a cloud model, returned text may reach that model.
 
-No telemetry, no usage stats, no automatic error reports. The “report an issue” feature sends only a masked format fingerprint — never conversation content.
+No telemetry, no usage stats, no automatic error reports. The “report an issue” feature sends only a masked format fingerprint - never conversation content.
 
 </details>
 
 <details>
-<summary><b>⌨️  For developers — CLI &amp; source install</b></summary>
+<summary><b>⌨️  For developers - CLI &amp; source install</b></summary>
 
 <br>
 
@@ -127,7 +127,7 @@ chatmem stats | config | progress                # status · config · progress
 </details>
 
 <details>
-<summary><b>✨  Optional summaries — pluggable backends</b></summary>
+<summary><b>✨  Optional summaries - pluggable backends</b></summary>
 
 <br>
 
@@ -149,7 +149,7 @@ CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem en
 </details>
 
 <details>
-<summary><b>🤖  MCP server — let other AIs search your past conversations</b></summary>
+<summary><b>🤖  MCP server - let other AIs search your past conversations</b></summary>
 
 <br>
 
@@ -178,7 +178,7 @@ Pushing a tag (`vX.Y.Z`) makes GitHub Actions build the Windows/Linux/macOS inst
 
 1. Bump `version` in `electron/package.json`, summarize changes in `CHANGELOG.md`.
 2. `git tag v0.2.0 && git push origin v0.2.0`.
-3. **The release body shows in the app's update banner** — split it with `<!--lang:en-->` / `<!--lang:ko-->` markers and the banner shows the section matching the user's language.
+3. **The release body shows in the app's update banner** - split it with `<!--lang:en-->` / `<!--lang:ko-->` markers and the banner shows the section matching the user's language.
 
 macOS: unsigned apps can't auto-update, so install/update via **Homebrew** (no Gatekeeper warning). Windows auto-updates from the banner even while unsigned.
 
@@ -186,6 +186,6 @@ macOS: unsigned apps can't auto-update, so install/update via **Homebrew** (no G
 
 ## License
 
-**MIT** — see [LICENSE](LICENSE). Engram bundles the [Syncthing](https://syncthing.net/) (MPL-2.0) engine for device sync; other third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+**MIT** - see [LICENSE](LICENSE). Engram bundles the [Syncthing](https://syncthing.net/) (MPL-2.0) engine for device sync; other third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-<div align="center"><br><sub>Built for people who talk to their AI all day — and want to remember what they said.</sub></div>
+<div align="center"><br><sub>Built for people who talk to their AI all day - and want to remember what they said.</sub></div>
