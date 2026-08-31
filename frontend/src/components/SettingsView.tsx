@@ -15,7 +15,7 @@ import {
 import {
   getConfig, getEmbedModels, getEnrichStatus, getIndexStatus, getMcp, getStats, getSyncStatus,
   archiveSync, getSyncthingStatus, getSystem, mcpRegister, mcpUnregister, putConfig, reindex, runEnrich, runIndex,
-  syncthingPair, syncthingStart, syncthingStop, toggleSource, toggleSync, verifyEnrich,
+  syncthingPair, syncthingStart, syncthingStop, toggleSource, verifyEnrich,
   type Config, type EmbedModel, type EnrichStatus, type IndexStatus, type McpTarget, type SyncStatus,
   type SyncthingStatus, type SyncthingSync, type SystemInfo,
 } from "@/lib/api"
@@ -185,58 +185,50 @@ function McpSection() {
 }
 
 // 동기화 충돌 자동 정리: 기기 간 동기화 중 생긴 충돌 파일을 자동 정리(긴 쪽 채택, 진짜 분기만 새 세션 보존).
-function SyncSection() {
+// 자동 동기화 상태 + 수동 병합(진단). 충돌 정리·기기 간 병합은 '기기 연결'이 켜지면 자동 실행되므로
+// 별도 토글은 없다. 여기서는 자동 실행 상태(해소 누계)를 보여주고, 필요 시 수동 병합만 제공한다.
+function AutoSyncSection() {
   const { t } = useTranslation()
-  const [st, setSt] = useState<SyncStatus | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState<string | null>(null)
+  const [sync, setSync] = useState<SyncStatus | null>(null)
+  const [archiving, setArchiving] = useState(false)
+  const [archiveMsg, setArchiveMsg] = useState<string | null>(null)
 
-  const load = () => getSyncStatus().then(setSt).catch(() => setSt(null))
   useEffect(() => {
+    const load = () => getSyncStatus().then(setSync).catch(() => setSync(null))
     load()
-    const id = setInterval(load, 5000)   // 상태·정리 카운트 주기 갱신
+    const id = setInterval(load, 5000)   // 자동 정리 상태·해소 누계 주기 갱신
     return () => clearInterval(id)
   }, [])
 
-  async function toggle() {
-    if (!st) return
-    setBusy(true); setNote(null)
+  async function mergeNow() {
+    setArchiving(true); setArchiveMsg(null)
     try {
-      const r = await toggleSync(!st.running)
-      setSt(r)
-      setNote(r.running ? t("sync.onNote") : t("common.off"))
-    } catch { setNote(t("sync.failed")) } finally { setBusy(false) }
+      const r = await archiveSync()
+      setArchiveMsg(r.imported > 0
+        ? t("sync.mergeImported", { count: r.imported.toLocaleString() })
+        : t("sync.mergeUpToDate"))
+    } catch (e) { setArchiveMsg(errText(t, e, "sync.mergeFailed")) }
+    finally { setArchiving(false) }
   }
 
-  const loading = st === null
   return (
     <>
       <Row label={
-        <span className="flex items-center gap-2">
-          {t("sync.autoResolve")}
-          {loading
-            ? <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("sync.checking")}</span>
-            : st?.running
-              ? <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">{t("common.on")}</span>
-              : <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{t("common.off")}</span>}
+        <span className="flex flex-col">
+          <span className="text-[13px]">{t("sync.mergeNow")}</span>
+          <span className="text-[11px] text-muted-foreground">{t("sync.autoHelp")}</span>
         </span>
       }>
-        {loading
-          ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          : <Button variant={st?.running ? "outline" : "default"} size="sm" disabled={busy} onClick={toggle}>
-              {busy ? <Loader2 className="size-4 animate-spin" /> : st?.running ? t("sync.turnOff") : t("sync.turnOn")}
-            </Button>}
+        <Button variant="outline" size="sm" disabled={archiving} onClick={mergeNow}>
+          {archiving && <Loader2 className="mr-1 size-4 animate-spin" />}{t("sync.mergeNow")}
+        </Button>
       </Row>
-      {note && <div className="py-1 text-[11px] text-primary">{note}</div>}
-      {st && (
-        <div className="py-2 text-[11px] text-muted-foreground">
-          {t("sync.resolvedStat", { count: st.resolved_total, interval: st.interval })}
-          {st.last_error && <span className="text-destructive"> · {t("sync.errorInline", { error: st.last_error })}</span>}
+      {(archiveMsg || sync?.running) && (
+        <div className="py-1 text-[11px] text-muted-foreground">
+          {archiveMsg ?? t("sync.resolvedStat", { count: sync!.resolved_total })}
+          {sync?.last_error && <span className="text-destructive"> · {t("sync.errorInline", { error: sync.last_error })}</span>}
         </div>
       )}
-      <div className="py-2 text-xs text-muted-foreground">
-        <Trans i18nKey="sync.explain" components={{ b: <b /> }} />
-      </div>
     </>
   )
 }
@@ -479,8 +471,6 @@ export function SettingsView() {
   const [tab, setTab] = useState<TabKey>("general")
   const [intervalSaved, setIntervalSaved] = useState(false)
   const [indexErr, setIndexErr] = useState("")
-  const [archiveMsg, setArchiveMsg] = useState<string | null>(null)
-  const [archiving, setArchiving] = useState(false)
 
   const [embed, setEmbed] = useState<EmbedModel[]>([])
   const [recommendedModel, setRecommendedModel] = useState("")
@@ -1033,32 +1023,8 @@ export function SettingsView() {
               <Section title={t("sync.deviceConnectSection")}>
                 <SyncthingSection />
               </Section>
-              <Section title={t("sync.conflictSection")}>
-                <SyncSection />
-              </Section>
-
-              <Section title={t("sync.mergeSection")}>
-                <div className="py-3.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" size="sm" disabled={archiving}
-                      onClick={async () => {
-                        setArchiving(true); setArchiveMsg(null)
-                        try {
-                          const r = await archiveSync()
-                          setArchiveMsg(r.imported > 0
-                            ? t("sync.mergeImported", { count: r.imported.toLocaleString() })
-                            : t("sync.mergeUpToDate"))
-                        } catch (e) { setArchiveMsg(errText(t, e, "sync.mergeFailed")) }
-                        finally { setArchiving(false) }
-                      }}>
-                      {archiving && <Loader2 className="mr-1 size-4 animate-spin" />}{t("sync.mergeNow")}
-                    </Button>
-                    {archiveMsg && <span className="text-[11px] text-muted-foreground">{archiveMsg}</span>}
-                  </div>
-                  <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
-                    <Trans i18nKey="sync.mergeHelp" components={{ b: <b /> }} />
-                  </p>
-                </div>
+              <Section title={t("sync.autoSection")}>
+                <AutoSyncSection />
               </Section>
             </>
           )}
