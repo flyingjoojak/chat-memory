@@ -22,7 +22,8 @@ def test_enabled_excludes_disabled_default(monkeypatch, tmp_path):
     names = enabled_source_names()
     assert "codex" not in names and "claude-code" in names
     db.set_meta("sources_disabled", ""); db.commit()
-    assert set(enabled_source_names()) == {"claude-code", "codex"}
+    # subagent(배경 에이전트) 어댑터도 기본 등록 소스 → 세 개 다 활성.
+    assert set(enabled_source_names()) == {"claude-code", "codex", "subagent"}
 
 
 def test_enabled_excludes_disabled_with_env_pin(monkeypatch, tmp_path):

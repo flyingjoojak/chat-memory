@@ -21,7 +21,8 @@ class ClaudeCodeAdapter:
 
     def discover(self, root: Path) -> Iterator[Path]:
         for p in root.rglob("*.jsonl"):
-            if _SKIP_DIRS.isdisjoint(p.parts):
+            # 백업 폴더 제외 + 서브에이전트 대화는 SubagentAdapter 담당이라 여기선 건너뜀.
+            if _SKIP_DIRS.isdisjoint(p.parts) and p.parent.name != "subagents":
                 yield p
 
     def read_records(self, path: str | Path, start_offset: int = 0) -> Iterator[tuple[dict, int]]:

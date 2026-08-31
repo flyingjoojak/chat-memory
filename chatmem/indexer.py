@@ -225,8 +225,10 @@ def index_file(
         db.commit()
         vi.save()
 
+    # 저장 출처: 어댑터가 source_name 을 주면 그걸(예: subagent 어댑터 → 'claude-code'), 없으면 name.
+    src = getattr(adapter, "source_name", adapter.name)
     for turn, resume in turns:
-        db.upsert_turn(turn, source=adapter.name, source_file=path)   # 출처·원문경로 기록(재개용)
+        db.upsert_turn(turn, source=src, source_file=path)   # 출처·원문경로 기록(재개용)
         count += 1
         if should_embed(turn):
             ctx = prev_q.get(turn.session_id, "")
