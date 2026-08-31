@@ -1,17 +1,17 @@
 # Third-Party Notices
 
-chat-memory is licensed under the MIT License (see [LICENSE](./LICENSE)).
+Engram is licensed under the MIT License (see [LICENSE](./LICENSE)).
 It uses, and in one case redistributes, third-party software listed below.
 Each component remains under its own license; nothing here changes those terms.
 
 ---
 
-## Redistributed binary — Syncthing
+## Redistributed binary - Syncthing
 
-chat-memory drives an **embedded [Syncthing](https://syncthing.net/)** engine for
+Engram drives an **embedded [Syncthing](https://syncthing.net/)** engine for
 optional device-to-device sync. The official, **unmodified** pre-built Syncthing
 binary is downloaded at runtime from Syncthing's GitHub releases (or bundled
-verbatim in packaged builds) and executed as a separate process — chat-memory
+verbatim in packaged builds) and executed as a separate process - Engram
 does not modify or statically link Syncthing.
 
 - **Project:** Syncthing
@@ -26,7 +26,7 @@ published by the Syncthing project.
 
 ---
 
-## Desktop shell — Electron
+## Desktop shell - Electron
 
 The packaged desktop app is built with **Electron**, which bundles Chromium and
 Node.js. These are redistributed as part of the installer.
@@ -71,11 +71,11 @@ are optional extras.
 
 The **default model is bundled** (redistributed) in packaged builds so the app
 works offline on first launch: an **int8-quantized derivative** of
-`intfloat/multilingual-e5-large` (generated at build time — see
+`intfloat/multilingual-e5-large` (generated at build time - see
 `packaging/make_int8.py`). The source model is published under the **MIT License**
 by its authors, which permits redistribution of this quantized derivative.
 
-- **Source model:** `intfloat/multilingual-e5-large` — MIT — https://huggingface.co/intfloat/multilingual-e5-large
+- **Source model:** `intfloat/multilingual-e5-large` - MIT - https://huggingface.co/intfloat/multilingual-e5-large
 
 Other, non-default models (e.g. the `sentence-transformers` MiniLM family) are
 **not** bundled; they are fetched from the Hugging Face Hub on first use. Consult
@@ -104,7 +104,7 @@ each model card for its exact terms.
 
 ### Bundled font
 
-- **Geist** (`@fontsource-variable/geist`) — SIL Open Font License 1.1 (OFL-1.1) —
+- **Geist** (`@fontsource-variable/geist`) - SIL Open Font License 1.1 (OFL-1.1) -
   https://github.com/vercel/geist-font
 
 ---
