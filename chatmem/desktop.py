@@ -17,7 +17,7 @@ import threading
 import time
 
 DEFAULT_PORT = 8642
-WIN_TITLE = "chat-memory"
+WIN_TITLE = "Engram"
 
 
 def _free_port(preferred: int = DEFAULT_PORT) -> int:

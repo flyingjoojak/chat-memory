@@ -39,4 +39,4 @@ GitHub 릴리스가 만들어지고, **그 릴리스 본문이 앱의 업데이�
 - Syncthing 다운로드 바이너리를 공식 SHA-256으로 무결성 검증.
 - 자동업데이트 산출물 파일명을 고정하여 업데이트 404를 방지.
 
-[Unreleased]: https://github.com/flyingjoojak/chat-memory/commits/main
+[Unreleased]: https://github.com/flyingjoojak/engram/commits/main

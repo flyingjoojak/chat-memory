@@ -2,7 +2,7 @@
 
 <img src="docs/assets/banner.png" alt="Engram" width="100%">
 
-### AI 코딩 대화를 위한 개인용 검색 기억
+### AI는 세션이 끝나면 다 잊어버립니다. 이제 당신은 그러지 않아도 됩니다.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-10b981.svg)](LICENSE)
 ![Platforms](https://img.shields.io/badge/Windows%20%7C%20macOS%20%7C%20Linux-1f2937)
@@ -13,59 +13,60 @@
 
 </div>
 
-> **Claude Code와 Codex는 세션이 끝나는 순간 모든 걸 잊습니다. Engram은 기억합니다.**
-> 내 컴퓨터에서 조용히 돌면서, AI 코딩 어시스턴트와 나눈 모든 대화를 저장하고
-> **즉시 검색되는 개인 기억**으로 만들어 줍니다 — 3주 전에 풀었던 그 해결책이 검색 한 번 거리에.
-> 어떤 것도 기기를 벗어나지 않습니다.
+**Claude Code**와 **Codex**로 지금까지 수백 개의 문제를 풀었을 겁니다 — 그 골치 아픈 async 버그,
+겨우 맞춘 Docker 설정, *드디어* 먹힌 그 프롬프트. 그런데 세션을 닫는 순간 전부 사라집니다.
+다음에 필요하면 기록을 하염없이 스크롤하거나, 그냥 처음부터 다시 물어보죠.
+
+**Engram은 당신의 AI에게 없는 장기 기억입니다.** 모든 대화를 내 컴퓨터에 조용히 보관하고,
+그중 무엇이든 몇 초 만에 찾아줍니다 — 정확한 단어가 아니라 **의미로**.
 
 <!--
-  ▶ 여기에 데모 GIF나 스크린샷을 넣으면 상단이 확 살아납니다.
+  ▶ 여기에 데모 GIF/스크린샷을 넣으면 "아 이거구나"가 한 번에 옵니다.
   파일을 docs/assets/ 에 넣고 아래 주석을 해제하세요 (방법·프라이버시 주의는 docs/assets/README.md 참고):
 
-  <div align="center">
-    <img src="docs/assets/demo.gif" alt="Engram에서 과거 대화 검색" width="860">
-  </div>
+  <div align="center"><img src="docs/assets/demo.gif" alt="Engram에서 과거 AI 대화 검색" width="860"></div>
 
-  재생되는 영상은 .mp4 를 GitHub 이슈/릴리스에 드래그해 얻은 github.com/user-attachments/... URL을
-  이 자리에 한 줄로 붙이면 됩니다.
+  재생 영상: .mp4 를 GitHub 이슈/릴리스에 드래그 → github.com/user-attachments/... URL을 이 자리에 한 줄로.
 -->
 
----
+## 뭐가 나아지나요
 
-## Engram이 뭔가요?
-
-Engram은 **Claude Code와 Codex가 이미 내 기기에 남기는 로그**를 지켜보다가, 임베딩 모델로
-내 컴퓨터에서 색인하고, **내 전체 기록을 훑는 검색창**과 지금까지 작업한 모든 것의 **3D 지도**를
-제공하는 데스크탑 앱입니다.
-
-계정·클라우드·텔레메트리 없음. 대화는 내 기기에 그대로 남습니다.
+| Engram 없을 때 | Engram 있을 때 |
+|---|---|
+| 분명 예전에 고쳤는데, 그 대화가 어디 갔는지 모릅니다. | **그 대화를 몇 초 만에 찾습니다.** |
+| 같은 질문을 Claude에게 또 물어보며 토큰을 씁니다. | **이미 받았던 답을 다시 씁니다.** |
+| 정확한 단어를 기억해야만 찾을 수 있습니다. | **어렴풋한 기억으로 검색합니다** — *"그 깨지던 웹소켓 테스트 고친 거"* 로 정확한 메시지를 찾습니다. |
+| 기록이 수백 개 세션에 흩어져 있습니다. | **3D 지도 하나에서 주제별로 모아 봅니다.** |
+| 클라우드 도구가 내 대화를 읽습니다. | **아무것도 기기를 벗어나지 않습니다.** 계정도, 클라우드도 없이. |
 
 ## 기능
 
-- 🔒 **완전 로컬·오프라인** — 대화가 기기를 벗어나지 않습니다
-- 🔍 **하이브리드 검색** — *의미*(시맨틱)와 *정확한 단어*(키워드)를 융합해 검색
-- 🗺️ **3D 기억 지도** — 기록이 주제별로 뭉쳐, 날아다니며 탐색
-- 🔌 **Claude Code + Codex** — 둘 다 자동 감지해 함께 색인
-- ↔️ **여러 기기 동기화** — 클라우드 없이 P2P (Syncthing 엔진 내장)
-- 🤖 **MCP 서버** — 내 AI가 자기 과거 세션을 직접 검색하게
+- 🔍 **마음을 읽는 검색** — *의미*로 찾아서, 어렴풋한 기억만으로도 정확한 메시지에 닿습니다(시맨틱 + 키워드 융합).
+- ⚡ **즉시 회상** — Claude Code·Codex의 모든 대화가 검색창 하나에. 스크롤도, 다시 묻기도 끝.
+- 🗺️ **내 작업의 지도** — 지금까지 한 모든 걸 주제별로 뭉쳐 보여주는 3D 뷰를 날아다니며 탐색.
+- 🔒 **완전 로컬·오프라인** — 전부 내 컴퓨터에서. 계정·텔레메트리 없고, 비행기에서도 됩니다.
+- ↔️ **여러 기기가 한 기억** — 노트북과 데스크탑이 P2P로 동기화(클라우드 없음).
+- 🤖 **AI에게 기억을 돌려주기** — MCP로 Claude가 자기 과거 세션을 직접 검색.
 
 ## 다운로드
 
-[**Releases**](https://github.com/flyingjoojak/chat-memory/releases) 페이지에서 최신 빌드를 받으세요.
+[**Releases**](https://github.com/flyingjoojak/engram/releases) 페이지에서 최신 빌드를 받으세요.
 
-| 플랫폼 | 설치 방법 |
+| 플랫폼 | 설치 |
 |---|---|
-| **Windows** | `Engram-Setup-<버전>.exe`를 받아 실행. 첫 실행 시 *추가 정보 → 실행* (아직 코드 서명 안 됨 — 안전합니다). 또는 포터블 `.zip`을 풀어 `Engram.exe` 실행. |
-| **macOS** | `brew tap flyingjoojak/chat-memory https://github.com/flyingjoojak/chat-memory` 후 `brew install --cask flyingjoojak/chat-memory/engram`. 업데이트는 `brew upgrade --cask engram`. |
+| **Windows** | `Engram-Setup-<버전>.exe`를 받아 실행. 첫 실행 → *추가 정보 → 실행* (아직 코드 서명 안 됨 — 안전합니다). 설치가 싫으면 포터블 `.zip`을 풀어 `Engram.exe` 실행. |
+| **macOS** | `brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram` → `brew install --cask flyingjoojak/engram/engram`. 업데이트: `brew upgrade --cask engram`. |
 | **Linux** | `.AppImage`를 받아 `chmod +x` 후 실행. |
 
-**첫 실행** 시 임베딩 모델을 하나 고릅니다(느린 기기는 *저사양* 옵션 제공). 한 번 내려받은 뒤
-Engram이 대화를 자동으로 색인하고, 이후 대화가 쌓일 때마다 따라갑니다.
+**첫 실행:** 임베딩 모델을 하나 고릅니다(느린 기기는 *저사양* 옵션 제공). 한 번 내려받은 뒤
+Engram이 대화를 자동으로 색인하고, 이후 대화가 쌓일 때마다 따라갑니다. 전부 백그라운드에서 돌고,
 왼쪽 레일에서 **검색 · 세션 · 3D 지도 · 설정**을 오갑니다.
 
-> **왜 “알 수 없는 게시자” 경고가 뜨나요?** 아직 코드 서명을 안 해서입니다(인증서 연 수십만 원). 서명은 OS 경고 제거용일 뿐, 안전성·기능과는 무관합니다.
+> **“알 수 없는 게시자” 경고?** 아직 코드 서명을 안 해서입니다(인증서 연 수십만 원). 서명은 OS 경고 제거용일 뿐, 안전성과는 무관합니다.
 
 ## 어떻게 동작하나
+
+Engram은 Claude Code와 Codex가 **이미 내 기기에 남기는 로그**를 지켜봅니다 — 따로 설정할 게 없습니다.
 
 ```
 Claude Code / Codex 로그  →  증분 읽기  →  대화(질문 + 답변 + 행동)
@@ -83,9 +84,9 @@ Claude Code / Codex 로그  →  증분 읽기  →  대화(질문 + 답변 + �
 
 <br>
 
-기본은 **전부 로컬**(`~/chat-memory/data`)이고 아무 데도 전송되지 않습니다. 데이터가 기기를 벗어나는 건 **직접 켜는 세 기능뿐:**
+기본은 **전부 로컬**이고 아무 데도 전송되지 않습니다. 데이터가 기기를 벗어나는 건 **직접 켜는 세 기능뿐:**
 
-1. **클라우드 요약** — 선택적 요약에 클라우드 AI(Anthropic/OpenAI/Gemini)를 쓰면 대화 일부가 그 API로 갑니다. `claude`(구독)·`ollama`(로컬)·`off`는 아무것도 안 보냅니다.
+1. **클라우드 요약** — *선택적* 요약에 클라우드 AI(Anthropic/OpenAI/Gemini)를 쓰면 대화 일부가 그 API로 갑니다. `claude`(구독)·`ollama`(로컬)·`off`는 아무것도 안 보냅니다.
 2. **기기 동기화** — 기기 연결 시 **내 기기들끼리 P2P**로 로그를 동기화합니다. 제3자 서버를 거치지 않는 암호화 전송이며, 번들 Syncthing 바이너리는 SHA-256으로 검증됩니다.
 3. **MCP** — 등록한 도구가 로컬 대화를 검색·열람할 수 있고, 그 도구가 클라우드 모델이면 반환된 텍스트가 그 모델로 갈 수 있습니다.
 
@@ -94,14 +95,14 @@ Claude Code / Codex 로그  →  증분 읽기  →  대화(질문 + 답변 + �
 </details>
 
 <details>
-<summary><b>⌨️  개발자용 — CLI & 소스 설치</b></summary>
+<summary><b>⌨️  개발자용 — CLI &amp; 소스 설치</b></summary>
 
 <br>
 
-Engram은 파이썬 코어(`chatmem`)와 얇은 CLI로 되어 있습니다. 소스에서 설치:
+Engram은 파이썬 코어 + 얇은 CLI로 되어 있습니다. 소스에서 설치:
 
 ```bash
-git clone https://github.com/flyingjoojak/chat-memory.git && cd chat-memory
+git clone https://github.com/flyingjoojak/engram.git && cd engram
 pip install ".[web]"          # 코어 + 웹 UI.  전부: ".[all]"  ·  개발: pip install -e ".[all]"
 chatmem setup                 # 폴더·설정 + 10분마다 자동 색인하는 스케줄러
 ```
@@ -109,18 +110,19 @@ chatmem setup                 # 폴더·설정 + 10분마다 자동 색인하는
 또는 [pipx](https://pipx.pypa.io):
 
 ```bash
-pipx install "chat-memory[web] @ git+https://github.com/flyingjoojak/chat-memory.git"
+pipx install "engram[web] @ git+https://github.com/flyingjoojak/engram.git"
 chatmem setup
 ```
 
 ```bash
-mem "급여 계산 로직 어떻게 짰더라"      # 터미널 검색
+mem "급여 계산 로직 어떻게 짰더라"      # 터미널에서 검색
 python -m chatmem.web                     # 웹 UI → http://127.0.0.1:8642
 chatmem search "..." -k 10 --since 2026-07-01 --session growth
 chatmem stats | config | progress          # 상태 · 설정 · 진행률
 ```
 
 > Extras: `[web]` 웹 UI · `[enrich]` 클라우드/로컬 요약 백엔드 · `[mcp]` MCP 서버 · `[all]` 전부.
+> (명령은 `chatmem`, 별칭 `mem`. 데이터는 `~/chat-memory/data`에 저장됩니다.)
 
 </details>
 
@@ -151,16 +153,16 @@ CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem en
 
 <br>
 
-`chatmem-mcp`를 등록하면 Claude Code·Desktop 등이 세션을 **검색·열람**합니다(로컬 하이브리드 검색 → 원문 + 요약).
+MCP 서버를 등록하면 Claude Code·Desktop 등이 세션을 **검색·열람**합니다(로컬 하이브리드 검색 → 원문 + 요약).
 
 > **가장 쉬운 방법:** 앱의 **설정 → MCP 연동**에서 대상별 등록 버튼.
 
 ```bash
-claude mcp add chat-memory -- chatmem-mcp
+claude mcp add engram -- chatmem-mcp
 ```
 
 ```json
-{ "mcpServers": { "chat-memory": { "command": "chatmem-mcp" } } }
+{ "mcpServers": { "engram": { "command": "chatmem-mcp" } } }
 ```
 
 도구: `search_memory` · `get_session` · `recent_sessions` · `stats`.

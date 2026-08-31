@@ -19,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-NAME = "chat-memory"
+NAME = "engram"
 
 
 def mcp_command() -> tuple[str, list[str]]:

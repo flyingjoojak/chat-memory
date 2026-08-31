@@ -5,8 +5,8 @@
 # 떼주므로, 코드 서명 없이도 설치·업데이트가 되고 Gatekeeper 경고도 뜨지 않는다.
 #
 # 설치:
-#   brew tap flyingjoojak/chat-memory https://github.com/flyingjoojak/chat-memory
-#   brew install --cask flyingjoojak/chat-memory/engram
+#   brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram
+#   brew install --cask flyingjoojak/engram/engram
 # 업데이트:
 #   brew upgrade --cask engram
 #
@@ -17,11 +17,11 @@ cask "engram" do
   version "0.1.0"
   sha256 :no_check
 
-  url "https://github.com/flyingjoojak/chat-memory/releases/download/v#{version}/Engram-Setup-#{version}.dmg",
-      verified: "github.com/flyingjoojak/chat-memory/"
+  url "https://github.com/flyingjoojak/engram/releases/download/v#{version}/Engram-Setup-#{version}.dmg",
+      verified: "github.com/flyingjoojak/engram/"
   name "Engram"
   desc "Local semantic search over your AI coding CLI conversations"
-  homepage "https://github.com/flyingjoojak/chat-memory"
+  homepage "https://github.com/flyingjoojak/engram"
 
   # 새 GitHub 릴리스가 뜨면 `brew upgrade` 가 감지하도록.
   livecheck do

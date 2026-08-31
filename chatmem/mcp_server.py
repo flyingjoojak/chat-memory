@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy  # noqa: F401
 from mcp.server.fastmcp import FastMCP
 
-mcp = FastMCP("chat-memory")
+mcp = FastMCP("engram")
 _state: dict = {}
 
 # 무거운 작업(임베딩·벡터검색·sqlite)은 단일 전용 워커 스레드로 오프로드한다.

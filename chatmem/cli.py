@@ -273,12 +273,12 @@ def cmd_app(args: argparse.Namespace) -> int:
     try:
         from . import desktop
     except ImportError:
-        print("데스크탑 앱은 pywebview가 필요합니다:  pip install \"chat-memory[desktop]\"")
+        print("데스크탑 앱은 pywebview가 필요합니다:  pip install \"engram[desktop]\"")
         return 1
     try:
         desktop.run(port=args.port)
     except ImportError:
-        print("pywebview 미설치. 설치:  pip install \"chat-memory[desktop]\"")
+        print("pywebview 미설치. 설치:  pip install \"engram[desktop]\"")
         return 1
     return 0
 
