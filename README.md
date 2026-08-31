@@ -1,239 +1,301 @@
-# chat-memory
+<div align="center">
 
-**English** | [한국어](README.ko.md)
+<img src="docs/assets/banner.png" alt="Engram — semantic search across everything you've built with your AI" width="100%">
 
-A personal knowledge search box that automatically accumulates your Claude Code conversations and makes them **semantically searchable**. Fully local and offline.
+**English** · [한국어](README.ko.md)
 
-> Full design spec: [SPEC.md](SPEC.md). The raw archive is the source of truth / the vector index is a regenerable derivative.
+[![License: MIT](https://img.shields.io/badge/license-MIT-10b981.svg)](LICENSE)
+![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-1f2937)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Electron](https://img.shields.io/badge/Electron-43-47848F?logo=electron&logoColor=white)
 
-## Desktop app install (Engram) — for non-developers
+**Engram turns your AI‑coding conversations into a private, offline, searchable memory.**
+It watches the logs Claude Code (and Codex) already write, indexes them locally with a
+multilingual embedding model, and gives you instant **hybrid semantic search**, a
+**3D memory map**, and a clean desktop app — all on your own machine.
 
-No Python, no install commands — just one installer. (Windows)
+</div>
 
-### Option 1 — Installer (recommended)
+<!--
+  ▶ Add a hero screenshot or demo GIF right here to make the top pop.
+  Drop the file in docs/assets/ and uncomment (see docs/assets/README.md for how + a privacy note):
 
-1. Download **`Engram-Setup-0.1.0.exe`** (the number varies by version) and double-click it.
-2. **Handling the unsigned warning**: if Windows shows *"Windows protected your PC / Unknown publisher"*, click **More info → Run anyway**. (If your browser warns on download, choose **Keep**.) — It's simply not code-signed; it's safe and works normally.
-3. After installing, launch **Start menu → Engram**. Closing the window **hides it to the tray** (background indexing/sync keeps running); to **quit fully, right-click the tray icon → Quit**.
+  <div align="center">
+    <img src="docs/assets/hero.png" alt="Engram desktop app" width="860">
+    <br><sub>Hybrid search · 3D semantic map · session browser — all local</sub>
+  </div>
 
-> Why the warning? We haven't attached a distribution code-signing certificate yet (they cost hundreds of dollars a year). Signing is only about trust indication and removing the warning — it has nothing to do with the app's functionality or safety.
+  For a playable video, drag an .mp4 into a GitHub issue/release to get a
+  user-attachments URL, then paste it here (see docs/assets/README.md).
+-->
 
-### Option 2 — Portable (no install)
+---
 
-Unzip **`Engram-Setup-0.1.0.zip`** (portable package; the number varies by version) and run **`Engram.exe`** inside the folder. (Same app — it just isn't registered with the installer/Start menu.)
+## Why Engram
+
+You've solved the same problem before — in a Claude Code session weeks ago. Engram makes that
+past self searchable. It’s not an LLM‑recall gimmick: it’s a fast, human **omni‑search box** over
+everything you've ever discussed, returning the **verbatim original** alongside an optional summary.
+
+- 🔒 **Local & offline by default** — your conversations never leave the machine (opt‑in features are clearly marked).
+- 🧠 **Hybrid semantic search** — meaning (vectors) + keywords (BM25), fused so exact terms *and* fuzzy ideas both surface.
+- 🌐 **Multilingual, Korean‑first** — bundled `multilingual‑e5‑large` (int8) handles CJK and mixed text well.
+- 🗺️ **3D memory map** — your history clustered into topics you can fly through.
+- 🔌 **Multi‑source** — Claude Code + Codex CLI/Desktop, auto‑detected and indexed together.
+- 🖥️ **One‑click desktop app** — no Python, no terminal. Windows / macOS / Linux.
+- ↔️ **Multi‑device sync** — P2P via a built‑in Syncthing engine, no external install, no cloud.
+- 🤖 **MCP server** — let Claude Code / Desktop search your past sessions directly.
+
+## Download & install (desktop app)
+
+No Python, no commands — just one installer.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**Windows — Installer** *(recommended)*
+
+1. Download **`Engram-Setup-<version>.exe`** and double‑click.
+2. If Windows shows *“Windows protected your PC / Unknown publisher”*, click **More info → Run anyway**. It’s simply not code‑signed yet — it’s safe.
+3. Launch from **Start → Engram**. Closing the window **hides it to the tray** (indexing keeps running); to quit fully, **right‑click the tray icon → Quit**.
+
+</td>
+<td width="50%" valign="top">
+
+**Windows — Portable** *(no install)*
+
+Unzip **`Engram-<version>-win-x64-portable.zip`** and run **`Engram.exe`** inside. Same app — just not registered with the Start menu.
+
+**macOS — Homebrew** *(recommended)*
+
+```bash
+brew tap flyingjoojak/chat-memory https://github.com/flyingjoojak/chat-memory
+brew install --cask flyingjoojak/chat-memory/engram
+brew upgrade --cask engram   # update
+```
+
+</td>
+</tr>
+</table>
+
+> **Why the unsigned warning?** We haven’t attached a code‑signing certificate yet (they cost hundreds of dollars a year). Signing only removes the OS warning — it has nothing to do with the app’s function or safety.
 
 ### First run
 
-- On first run you pick an **embedding model** — if your machine is slow or low on RAM, the **"recommended for low-spec"** model is suggested. The chosen model is downloaded once, then indexing begins.
-- After that, conversations are indexed automatically as they accumulate. Use the left ribbon to move between **Search / Sessions / 3D map / Settings**.
-- **Multiple devices**: in Settings → **Device connection**, paste each other's codes to connect and your conversations sync automatically (each device builds its own index).
-- **Search past conversations from other AI tools (Claude Code/Desktop, etc.)**: register it in Settings → **MCP integration**.
+- Pick an **embedding model** — on a slow / low‑RAM machine choose the **“recommended for low‑spec”** one. It downloads once, then indexing begins.
+- Conversations index automatically as they accumulate. Use the left ribbon for **Search / Sessions / 3D map / Settings**.
+- **Multiple devices:** Settings → **Device connection** → paste each other’s codes. Conversations then sync automatically.
+- **Search from other AI tools:** Settings → **MCP integration** to register Claude Code / Desktop / Codex / Gemini.
 - Diagnostic log: `%APPDATA%\Engram\backend.log`.
 
-## Running the standalone backend exe (alternative — no Electron shell)
+## How it works
 
-Instead of the Electron app, you can run **just the backend exe folder** (access via a browser).
+```
+Claude Code / Codex logs  →  incremental cursor read  →  turns (Q + A + actions)
+      →  chunking + context  →  local embeddings (e5‑large int8)
+      →  SQLite archive  +  vector index  →  hybrid search (semantic ⊕ keyword, RRF)
+```
 
-No Python, no install — just the exe folder.
+The **raw archive is the source of truth**; the vector index is a regenerable derivative, so changing
+the model or re‑indexing is always lossless. Full design spec: [SPEC.md](SPEC.md).
 
-1. Keep the received **`chatmem-backend` folder intact** and **double-click** `chatmem-backend.exe` (all files in the folder must be present for it to run).
-2. After a moment your **browser opens automatically** (if not, go to `http://127.0.0.1:8765`).
-3. On first run, **pick an embedding model** — for a slow/low-RAM machine, the **"recommended for low-spec"** model is suggested. It's downloaded once, then indexing begins.
-4. After that, conversations are indexed automatically as they accumulate. On the left you can switch between **Search / Sessions / Clusters / 3D map / Settings**.
+---
 
-- To use **multiple devices**, connect them in Settings → **Device connection** by pasting each other's codes; conversations then sync automatically (each device builds its own index).
-- To **search past conversations from other AI tools (Claude Code/Desktop, etc.)**, register it in Settings → **MCP integration**.
-- Logs are kept in the folder's `data/app.log` (for troubleshooting).
+<details>
+<summary><b>📦  Run the standalone backend (no Electron shell)</b></summary>
 
-## What it does
+<br>
 
-- Reads the JSONL logs that Claude Code auto-saves (`~/.claude/projects/**/*.jsonl`) **incrementally via a cursor**
-- Parses into turns (question + answer + actions) → chunks → local embeddings (e5-large) → SQLite archive + numpy vector index
-- `mem "query"` runs a semantic search → returns the **raw text + enriched summary + thread context**
+Instead of the Electron app you can run **just the `chatmem-backend` folder** and use it from a browser — no Python, no install.
 
-## Quick start (easiest — 2 lines)
+1. Keep the **`chatmem-backend` folder intact** and **double‑click** `chatmem-backend.exe` (all files must be present).
+2. Your **browser opens automatically** after a moment (else visit `http://127.0.0.1:8765`).
+3. On first run, pick an embedding model (low‑spec option available); it downloads once, then indexing begins.
+4. Same features as the app — Search / Sessions / Clusters / 3D map / Settings, device connection, MCP integration. Logs live in the folder’s `data/app.log`.
 
-Installing with [pipx](https://pipx.pypa.io) handles the virtualenv and PATH for you.
+</details>
+
+<details>
+<summary><b>⌨️  CLI quick start (developers)</b></summary>
+
+<br>
+
+Installing with [pipx](https://pipx.pypa.io) handles the virtualenv and PATH for you:
 
 ```bash
 pipx install "chat-memory[web] @ git+https://github.com/flyingjoojak/chat-memory.git"
 chatmem setup
 ```
 
-`setup` creates the folders/config and **registers a scheduler that auto-accumulates every 10 minutes**. After that it fills up hands-free (the embedding model, ~2.2 GB, downloads automatically on first run). To fill immediately, `chatmem setup --index`.
-
-Search:
+`setup` creates the folders/config and **registers a scheduler that auto‑accumulates every 10 minutes**.
+The embedding model (~2.2 GB) downloads on first run. To fill immediately: `chatmem setup --index`.
 
 ```bash
-mem "how did I write the payroll calc logic"   # bare = search (terminal)
-chatmem app                                     # desktop app (native window — Obsidian-like). Needs the [desktop] extra
-python -m chatmem.web                            # web UI → http://127.0.0.1:8642 (browser)
+mem "how did I write the payroll calc logic"   # bare = terminal search
+chatmem app                                     # desktop app (needs the [desktop] extra)
+python -m chatmem.web                            # web UI → http://127.0.0.1:8642
 ```
 
-> The desktop app needs `pip install "chat-memory[desktop]"` (pywebview). On Windows it requires the Edge WebView2 runtime (included by default on Win11).
+</details>
 
-## Install (from source / for development)
+<details>
+<summary><b>🛠️  Install from source</b></summary>
 
-If you don't have pipx or want to modify the source:
+<br>
 
 ```bash
 git clone https://github.com/flyingjoojak/chat-memory.git && cd chat-memory
-pip install ".[web]"          # core + web. With enrichment: ".[all]"  / dev: pip install -e ".[all]"
+pip install ".[web]"          # core + web.  Enrichment: ".[all]"  ·  dev: pip install -e ".[all]"
 chatmem setup
 ```
 
-Extras: `[web]` web UI · `[enrich]` enrichment backends (anthropic/openai·gemini·ollama) · `[all]` everything.
-Installing creates the console command **`chatmem`** (alias **`mem`**). Without installing, `python -m chatmem <subcommand>` works identically.
+Extras: `[web]` web UI · `[enrich]` enrichment backends · `[mcp]` MCP server · `[all]` everything.
+Installing creates the command **`chatmem`** (alias **`mem`**). Without installing, `python -m chatmem <cmd>` is identical.
 
-## Command summary
+</details>
+
+<details>
+<summary><b>📋  Command reference</b></summary>
+
+<br>
 
 ```bash
 chatmem setup [--index] [--no-scheduler]   # onboarding (folders, config, scheduler [, immediate backfill])
-chatmem index                              # backfill / incremental indexing (the scheduler runs it automatically)
+chatmem index                              # backfill / incremental indexing (the scheduler runs this)
 mem "query"                                # semantic search
 chatmem search "..." -k 10 --since 2026-07-01 --until 2026-07-24 --session growth
 chatmem scheduler status|install|uninstall # auto-accumulation scheduler
 chatmem stats | config | progress          # status · config · backfill progress
 ```
 
-## Architecture (core library + thin CLI)
+</details>
+
+<details>
+<summary><b>🧩  Architecture (core library + thin CLI)</b></summary>
+
+<br>
 
 | Module | Role |
 |------|------|
-| `parser.py` | Cursor-based incremental JSONL reading (tail-safe) · filters · turn grouping |
-| `chunker.py` | Turn-based chunking + boundary splitting of long turns + parent-child |
+| `parser.py` | Cursor‑based incremental JSONL reading (tail‑safe) · filters · turn grouping |
+| `chunker.py` | Turn‑based chunking + boundary splitting of long turns + parent‑child |
 | `embedder.py` | fastembed e5 (query/passage prefixes, L2 normalization) |
 | `store.py` | SQLite archive (turns · chunks · cursors · enrichments · meta) |
-| `vectorindex.py` | numpy brute-force vector search |
+| `vectorindex.py` | vector search (numpy / sqlite‑vec int8) |
 | `indexer.py` | pipeline · holds back the incomplete last turn · contextual embedding |
 | `search.py` | **hybrid search** (semantic + keyword BM25, fused via RRF) · dedup · filters · threads |
+| `sources/` | pluggable source adapters (Claude Code · Codex) |
 | `cli.py` | the `mem` command |
 
-## Enrichment (summary/tags) backends — pluggable
+</details>
 
-Enrichment is an **optional feature**; you pick a backend (`CHATMEM_ENRICH_BACKEND` or `--backend`):
+<details>
+<summary><b>✨  Enrichment (summaries/tags) — pluggable backends</b></summary>
+
+<br>
+
+Enrichment is **optional**; search itself runs on the raw text. Pick a backend via `CHATMEM_ENRICH_BACKEND` or `--backend`:
 
 | Backend | Description | Requirements |
 |--------|------|-----------|
 | `claude` (default) | Claude Code subscription (`claude -p`) | Claude Code installed & logged in |
 | `anthropic` | Anthropic API | `pip install anthropic` + `ANTHROPIC_API_KEY` |
-| `openai` | OpenAI (GPT) / OpenAI-compatible server | `pip install openai` + `OPENAI_API_KEY` |
-| `gemini` | Google Gemini (OpenAI-compatible) | `pip install openai` + `GEMINI_API_KEY` |
+| `openai` | OpenAI (GPT) / OpenAI‑compatible server | `pip install openai` + `OPENAI_API_KEY` |
+| `gemini` | Google Gemini (OpenAI‑compatible) | `pip install openai` + `GEMINI_API_KEY` |
 | `ollama` | Local model (offline, free) | `pip install openai` + Ollama running |
-| `off` | No enrichment (raw search only) | none — fully functional without enrichment |
-
-`openai`/`gemini`/`ollama` are all **OpenAI-compatible APIs**, so a single `openai` SDK handles them. LM Studio, vLLM, Groq, etc. can also connect via the `openai` backend with a custom `CHATMEM_OPENAI_MODEL` + base_url.
+| `off` | No enrichment (raw search only) | none |
 
 ```bash
-# GPT
-CHATMEM_ENRICH_BACKEND=openai OPENAI_API_KEY=sk-... python -m chatmem enrich
-
-# Gemini
-CHATMEM_ENRICH_BACKEND=gemini GEMINI_API_KEY=... python -m chatmem enrich
-
-# Local (Ollama, fully offline, zero leakage)
-CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem enrich
-
-# Turn enrichment off
-python -m chatmem enrich --backend off
+CHATMEM_ENRICH_BACKEND=openai OPENAI_API_KEY=sk-... python -m chatmem enrich   # GPT
+CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem enrich   # local, zero leakage
+python -m chatmem enrich --backend off                                          # turn off
 ```
 
-Embedding and hybrid search work the same without enrichment. Enrichments are just result headlines (for display); search itself is based on the raw text.
+`openai`/`gemini`/`ollama` all speak the OpenAI‑compatible API, so a single `openai` SDK handles them (LM Studio, vLLM, Groq, … work too via a custom base_url).
 
-## MCP server — let other AIs search your past conversations
+</details>
 
-Registering `chatmem-mcp` as an MCP server lets Claude Code, Desktop, etc. **directly search and view past sessions** (local hybrid search, returning raw text + summary).
+<details>
+<summary><b>🤖  MCP server — let other AIs search your past conversations</b></summary>
 
-> **Easiest way**: in the app, **Settings → MCP integration**, use the **register/unregister buttons** per target (Claude Code / Claude Desktop / Codex CLI / Gemini CLI). Each config file is backed up as `.bak` before editing; after registering, restart that client. (Manual method below.)
+<br>
+
+Registering `chatmem-mcp` lets Claude Code, Desktop, etc. **search and view** your past sessions (local hybrid search → raw text + summary).
+
+> **Easiest:** in the app, **Settings → MCP integration**, use the register/unregister buttons per target. Each config file is backed up as `.bak` before editing; restart the client after registering.
 
 ```bash
-pip install ".[mcp]"          # mcp SDK
-# Claude Code:
-claude mcp add chat-memory -- chatmem-mcp
+pip install ".[mcp]"
+claude mcp add chat-memory -- chatmem-mcp      # Claude Code
 ```
-
-Config JSON for Claude Desktop, etc.:
 
 ```json
 { "mcpServers": { "chat-memory": { "command": "chatmem-mcp" } } }
 ```
 
-Exposed tools: `search_memory` (semantic + keyword search) · `get_session` (full session) · `recent_sessions` · `stats`.
-All read the same local data (the same archive), and the embedding model is loaded once on the first search.
+Tools: `search_memory` · `get_session` · `recent_sessions` · `stats`. All read the same local archive.
 
-## Configuration (environment variables or config file)
+</details>
 
-Configure either way. **Environment variables always take precedence**; otherwise config-file values are used.
+<details>
+<summary><b>⚙️  Configuration</b></summary>
 
-**Config file (recommended)** — writing `KEY=VALUE` lines in `~/chat-memory/config.env` means **the CLI, nightly enrichment scheduler, and web UI all read it automatically** (no need to permanently register OS environment variables or edit `.cmd` files). Copy [`config.env.example`](config.env.example) to start.
+<br>
+
+Environment variables always win; otherwise `~/chat-memory/config.env` is read by the CLI, scheduler, and web UI alike. Copy [`config.env.example`](config.env.example) to start.
 
 ```bash
-cp config.env.example ~/chat-memory/config.env   # uncomment only the values you want
-python -m chatmem config                          # check the effective config & file location
+cp config.env.example ~/chat-memory/config.env
+python -m chatmem config     # check effective config & file location
 ```
 
-> `config.env` may contain API keys, so it's excluded via `.gitignore`. Never commit it.
-
-### Key list
-
-- `CHATMEM_DATA_DIR` — data storage location (default `~/chat-memory/data`)
+- `CHATMEM_DATA_DIR` — data location (default `~/chat-memory/data`)
 - `CLAUDE_PROJECTS_DIR` — log source (default `~/.claude/projects`)
-- `CHATMEM_EMBED_MODEL` — embedding model (changing it requires a full re-index)
-- `CHATMEM_ENRICH_BACKEND` — `claude` (default) / `anthropic` / `openai` / `gemini` / `ollama` / `off`
-- `CHATMEM_ENRICH_API_MODEL` — anthropic model (default `claude-sonnet-5`)
-- `CHATMEM_OPENAI_MODEL` / `CHATMEM_GEMINI_MODEL` / `CHATMEM_OLLAMA_MODEL` — model for each backend
+- `CHATMEM_EMBED_MODEL` — embedding model (changing it requires a full re‑index)
+- `CHATMEM_ENRICH_BACKEND` — `claude` / `anthropic` / `openai` / `gemini` / `ollama` / `off`
+- `CHATMEM_OPENAI_MODEL` / `CHATMEM_GEMINI_MODEL` / `CHATMEM_OLLAMA_MODEL` — model per backend
 - `CHATMEM_OLLAMA_URL` — Ollama endpoint (default `http://localhost:11434/v1`)
+
+> `config.env` may hold API keys and is git‑ignored. Never commit it.
+
+</details>
 
 ## Data & privacy
 
-By default **everything is local**. The conversation archive (archive.db) and vector index are stored on this device at
-`~/chat-memory/data` (change with `CHATMEM_DATA_DIR`), and no data is sent to any server in normal use.
+By default **everything is local**. The archive (`archive.db`) and vector index live on your device at
+`~/chat-memory/data`, and nothing is sent anywhere in normal use.
 
-Data can leave the device only via **three features you opt into**:
+Data leaves the device **only via three features you opt into:**
 
-1. **Cloud enrichment AI** — if you set the enrichment backend to Anthropic/OpenAI/Gemini, parts of conversations are sent to that API for summarization/tagging. `claude` (subscription), `ollama` (local), and `off` send nothing externally.
-2. **Device sync (Syncthing)** — turning on device connection syncs your conversation logs P2P **between your own connected devices**. It's a direct device-to-device transfer that doesn't go through any third-party server, and the transport is encrypted. The bundled Syncthing binary is fetched from official releases and **verified via SHA-256** before running.
-3. **MCP integration** — once registered, the AI tool you registered (Claude Code, etc.) can **search and view** your local conversations. If that tool is a cloud model, it may send returned conversations to its model (behavior on the tool's side).
+1. **Cloud enrichment AI** — if you set the backend to Anthropic/OpenAI/Gemini, parts of conversations go to that API for summarization. `claude` (subscription), `ollama` (local) and `off` send nothing.
+2. **Device sync (Syncthing)** — turning on device connection syncs logs **P2P between your own devices**, direct and encrypted, through no third‑party server. The bundled Syncthing binary is fetched from official releases and **verified via SHA‑256**.
+3. **MCP integration** — a tool you register can search/view your local conversations; if it’s a cloud model, returned text may go to that model.
 
-Otherwise:
-- **No telemetry, usage stats, or automatic error reports are collected.**
-- The "report an issue" feature (log-format-change detection) **does not send conversation content** — it sends only a format fingerprint, with values masked.
-- Secrets such as API keys are stored only in the local config file, and responses expose only whether they're set (true/false).
+Otherwise: **no telemetry, no usage stats, no automatic error reports.** The “report an issue” feature sends only a masked format fingerprint — never conversation content. Secrets live only in the local config file.
 
-## Status
+<details>
+<summary><b>🚀  Release &amp; versioning (maintainers)</b></summary>
 
-Phase 1 (core + CLI) and Phase 2 (FastAPI + React + Electron desktop app) are implemented and tested.
-It has automatic indexing of Codex CLI/Desktop and Claude Code, device sync (bundled Syncthing), MCP integration, auto-update, and 3-OS release CI. The remaining distribution work is code signing (a certificate) and real-world validation of the first release.
+<br>
 
-## Release (distribution & versioning)
+Pushing a version tag (`vX.Y.Z`) makes GitHub Actions build the Windows/Linux/macOS installers and attach them to the release (including `latest.yml` for auto‑update):
 
-Pushing a version tag (`vX.Y.Z`) makes GitHub Actions build the Windows/Linux/macOS installers and upload them automatically to the GitHub release (including `latest.yml` for auto-update). Steps:
+1. Bump `version` in `electron/package.json`.
+2. Summarize changes in `CHANGELOG.md`.
+3. `git tag v0.2.0 && git push origin v0.2.0`.
+4. Actions builds the 3‑OS installers and attaches them.
+5. **The release body is shown as‑is in the app’s update banner** — put the CHANGELOG entry there.
 
-1. Bump `version` in `electron/package.json` (e.g. `0.2.0`).
-2. Summarize the changes in `CHANGELOG.md`.
-3. Push a matching version tag: `git tag v0.2.0 && git push origin v0.2.0`.
-4. Actions builds the 3-OS installers and attaches them to the `v0.2.0` release.
-5. **The GitHub release body (release notes) is shown as-is in the app's update banner**, so putting the CHANGELOG content into the release body surfaces it to users.
+> **Bilingual release notes:** split the body with `<!--lang:en-->` / `<!--lang:ko-->` markers; GitHub shows both while the app’s banner shows the section matching the user’s language.
 
-> **Bilingual release notes**: split the release body into English/Korean sections with `<!--lang:en-->` / `<!--lang:ko-->` markers, and GitHub shows both while the app's update banner shows only the section matching the user's app language (if no markers are present, the whole body is shown as-is).
+**macOS:** unsigned apps can’t auto‑update (Squirrel.Mac needs signing), so **install/update via Homebrew** — it handles download/replacement and clears quarantine with no Gatekeeper warning. Direct‑dmg users get a banner that opens the download page. On Windows, auto‑update works from the banner even while unsigned.
 
-> The current installers are **unsigned** — Windows SmartScreen / macOS Gatekeeper warnings may appear.
-> Once a code-signing certificate is ready, you only need to add the signing secrets to CI.
-
-### macOS install & update (Homebrew recommended)
-
-macOS **blocks auto-update for unsigned apps** (Squirrel.Mac requires code signing). So on macOS, **install and update via Homebrew** is recommended — Homebrew handles the download/replacement and removes the quarantine, so **it installs and updates even without signing, with no Gatekeeper warning.**
-
-```bash
-brew tap flyingjoojak/chat-memory https://github.com/flyingjoojak/chat-memory
-brew install --cask flyingjoojak/chat-memory/engram   # install
-brew upgrade --cask engram                            # update
-```
-
-For mac users who **downloaded the dmg directly** without Homebrew, when the app detects a new version it **notifies via the update banner and opens the download page** (it can't auto-replace, so download the new dmg and drag it into Applications to replace). On Windows, **auto-update works from the banner** even while unsigned.
+</details>
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+**MIT** — see [LICENSE](LICENSE). For device‑to‑device sync it bundles the [Syncthing](https://syncthing.net/) (MPL‑2.0) engine; other third‑party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-For device-to-device sync it bundles and runs the [Syncthing](https://syncthing.net/) (MPL-2.0) engine; licenses and sources of other third-party components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+<div align="center"><sub>Built for people who talk to their AI all day — and want to remember what they said.</sub></div>
