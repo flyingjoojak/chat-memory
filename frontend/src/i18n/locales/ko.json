@@ -309,7 +309,7 @@
     "resumeCannotOpen": "세션을 열 수 없어요",
     "execFailed": "실행 실패",
     "detailLoadFailed": "세션 정보를 불러오지 못했어요 — 재개 가능 여부를 확인할 수 없어요.",
-    "noLogNote": "원문 로그가 없어 이 세션은 열 수 없어요 (검색·조회는 그대로 가능).",
+    "noLogNote": "해당 세션은 원문이 없어 열 수 없습니다.",
     "loadFailed": "목록을 불러오지 못했어요",
     "appMayBeStarting": "앱이 준비 중일 수 있어요.",
     "noResults": "결과 없음",
