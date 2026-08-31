@@ -116,25 +116,25 @@ Engram은 파이썬 코어 + 얇은 CLI로 되어 있습니다. 소스에서 설
 ```bash
 git clone https://github.com/flyingjoojak/engram.git && cd engram
 pip install ".[web]"          # 코어 + 웹 UI.  전부: ".[all]"  ·  개발: pip install -e ".[all]"
-chatmem setup                 # 폴더·설정 + 10분마다 자동 색인하는 스케줄러
+engram setup                 # 폴더·설정 + 10분마다 자동 색인하는 스케줄러
 ```
 
 또는 [pipx](https://pipx.pypa.io):
 
 ```bash
 pipx install "engram[web] @ git+https://github.com/flyingjoojak/engram.git"
-chatmem setup
+engram setup
 ```
 
 ```bash
 mem "급여 계산 로직 어떻게 짰더라"      # 터미널에서 검색
 python -m chatmem.web                     # 웹 UI → http://127.0.0.1:8642
-chatmem search "..." -k 10 --since 2026-07-01 --session growth
-chatmem stats | config | progress          # 상태 · 설정 · 진행률
+engram search "..." -k 10 --since 2026-07-01 --session growth
+engram stats | config | progress           # 상태 · 설정 · 진행률
 ```
 
 > Extras: `[web]` 웹 UI · `[enrich]` 클라우드/로컬 요약 백엔드 · `[mcp]` MCP 서버 · `[all]` 전부.
-> (명령은 `chatmem`, 별칭 `mem`. 데이터는 `~/chat-memory/data`에 저장됩니다.)
+> (명령은 `engram`, 별칭 `mem`. 데이터는 `~/chat-memory/data`에 저장됩니다.)
 
 </details>
 
@@ -170,11 +170,11 @@ MCP 서버를 등록하면 Claude Code·Desktop 등이 세션을 **검색·열�
 > **가장 쉬운 방법:** 앱의 **설정 → MCP 연동**에서 대상별 등록 버튼.
 
 ```bash
-claude mcp add engram -- chatmem-mcp
+claude mcp add engram -- engram-mcp
 ```
 
 ```json
-{ "mcpServers": { "engram": { "command": "chatmem-mcp" } } }
+{ "mcpServers": { "engram": { "command": "engram-mcp" } } }
 ```
 
 도구: `search_memory` · `get_session` · `recent_sessions` · `stats`.

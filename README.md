@@ -116,25 +116,25 @@ Engram is built on a Python core with a thin CLI. Install from source:
 ```bash
 git clone https://github.com/flyingjoojak/engram.git && cd engram
 pip install ".[web]"          # core + web UI.  Everything: ".[all]"  ·  dev: pip install -e ".[all]"
-chatmem setup                 # folders, config, and a scheduler that auto-indexes every 10 min
+engram setup                 # folders, config, and a scheduler that auto-indexes every 10 min
 ```
 
 Or with [pipx](https://pipx.pypa.io):
 
 ```bash
 pipx install "engram[web] @ git+https://github.com/flyingjoojak/engram.git"
-chatmem setup
+engram setup
 ```
 
 ```bash
 mem "how did I write the payroll calc logic"   # search from the terminal
 python -m chatmem.web                            # web UI → http://127.0.0.1:8642
-chatmem search "..." -k 10 --since 2026-07-01 --session growth
-chatmem stats | config | progress                # status · config · progress
+engram search "..." -k 10 --since 2026-07-01 --session growth
+engram stats | config | progress                 # status · config · progress
 ```
 
 > Extras: `[web]` web UI · `[enrich]` cloud/local summary backends · `[mcp]` MCP server · `[all]` everything.
-> (The command is `chatmem`, alias `mem`; data lives in `~/chat-memory/data`.)
+> (The command is `engram`, alias `mem`; data lives in `~/chat-memory/data`.)
 
 </details>
 
@@ -170,11 +170,11 @@ Registering the MCP server lets Claude Code, Desktop, etc. **search and view** y
 > **Easiest:** in the app, **Settings → MCP integration**, use the register buttons per target.
 
 ```bash
-claude mcp add engram -- chatmem-mcp
+claude mcp add engram -- engram-mcp
 ```
 
 ```json
-{ "mcpServers": { "engram": { "command": "chatmem-mcp" } } }
+{ "mcpServers": { "engram": { "command": "engram-mcp" } } }
 ```
 
 Tools: `search_memory` · `get_session` · `recent_sessions` · `stats`.

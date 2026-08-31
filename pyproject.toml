@@ -37,10 +37,12 @@ all = ["fastapi>=0.110", "uvicorn>=0.29", "pywebview>=5.0", "anthropic>=0.40", "
 [project.urls]
 Repository = "https://github.com/flyingjoojak/engram"
 
-# 두 이름 모두 같은 CLI 진입점. `mem`은 짧은 별칭.
+# 기본 명령은 `engram`. `mem`은 짧은 별칭. `chatmem`/`chatmem-mcp`는 하위호환 별칭.
 [project.scripts]
-chatmem = "chatmem.cli:main"
+engram = "chatmem.cli:main"
+engram-mcp = "chatmem.mcp_server:main"
 mem = "chatmem.cli:main"
+chatmem = "chatmem.cli:main"
 chatmem-mcp = "chatmem.mcp_server:main"
 
 [tool.setuptools.packages.find]
