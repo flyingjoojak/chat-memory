@@ -21,7 +21,7 @@
 그중 무엇이든 몇 초 만에 찾아줍니다 - 정확한 단어가 아니라 **의미로**.
 
 <div align="center">
-  <img src="docs/assets/search.png" alt="Engram에서 과거 대화 검색 - 기억나는 대로 입력하면 정확한 답이 돌아온다" width="880">
+  <img src="docs/assets/search.ko.png" alt="Engram에서 과거 대화 검색 - 기억나는 대로 입력하면 정확한 답이 돌아온다" width="880">
 </div>
 
 <!-- 재생 영상도 넣고 싶으면 .mp4 를 GitHub 이슈/릴리스에 드래그 → github.com/user-attachments/... URL을
@@ -51,13 +51,13 @@
 **지금까지 나눈 모든 대화의 3D 지도** - 기록이 주제별로 뭉쳐, 날아다니며 탐색할 수 있습니다.
 
 <div align="center">
-  <img src="docs/assets/map.png" alt="Engram의 3D 시맨틱 지도 - 대화가 주제별 군집으로 묶여 라벨과 함께 표시" width="880">
+  <img src="docs/assets/map.ko.png" alt="Engram의 3D 시맨틱 지도 - 대화가 주제별 군집으로 묶여 라벨과 함께 표시" width="880">
 </div>
 
 **모든 세션이 클릭 한 번 거리** - 묶이고, 시각이 찍히고, 검색됩니다.
 
 <div align="center">
-  <img src="docs/assets/sessions.png" alt="Engram의 세션 브라우저 - 과거 대화 목록" width="880">
+  <img src="docs/assets/sessions.ko.png" alt="Engram의 세션 브라우저 - 과거 대화 목록" width="880">
 </div>
 
 ## 다운로드
