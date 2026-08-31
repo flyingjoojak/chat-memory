@@ -285,13 +285,10 @@ async def _lifespan(app: FastAPI):
                 pass
     threading.Thread(target=_warm, daemon=True).start()
 
-    # 이전에 켜둔 세션 동기화 감시가 있으면 자동 재개(설정 지속).
+    # 이전에 켜둔 기기 연결(임베디드 Syncthing)이 있으면 자동 재개.
+    # 충돌 정리 워커는 기기 연결에 종속 — _st_start_bg가 준비되면 함께 시작한다(별도 토글 없음).
     with contextlib.suppress(Exception):
         db = ArchiveDB()
-        if db.get_meta("sync_enabled") == "1":
-            iv = db.get_meta("sync_interval")
-            _sync_start(float(iv) if iv else None, persist=False)
-        # 이전에 켜둔 임베디드 Syncthing이 있으면 자동 재개.
         if db.get_meta("syncthing_enabled") == "1":
             _st_start_bg(persist=False)
 
@@ -842,6 +839,7 @@ def _st_start_bg(persist: bool = True) -> None:
             if inst.wait_ready():
                 with _st_lock:
                     _st_state.update(running=True, starting=False, phase="실행 중", my_id=inst.device_id())
+                _sync_start(persist=False)   # 기기 연결이 켜지면 충돌 정리 워커도 자동 시작(별도 토글 없음)
                 if persist:
                     with contextlib.suppress(Exception):
                         db = ArchiveDB(); db.set_meta("syncthing_enabled", "1"); db.commit()
@@ -861,6 +859,7 @@ def _st_start_bg(persist: bool = True) -> None:
 
 
 def _st_stop(persist: bool = True) -> None:
+    _sync_stop(persist=False)   # 기기 연결을 끄면 충돌 정리 워커도 함께 정지
     inst = _st.get("inst")
     if inst is not None:
         with contextlib.suppress(Exception):
