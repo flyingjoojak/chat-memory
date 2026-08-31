@@ -20,14 +20,12 @@
 **Engram은 당신의 AI에게 없는 장기 기억입니다.** 모든 대화를 내 컴퓨터에 조용히 보관하고,
 그중 무엇이든 몇 초 만에 찾아줍니다 - 정확한 단어가 아니라 **의미로**.
 
-<!--
-  ▶ 여기에 데모 GIF/스크린샷을 넣으면 "아 이거구나"가 한 번에 옵니다.
-  파일을 docs/assets/ 에 넣고 아래 주석을 해제하세요 (방법·프라이버시 주의는 docs/assets/README.md 참고):
+<div align="center">
+  <img src="docs/assets/search.png" alt="Engram에서 과거 대화 검색 - 기억나는 대로 입력하면 정확한 답이 돌아온다" width="880">
+</div>
 
-  <div align="center"><img src="docs/assets/demo.gif" alt="Engram에서 과거 AI 대화 검색" width="860"></div>
-
-  재생 영상: .mp4 를 GitHub 이슈/릴리스에 드래그 → github.com/user-attachments/... URL을 이 자리에 한 줄로.
--->
+<!-- 재생 영상도 넣고 싶으면 .mp4 를 GitHub 이슈/릴리스에 드래그 → github.com/user-attachments/... URL을
+     이 자리에 한 줄로. (데모 데이터로 녹화 - docs/assets/README.md 참고.) -->
 
 ## 뭐가 나아지나요
 
@@ -47,6 +45,20 @@
 - 🔒 **완전 로컬·오프라인** - 전부 내 컴퓨터에서. 계정·텔레메트리 없고, 비행기에서도 됩니다.
 - ↔️ **여러 기기가 한 기억** - 노트북과 데스크탑이 P2P로 동기화(클라우드 없음).
 - 🤖 **AI에게 기억을 돌려주기** - MCP로 Claude가 자기 과거 세션을 직접 검색.
+
+## 실제 화면
+
+**지금까지 나눈 모든 대화의 3D 지도** - 기록이 주제별로 뭉쳐, 날아다니며 탐색할 수 있습니다.
+
+<div align="center">
+  <img src="docs/assets/map.png" alt="Engram의 3D 시맨틱 지도 - 대화가 주제별 군집으로 묶여 라벨과 함께 표시" width="880">
+</div>
+
+**모든 세션이 클릭 한 번 거리** - 묶이고, 시각이 찍히고, 검색됩니다.
+
+<div align="center">
+  <img src="docs/assets/sessions.png" alt="Engram의 세션 브라우저 - 과거 대화 목록" width="880">
+</div>
 
 ## 다운로드
 

@@ -20,14 +20,12 @@ need it, you scroll through endless history, or just ask again from scratch.
 **Engram is the long-term memory your AI assistant doesn't have.** It quietly keeps every conversation
 on your own machine and lets you find any of them in a second - by meaning, not just keywords.
 
-<!--
-  ▶ Drop a demo GIF/screenshot here - it's the single biggest thing that makes people "get it".
-  Put the file in docs/assets/ and uncomment (see docs/assets/README.md for how + a privacy note):
+<div align="center">
+  <img src="docs/assets/search.png" alt="Searching past conversations in Engram - type what you remember and the exact answer comes back" width="880">
+</div>
 
-  <div align="center"><img src="docs/assets/demo.gif" alt="Searching past AI conversations in Engram" width="860"></div>
-
-  Playable video: drag an .mp4 into a GitHub issue/release, copy the github.com/user-attachments/... URL, paste it on its own line here.
--->
+<!-- Want a playable demo video too? Drag an .mp4 into a GitHub issue/release, then paste the
+     github.com/user-attachments/... URL on its own line here. (Record on demo data - see docs/assets/README.md.) -->
 
 ## What changes for you
 
@@ -47,6 +45,20 @@ on your own machine and lets you find any of them in a second - by meaning, not 
 - 🔒 **100% local & offline** - runs entirely on your computer. No account, no telemetry, works on a plane.
 - ↔️ **One memory across devices** - your laptop and desktop stay in sync, peer-to-peer (no cloud).
 - 🤖 **Give your AI its memory back** - via MCP, Claude can search its own past sessions for you.
+
+## See it in action
+
+**A 3D map of everything you've discussed** - your history clustered into topics you can fly through.
+
+<div align="center">
+  <img src="docs/assets/map.png" alt="Engram's 3D semantic map, with conversations clustered into labeled topics" width="880">
+</div>
+
+**Every session, one click away** - grouped, timestamped, and searchable.
+
+<div align="center">
+  <img src="docs/assets/sessions.png" alt="Engram's session browser listing past conversations" width="880">
+</div>
 
 ## Download
 
