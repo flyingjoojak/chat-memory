@@ -188,4 +188,4 @@ macOS: 미서명 앱은 자동 업데이트가 막혀 **Homebrew로 설치/업�
 
 **MIT** - [LICENSE](LICENSE) 참고. 기기 동기화를 위해 [Syncthing](https://syncthing.net/)(MPL-2.0) 엔진을 번들합니다. 다른 서드파티 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 있습니다.
 
-<div align="center"><br><sub>하루 종일 AI와 대화하는 사람들을 위해 - 그리고 그 대화를 기억하고 싶은 사람들을 위해.</sub></div>
+<div align="center"><br><sub>하루 종일 AI와 대화하는 사람들을 위해 - 그리고 그 대화를 기억하고 싶은 사람들을 위해.</sub><br><sub><a href="https://claude.com/claude-code">Claude Code</a>로 만들었습니다.</sub></div>

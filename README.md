@@ -188,4 +188,4 @@ macOS: unsigned apps can't auto-update, so install/update via **Homebrew** (no G
 
 **MIT** - see [LICENSE](LICENSE). Engram bundles the [Syncthing](https://syncthing.net/) (MPL-2.0) engine for device sync; other third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-<div align="center"><br><sub>Built for people who talk to their AI all day - and want to remember what they said.</sub></div>
+<div align="center"><br><sub>Built for people who talk to their AI all day - and want to remember what they said.</sub><br><sub>Built with <a href="https://claude.com/claude-code">Claude Code</a>.</sub></div>

@@ -39,3 +39,6 @@ Thumbs.db
 # PyInstaller
 *.spec
 packaging/*.log
+
+# editor/backup junk
+*.bak
