@@ -12,7 +12,7 @@ from chatmem import web  # noqa: E402
 def test_index_html_fallback():
     # 빌드된 프론트가 없을 때 서빙되는 인라인 HTML 폴백 회귀 테스트.
     assert "<!doctype html>" in web._HTML.lower()
-    assert "chat-memory" in web._HTML
+    assert "Engram" in web._HTML
 
 
 def test_index_returns_response():

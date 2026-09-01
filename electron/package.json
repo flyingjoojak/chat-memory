@@ -30,7 +30,7 @@
     "mac": { "target": "dmg", "category": "public.app-category.productivity", "icon": "icon.png" },
     "linux": { "target": "AppImage", "category": "Utility", "icon": "icon.png" },
     "publish": [
-      { "provider": "github", "owner": "flyingjoojak", "repo": "chat-memory" }
+      { "provider": "github", "owner": "flyingjoojak", "repo": "engram" }
     ]
   }
 }

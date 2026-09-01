@@ -298,7 +298,7 @@ async def _lifespan(app: FastAPI):
     _state.clear()
 
 
-app = FastAPI(lifespan=_lifespan, title="chat-memory")
+app = FastAPI(lifespan=_lifespan, title="Engram")
 
 
 # ── CSRF 보호(Fetch Metadata resource isolation) ──────────────────────────
@@ -1552,7 +1552,7 @@ _HTML = r"""<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>chat-memory</title>
+<title>Engram</title>
 <style>
 :root{
   --bg:#f5f6f8; --surface:#ffffff; --surface2:#eef0f4; --border:#e3e5ea;
@@ -1716,7 +1716,7 @@ kbd{background:var(--surface2);border:1px solid var(--border);border-radius:5px;
 <body>
 <div class="wrap">
   <header class="appbar">
-    <div class="brand"><span class="logo">C</span><h1>chat-memory</h1></div>
+    <div class="brand"><span class="logo">E</span><h1>Engram</h1></div>
     <div class="bar-right">
       <span class="stats" id="stats"></span>
       <button id="themeBtn" class="icon-btn" aria-label="라이트/다크 테마 전환" title="테마 전환">◐</button>
@@ -1895,7 +1895,7 @@ if (_DIST / "assets").exists():
 def main() -> None:
     import uvicorn
 
-    print("chat-memory 웹 UI → http://127.0.0.1:8642  (모델 로딩 ~15초)")
+    print("Engram 웹 UI → http://127.0.0.1:8642  (모델 로딩 ~15초)")
     uvicorn.run(app, host="127.0.0.1", port=8642, log_level="warning")
 
 

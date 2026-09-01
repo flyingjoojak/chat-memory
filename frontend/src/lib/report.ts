@@ -2,7 +2,7 @@ import type { SchemaReport } from "./api"
 
 // GitHub 이슈 URL(GET) 전체 쿼리 길이 예산. 넘으면 본문에 JSON 대신 '붙여넣기' 안내.
 const MAX_QUERY = 7000
-const DEFAULT_REPO = "flyingjoojak/chat-memory"
+const DEFAULT_REPO = "flyingjoojak/engram"
 const REPO_RE = /^[\w.-]+\/[\w.-]+$/
 
 function safeRepo(repo: string | undefined): string {

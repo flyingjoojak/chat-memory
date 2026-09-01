@@ -19,7 +19,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-NAME = "chat-memory"
+NAME = "engram"
 
 
 def mcp_command() -> tuple[str, list[str]]:
@@ -31,7 +31,7 @@ def mcp_command() -> tuple[str, list[str]]:
     """
     if getattr(sys, "frozen", False):
         return sys.executable, ["--mcp"]
-    exe = shutil.which("chatmem-mcp")
+    exe = shutil.which("engram-mcp") or shutil.which("chatmem-mcp")
     if exe:
         return exe, []
     return sys.executable, ["-m", "chatmem.mcp_server"]

@@ -261,7 +261,7 @@ function setupAutoUpdate() {
   // GitHub 릴리스에서 최신 버전을 직접 확인해 배너로 알리고, 사용자가 누르면 다운로드 페이지를 연다.
   // (서명 인증서가 준비되면 이 분기를 제거하고 아래 electron-updater 경로로 통일하면 된다.)
   if (process.platform === "darwin") {
-    const REPO = "flyingjoojak/chat-memory"
+    const REPO = "flyingjoojak/engram"
     let dlUrl = `https://github.com/${REPO}/releases/latest`
     const httpsMod = require("https")
     // 리다이렉트는 최대 3회까지만 추적(주석과 구현 일치 + 리다이렉트 루프 방어).

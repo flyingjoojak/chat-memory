@@ -273,13 +273,20 @@ def cmd_app(args: argparse.Namespace) -> int:
     try:
         from . import desktop
     except ImportError:
-        print("데스크탑 앱은 pywebview가 필요합니다:  pip install \"chat-memory[desktop]\"")
+        print("데스크탑 앱은 pywebview가 필요합니다:  pip install \"engram[desktop]\"")
         return 1
     try:
         desktop.run(port=args.port)
     except ImportError:
-        print("pywebview 미설치. 설치:  pip install \"chat-memory[desktop]\"")
+        print("pywebview 미설치. 설치:  pip install \"engram[desktop]\"")
         return 1
+    return 0
+
+
+def cmd_web(args: argparse.Namespace) -> int:
+    """브라우저 웹 UI(FastAPI)를 실행 → http://127.0.0.1:8642."""
+    from .web import main as web_main
+    web_main()
     return 0
 
 
@@ -398,6 +405,9 @@ def main(argv: list[str] | None = None) -> int:
 
     st = sub.add_parser("stats", help="현황")
     st.set_defaults(func=cmd_stats)
+
+    wb = sub.add_parser("web", help="브라우저 웹 UI 실행 (http://127.0.0.1:8642)")
+    wb.set_defaults(func=cmd_web)
 
     sy = sub.add_parser("sync", help="세션 동기화 감시(Syncthing 충돌 해소 + 선택 색인)")
     sy.add_argument("--once", action="store_true", help="한 번만 점검하고 종료")
