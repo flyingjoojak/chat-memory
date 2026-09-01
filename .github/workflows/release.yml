@@ -60,6 +60,40 @@ jobs:
           HF_HUB_DISABLE_SYMLINKS: "1" # HF 캐시 외부데이터 심링크로 인한 onnx 양자화 실패 방지(소스에서도 복사로 처리)
         run: bash packaging/build-backend.sh
 
+      # 동결된 파이썬 사이드카가 그 OS에서 실제로 부팅해 서빙하는지(런타임 검증).
+      # 빌드만이 아니라 네이티브 의존성(onnxruntime·sqlite-vec·fastembed·uvicorn) 로드+서버 기동을 확인.
+      # GUI(Electron 창)는 헤드리스 CI에서 못 띄우므로 백엔드까지만 — 그래도 런타임 부팅 실패는 여기서 잡힘.
+      - name: 백엔드 스모크(동결 사이드카 부팅 + API 응답)
+        shell: bash
+        env:
+          CHATMEM_MANAGED: "1"          # 순수 서버 모드(브라우저·단일인스턴스 로직 끔 — Electron 셸과 동일)
+          CHATMEM_DATA_DIR: ${{ runner.temp }}/smoke-data
+          CLAUDE_PROJECTS_DIR: ${{ runner.temp }}/smoke-proj
+          CHATMEM_SOURCES: "claude-code"
+          CHATMEM_INDEX_MODE: "off"
+        run: |
+          set -e
+          mkdir -p "$CHATMEM_DATA_DIR" "$CLAUDE_PROJECTS_DIR"
+          BIN="dist/chatmem-backend/chatmem-backend"
+          if [ -f "$BIN.exe" ]; then BIN="$BIN.exe"; fi
+          PORT=8799
+          "$BIN" "$PORT" &
+          PID=$!
+          ok=0
+          for i in $(seq 1 40); do
+            sleep 3
+            if curl -fsS "http://127.0.0.1:$PORT/api/stats" -o stats.json 2>/dev/null; then ok=1; break; fi
+          done
+          # 설정·시스템메모리 경로(그 OS에서 도는지)도 함께 확인 — 실패해도 비차단(참고용).
+          curl -fsS "http://127.0.0.1:$PORT/api/embed-models" -o models.json 2>/dev/null || true
+          kill "$PID" 2>/dev/null || true
+          if [ "$ok" != "1" ]; then
+            echo "::error::동결 백엔드가 /api/stats 에 응답하지 않음(런타임 부팅 실패)"
+            exit 1
+          fi
+          echo "smoke OK — /api/stats:"; cat stats.json; echo
+          echo "embed-models(head):"; head -c 400 models.json 2>/dev/null || true
+
       - name: electron 의존성
         run: npm --prefix electron ci
 
