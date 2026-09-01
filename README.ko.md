@@ -51,7 +51,7 @@
 **지금까지 나눈 모든 대화의 3D 지도** - 기록이 주제별로 뭉쳐, 날아다니며 탐색할 수 있습니다.
 
 <div align="center">
-  <img src="docs/assets/map.ko.png" alt="Engram의 3D 시맨틱 지도 - 대화가 주제별 군집으로 묶여 라벨과 함께 표시" width="880">
+  <img src="docs/assets/map.ko.gif" alt="Engram의 3D 시맨틱 지도 - 대화가 주제별 군집으로 묶여 회전하는 3D 뷰" width="880">
 </div>
 
 **모든 세션이 클릭 한 번 거리** - 묶이고, 시각이 찍히고, 검색됩니다.
