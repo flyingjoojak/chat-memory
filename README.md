@@ -137,7 +137,7 @@ engram setup
 
 ```bash
 mem "how did I write the payroll calc logic"   # search from the terminal
-python -m chatmem.web                            # web UI → http://127.0.0.1:8642
+engram web                            # web UI → http://127.0.0.1:8642
 engram search "..." -k 10 --since 2026-07-01 --session growth
 engram stats | config | progress                 # status · config · progress
 ```
@@ -164,7 +164,7 @@ Summaries/tags are **optional** (search runs on the raw text). Pick a backend vi
 `openai`/`gemini`/`ollama` all speak the OpenAI-compatible API (LM Studio, vLLM, Groq, … work too).
 
 ```bash
-CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem enrich   # local, zero leakage
+CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 engram enrich   # local, zero leakage
 ```
 
 </details>

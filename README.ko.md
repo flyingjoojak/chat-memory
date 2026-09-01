@@ -137,7 +137,7 @@ engram setup
 
 ```bash
 mem "급여 계산 로직 어떻게 짰더라"      # 터미널에서 검색
-python -m chatmem.web                     # 웹 UI → http://127.0.0.1:8642
+engram web                     # 웹 UI → http://127.0.0.1:8642
 engram search "..." -k 10 --since 2026-07-01 --session growth
 engram stats | config | progress           # 상태 · 설정 · 진행률
 ```
@@ -164,7 +164,7 @@ engram stats | config | progress           # 상태 · 설정 · 진행률
 `openai`/`gemini`/`ollama`는 모두 OpenAI 호환 API입니다(LM Studio·vLLM·Groq도 연결 가능).
 
 ```bash
-CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 python -m chatmem enrich   # 로컬, 유출 0
+CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 engram enrich   # 로컬, 유출 0
 ```
 
 </details>
