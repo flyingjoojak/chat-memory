@@ -221,9 +221,19 @@ class SqliteVecIndex:
 
 
 def make_index(backend: str | None = None):
-    """설정에 따라 벡터 인덱스 백엔드 선택. npy(기본) / sqlite-vec(배포)."""
+    """설정에 따라 벡터 인덱스 백엔드 선택. npy(기본) / sqlite-vec(배포).
+
+    sqlite-vec 는 sqlite3 확장 로드가 필요한데, 일부 macOS 파이썬은 보안상
+    `enable_load_extension` 없이 빌드된다 → 그 경우 npy 로 자동 폴백(RAM 더 쓰지만 동작).
+    """
+    import logging
     from .config import VECTOR_BACKEND
     b = (backend or VECTOR_BACKEND or "npy").lower()
     if b in ("sqlite-vec", "sqlite_vec", "sqlitevec"):
-        return SqliteVecIndex()
+        try:
+            return SqliteVecIndex()
+        except Exception as e:  # noqa: BLE001 — 확장 로드 불가 등 어떤 이유든 안전 폴백
+            logging.getLogger(__name__).warning(
+                "sqlite-vec 벡터 백엔드 사용 불가(%s) → npy 백엔드로 폴백", e)
+            return VectorIndex()
     return VectorIndex()
