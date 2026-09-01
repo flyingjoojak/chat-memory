@@ -51,7 +51,7 @@ on your own machine and lets you find any of them in a second - by meaning, not 
 **A 3D map of everything you've discussed** - your history clustered into topics you can fly through.
 
 <div align="center">
-  <img src="docs/assets/map.png" alt="Engram's 3D semantic map, with conversations clustered into labeled topics" width="880">
+  <img src="docs/assets/map.gif" alt="Engram's rotating 3D semantic map, with conversations clustered into labeled topics" width="880">
 </div>
 
 **Every session, one click away** - grouped, timestamped, and searchable.
@@ -62,19 +62,28 @@ on your own machine and lets you find any of them in a second - by meaning, not 
 
 ## Download
 
-Get the latest build from the [**Releases**](https://github.com/flyingjoojak/engram/releases) page.
+> **Platform status** — **Windows** is built and verified end to end. **macOS and Linux** builds are produced automatically but **haven't been tested on real hardware yet**, so they may not work smoothly. If something breaks, please [open an issue](https://github.com/flyingjoojak/engram/issues) and I'll fix it.
 
-| Platform | Install |
-|---|---|
-| **Windows** | Download `Engram-Setup-<version>.exe` and run it. First launch → More info → Run anyway (not code-signed yet - it's safe). Prefer no install? Use the portable `.zip` and run `Engram.exe`. |
-| **macOS** | `brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram` → `brew install --cask flyingjoojak/engram/engram`. Update: `brew upgrade --cask engram`. |
-| **Linux** | Download the `.AppImage`, `chmod +x`, run. |
+Builds land on the [**Releases**](https://github.com/flyingjoojak/engram/releases) page.
 
-**First launch:** pick an embedding model (a low-spec option is offered for slower machines). It downloads
-once, then Engram indexes your conversations automatically and keeps up as you chat. Everything runs in the
-background - use the left rail for **Search · Sessions · 3D map · Settings**.
+### 🪟 Windows — recommended · verified
 
-> **“Unknown publisher” warning?** The app isn't code-signed yet (certificates cost hundreds a year). Signing only removes the OS warning - it has nothing to do with safety.
+1. Download `Engram-Setup-<version>.exe` and run it.
+2. If Windows shows a "protected your PC" warning, click **More info → Run anyway**. (It's just because the app isn't code-signed yet - it's safe.)
+3. Prefer no install? Unzip the portable `.zip` and run `Engram.exe`.
+
+### 🍎 macOS — not tested yet
+
+```bash
+brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram
+brew install --cask flyingjoojak/engram/engram
+```
+
+### 🐧 Linux — not tested yet
+
+Download the `.AppImage`, make it executable with `chmod +x`, and run it.
+
+**First launch** — pick an embedding model (a lightweight option is offered for slower machines) and you're set. Engram then indexes your conversations in the background; use the left rail for **Search · Sessions · 3D map · Settings**.
 
 ## How it works
 

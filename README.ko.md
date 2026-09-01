@@ -62,19 +62,28 @@
 
 ## 다운로드
 
-[**Releases**](https://github.com/flyingjoojak/engram/releases) 페이지에서 최신 빌드를 받으세요.
+> **플랫폼 지원 현황** — **Windows**는 빌드하고 실제 실행까지 확인했습니다. **macOS·Linux**는 자동 빌드는 되지만 **아직 실기기에서 테스트하지 못했습니다.** 잘 동작하지 않을 수 있으니, 문제가 생기면 [이슈](https://github.com/flyingjoojak/engram/issues)로 알려주시면 고치겠습니다.
 
-| 플랫폼 | 설치 |
-|---|---|
-| **Windows** | `Engram-Setup-<버전>.exe`를 받아 실행. 첫 실행 → 추가 정보 → 실행 (아직 코드 서명 안 됨 - 안전합니다). 설치가 싫으면 포터블 `.zip`을 풀어 `Engram.exe` 실행. |
-| **macOS** | `brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram` → `brew install --cask flyingjoojak/engram/engram`. 업데이트: `brew upgrade --cask engram`. |
-| **Linux** | `.AppImage`를 받아 `chmod +x` 후 실행. |
+최신 빌드는 [**Releases**](https://github.com/flyingjoojak/engram/releases)에 올라옵니다.
 
-**첫 실행:** 임베딩 모델을 하나 고릅니다(느린 기기는 저사양 옵션 제공). 한 번 내려받은 뒤
-Engram이 대화를 자동으로 색인하고, 이후 대화가 쌓일 때마다 따라갑니다. 전부 백그라운드에서 돌고,
-왼쪽 레일에서 **검색 · 세션 · 3D 지도 · 설정**을 오갑니다.
+### 🪟 Windows — 권장 · 검증됨
 
-> **“알 수 없는 게시자” 경고?** 아직 코드 서명을 안 해서입니다(인증서 연 수십만 원). 서명은 OS 경고 제거용일 뿐, 안전성과는 무관합니다.
+1. `Engram-Setup-<버전>.exe` 를 받아 실행합니다.
+2. "Windows의 PC 보호" 경고가 뜨면 **추가 정보 → 실행**. (아직 코드 서명을 안 해서 뜨는 경고일 뿐이며 안전합니다.)
+3. 설치가 싫으면 포터블 `.zip` 을 풀어 `Engram.exe` 를 실행하세요.
+
+### 🍎 macOS — 아직 테스트 안 됨
+
+```bash
+brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram
+brew install --cask flyingjoojak/engram/engram
+```
+
+### 🐧 Linux — 아직 테스트 안 됨
+
+`.AppImage` 를 받아 `chmod +x` 로 실행 권한을 준 뒤 실행합니다.
+
+**첫 실행** — 임베딩 모델을 하나 고르면(느린 기기용 경량 옵션 있음) 끝입니다. 이후 Engram이 백그라운드에서 대화를 자동 색인하고, 왼쪽 레일에서 **검색 · 세션 · 3D 지도 · 설정**을 오갑니다.
 
 ## 어떻게 동작하나
 
