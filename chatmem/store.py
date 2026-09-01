@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS chunks(
   chunk_key TEXT PRIMARY KEY, turn_id TEXT, idx INTEGER, text TEXT
 );
 CREATE TABLE IF NOT EXISTS cursors(
-  file_path TEXT PRIMARY KEY, offset INTEGER, size INTEGER, mtime REAL, updated_at REAL
+  file_path TEXT PRIMARY KEY, offset INTEGER, size INTEGER, mtime REAL, updated_at REAL,
+  hold_offset INTEGER
 );
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
 CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id);
@@ -88,6 +89,13 @@ class ArchiveDB:
                     # 쓰기 락이면 다음 기회에 적용됨(무해). 영속적 실패면 이후 upsert가
                     # 'no such column'으로 터지므로 원인 추적용 경고를 남긴다.
                     logger.warning("turns.%s 컬럼 추가 실패(다음 열기 때 재시도): %s", col, e)
+        # cursors.hold_offset: idle 확정된 '열린 마지막 턴'의 시작 offset(뒷내용 재포착용).
+        ccols = {r["name"] for r in self.conn.execute("PRAGMA table_info(cursors)")}
+        if "hold_offset" not in ccols:
+            try:
+                self.conn.execute("ALTER TABLE cursors ADD COLUMN hold_offset INTEGER")
+            except sqlite3.OperationalError as e:
+                logger.warning("cursors.hold_offset 컬럼 추가 실패(다음 열기 때 재시도): %s", e)
 
     def _has_schema(self) -> bool:
         row = self.conn.execute(
@@ -255,13 +263,22 @@ class ArchiveDB:
         ).fetchone()
         return (row["offset"], row["size"], row["mtime"]) if row else (0, 0, 0.0)
 
-    def set_cursor(self, file_path: str, offset: int, size: int, mtime: float) -> None:
+    def get_hold(self, file_path: str) -> int | None:
+        """idle 확정된 '열린 마지막 턴'의 시작 offset(뒷내용이 붙으면 여기부터 다시 읽음). 없으면 None."""
+        row = self.conn.execute(
+            "SELECT hold_offset FROM cursors WHERE file_path=?", (file_path,)
+        ).fetchone()
+        return row["hold_offset"] if row else None
+
+    def set_cursor(self, file_path: str, offset: int, size: int, mtime: float,
+                   hold_offset: int | None = None) -> None:
         self.conn.execute(
-            """INSERT INTO cursors(file_path,offset,size,mtime,updated_at) VALUES(?,?,?,?,?)
+            """INSERT INTO cursors(file_path,offset,size,mtime,updated_at,hold_offset)
+                 VALUES(?,?,?,?,?,?)
                ON CONFLICT(file_path) DO UPDATE SET
                  offset=excluded.offset, size=excluded.size, mtime=excluded.mtime,
-                 updated_at=excluded.updated_at""",
-            (file_path, offset, size, mtime, time.time()),
+                 updated_at=excluded.updated_at, hold_offset=excluded.hold_offset""",
+            (file_path, offset, size, mtime, time.time(), hold_offset),
         )
 
     def clear_cursors(self) -> None:

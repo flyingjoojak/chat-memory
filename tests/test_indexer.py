@@ -103,3 +103,49 @@ def test_index_file_resume_from_cursor(tmp_path):
     index_file(f, db, vi, e, idle_secs=0)
     assert db.conn.execute("SELECT COUNT(*) c FROM turns").fetchone()["c"] == 4
     assert len(vi) == before  # 재처리해도 키가 같아 교체(중복 X)
+
+
+def _turn(session, uuid, text, ts="2026-07-24T00:00:00Z"):
+    return json.dumps({"type": "user", "uuid": uuid, "parentUuid": None, "sessionId": session,
+                       "cwd": "C:/proj", "timestamp": ts,
+                       "message": {"role": "user", "content": text}})
+
+
+def _assistant(session, text, tool=None):
+    content = [{"type": "text", "text": text}]
+    if tool:
+        content.append({"type": "tool_use", "name": tool, "input": {"command": "run"}})
+    return json.dumps({"type": "assistant", "sessionId": session,
+                       "message": {"role": "assistant", "content": content}})
+
+
+def test_idle_finalized_turn_recaptures_trailing_content(tmp_path):
+    """긴 도구호출로 idle 확정된 턴에 나중에 붙은 뒷내용이 유실되지 않고 합쳐지는지(회귀)."""
+    import os, time
+    f = tmp_path / "s.jsonl"
+    db = ArchiveDB(tmp_path / "a.db")
+    vi = VectorIndex(tmp_path / "v.npy", tmp_path / "v.json")
+    emb = FakeEmbedder()
+
+    # 1) 유저 + 어시스턴트(텍스트 + 도구호출, tool_result 아직 없음), 파일 idle.
+    f.write_bytes(("\n".join([
+        _turn("s1", "u1", "빌드를 고쳐줘 상세 내용입니다"),
+        _assistant("s1", "빌드를 확인하겠습니다.", tool="Bash"),
+    ]) + "\n").encode("utf-8"))
+    old = time.time() - 300
+    os.utime(f, (old, old))
+    index_file(str(f), db, vi, emb, idle_secs=120)
+    t1 = db.get_turn("s1:u1")
+    assert t1 is not None and t1.answer == "빌드를 확인하겠습니다."
+    assert db.get_hold(str(f)) is not None   # 열린 턴 시작이 기록됨
+
+    # 2) 도구 완료 → 같은 턴에 뒷내용 추가(새 유저턴 없음).
+    with open(f, "a", encoding="utf-8") as fp:
+        fp.write(_assistant("s1", "빌드 완료. 이제 테스트를 돌리겠습니다.") + "\n")
+    os.utime(f, (old, old))
+    index_file(str(f), db, vi, emb, idle_secs=120)
+    t2 = db.get_turn("s1:u1")
+    assert "빌드 완료" in (t2.answer or ""), "idle 확정 턴의 뒷내용이 유실됨"
+
+    # 3) 변화 없으면 스킵(무의미한 재처리 없음).
+    assert index_file(str(f), db, vi, emb, idle_secs=120) == 0

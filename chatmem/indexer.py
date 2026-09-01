@@ -169,14 +169,20 @@ def index_file(
     size = os.path.getsize(path)
     mtime = os.path.getmtime(path)
     offset, _, _ = db.get_cursor(path)
+    hold = db.get_hold(path)   # idle 확정된 '열린 마지막 턴'의 시작(있으면 여기부터 재읽기)
     if offset > size:  # 파일 회전/절단 → 처음부터
         offset = 0
-    if offset == size:
+        hold = None
+    if hold is not None and hold > size:  # 절단으로 hold가 파일 밖 → 무시
+        hold = None
+    if offset == size:   # 새 바이트 없음 → 스킵(열린 턴도 안 변했음)
         return 0
 
+    # 열린 턴(hold)이 있으면 그 시작부터 다시 읽어 뒤에 붙은 내용까지 합쳐 '완성된 턴'으로 재저장(멱등).
+    read_from = hold if hold is not None else offset
     records = []  # (obj, start, end)
-    prev = offset
-    for obj, end in adapter.read_records(path, offset):
+    prev = read_from
+    for obj, end in adapter.read_records(path, read_from):
         records.append((obj, prev, end))
         prev = end
     if not records:
@@ -190,15 +196,19 @@ def index_file(
     idle = (time.time() - mtime) > idle_secs
     if last_up is None or idle:
         proc, final_offset = records, prev
+        # idle 로 마지막 턴을 확정하지만, 그 턴은 아직 안 끝났을 수 있다(긴 도구호출 중).
+        # 그 턴의 시작을 hold 로 남겨, 나중에 뒷내용이 붙으면 여기서부터 다시 읽어 완성한다.
+        new_hold = records[last_up][1] if (idle and last_up is not None) else None
     else:
         # 마지막(진행중일 수 있는) 턴 보류: 그 프롬프트 시작을 최종 경계로.
         proc, final_offset = records[:last_up], records[last_up][1]
+        new_hold = None
     if not proc:
         return 0
 
     turns = _group_with_offsets(proc, final_offset, adapter)
-    if not turns:  # 노이즈만 있었으면 커서만 전진
-        db.set_cursor(path, final_offset, size, mtime)
+    if not turns:  # 노이즈만 있었으면 커서만 전진(hold 정리)
+        db.set_cursor(path, final_offset, size, mtime, new_hold)
         db.commit()
         return 0
 
@@ -218,9 +228,9 @@ def index_file(
             if on_flush:
                 on_flush(n)   # 청크 단위 진행 보고(임베딩 배치가 저장될 때마다)
 
-    def checkpoint(off: int) -> None:
+    def checkpoint(off: int, hold: int | None = None) -> None:
         flush_vectors()
-        db.set_cursor(path, off, size, mtime)
+        db.set_cursor(path, off, size, mtime, hold)
         db.set_meta("embed_model", embedder.model_name)
         db.commit()
         vi.save()
@@ -243,9 +253,9 @@ def index_file(
         last_resume = resume
         since_ckpt += 1
         if since_ckpt >= checkpoint_turns:
-            checkpoint(last_resume)
+            checkpoint(last_resume)   # 중간 체크포인트: hold 없음(확정된 경계까지만)
             since_ckpt = 0
-    checkpoint(final_offset)
+    checkpoint(final_offset, new_hold)   # 최종: idle 확정이면 열린 턴 시작을 hold 로 남김
     return count
 
 

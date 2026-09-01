@@ -61,3 +61,16 @@ def test_hit_to_dict_shape():
     assert d["actions"] == ["Edit(x.py)"]
     assert d["sources"] == ["semantic", "keyword"]
     assert d["cosine"] == 0.87
+
+
+def test_safe_resume_cwd_rejects_unc_and_missing(tmp_path):
+    """세션 로그의 cwd(신뢰 불가)에서 UNC/네트워크·디바이스·없는 경로를 거부(강제 NTLM 인증 등 차단)."""
+    from chatmem.web import _safe_resume_cwd
+    # 거부돼야 하는 것들
+    assert _safe_resume_cwd(r"\attacker.example.com\share") is None   # UNC
+    assert _safe_resume_cwd("//attacker/share") is None                # UNC(슬래시)
+    assert _safe_resume_cwd(r"\?\C:\x") is None                       # 디바이스/확장 경로
+    assert _safe_resume_cwd(r"C:\NoSuchDir_zzz_absent") is None        # 없는 폴더
+    assert _safe_resume_cwd("") is None and _safe_resume_cwd(None) is None
+    # 실재하는 로컬 폴더만 허용
+    assert _safe_resume_cwd(str(tmp_path)) == str(tmp_path)

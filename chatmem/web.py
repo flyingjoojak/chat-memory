@@ -661,6 +661,26 @@ def _subagent_info(stored: str | None) -> tuple[bool, str | None]:
     return True, parent
 
 
+def _safe_resume_cwd(project: str | None) -> str | None:
+    """세션 로그의 cwd(project)는 신뢰 불가(동기화된 로그에 임의 값이 심길 수 있음).
+    UNC/네트워크/디바이스 경로를 거부하고 실재하는 로컬 디렉터리일 때만 반환(아니면 None → 홈에서 재개).
+    UNC 경로를 stat 하면 Windows가 SMB 로 해석해 강제 NTLM 인증(자격증명 유출)을 유발할 수 있어
+    stat 전에 걸러낸다."""
+    if not project:
+        return None
+    cwd = project.strip()
+    if not cwd:
+        return None
+    if cwd.replace("/", "\\").startswith("\\\\"):   # UNC(\\server\share)·디바이스(\\?\) 경로 거부
+        return None
+    try:
+        if not Path(cwd).is_dir():   # UNC 를 거른 뒤에만 stat
+            return None
+    except OSError:
+        return None
+    return cwd
+
+
 @app.post("/api/resume")
 def api_resume(session: str = Query(...), force: bool = False):
     """이 PC에서 새 터미널을 열어 그 세션의 작업 폴더에서 출처별 재개 명령 실행
@@ -683,9 +703,7 @@ def api_resume(session: str = Query(...), force: bool = False):
         return {"ok": False, "subagent": True, "code": "resume_subagent",
                 "warning": "배경 에이전트 대화는 직접 열 수 없어요 (검색·조회만 가능)."}
 
-    cwd = (project or "").strip() or None
-    if cwd and not Path(cwd).is_dir():   # 폴더가 옮겨졌으면 기본 cwd로 폴백
-        cwd = None
+    cwd = _safe_resume_cwd(project)   # 로그의 cwd 는 신뢰 불가 → UNC/네트워크 경로 거부 + 실재 폴더만
 
     # 원문 존재 확인: 로그 파일이 없어졌으면 재개 불가(세션을 열 수 없음).
     src_file = _find_source_file(source, sid, stored)
