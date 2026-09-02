@@ -221,11 +221,13 @@ class ArchiveDB:
             return None, []
         return row["summary"], (json.loads(row["tags"]) if row["tags"] else [])
 
-    def set_enrichment(self, turn_id: str, summary: str, tags: list[str]) -> None:
-        self.conn.execute(
+    def set_enrichment(self, turn_id: str, summary: str, tags: list[str]) -> int:
+        """정제본 저장. 실제 갱신된 행 수 반환(0 = 매칭 turn 없음, 예: LLM이 id를 잘못 복사)."""
+        cur = self.conn.execute(
             "UPDATE turns SET summary=?, tags=? WHERE id=?",
             (summary, json.dumps(tags, ensure_ascii=False), turn_id),
         )
+        return cur.rowcount
 
     def thread(self, turn_id: str, window: int = 2) -> list[Turn]:
         """같은 세션에서 시간순 앞뒤 window 개 턴을 포함해 반환."""

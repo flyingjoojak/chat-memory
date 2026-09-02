@@ -171,6 +171,9 @@ def _run_incremental(quick: bool = False) -> bool:
         # 실패 시 재시도는 ~_QUICK_HEAVY_MIN_SECS(60s) 뒤로 미룬다(0으로 리셋하면 sweep_due가
         # 즉시 True가 되어 heavy_due 스로틀을 우회 → realtime에서 10초마다 재시도 스톰).
         _last_full_sweep[0] = _time.time() - _FULL_SWEEP_SECS + _QUICK_HEAVY_MIN_SECS
+        # 백그라운드 스레드 예외는 FastAPI 예외핸들러(app.log)에 안 잡히므로 여기서 직접 트레이스백을 남긴다.
+        import traceback
+        traceback.print_exc(file=_sys.stderr)
         _autoindex_state.update(running=False, phase="오류", last_error=str(ex))
         return True
     finally:
@@ -589,21 +592,26 @@ def api_session(id: str = Query(...), limit: int = 2000):
 def api_sessions(limit: int = 500):
     """세션 목록(최근순): id·턴수·시작/끝 시각·대표 헤드라인(첫 정제/질문)."""
     db = ArchiveDB()
+    # 세션별 집계(턴수·시작/끝)와 대표 첫 턴(제목·소스)을 윈도우 함수로 단일 쿼리에서 산출(N+1 제거).
+    # (기존: 집계 1회 + 세션마다 헤드라인 1회 = 최대 limit+1 왕복 → mcp_server._recent_sessions 와 동일 패턴으로 통일)
     rows = db.conn.execute(
-        "SELECT session_id, COUNT(*) n, MIN(timestamp) started, MAX(timestamp) ended "
-        "FROM turns GROUP BY session_id ORDER BY ended DESC LIMIT ?", (limit,)
+        "SELECT session_id, summary, question, source, source_file, n, started, ended FROM ("
+        "  SELECT session_id, summary, question, source, source_file,"
+        "         COUNT(*) OVER (PARTITION BY session_id) AS n,"
+        "         MIN(timestamp) OVER (PARTITION BY session_id) AS started,"
+        "         MAX(timestamp) OVER (PARTITION BY session_id) AS ended,"
+        "         ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY timestamp, id) AS rn"
+        "  FROM turns"
+        ") WHERE rn = 1 ORDER BY ended DESC LIMIT ?", (limit,)
     ).fetchall()
     out = []
     for r in rows:
-        head = db.conn.execute(
-            "SELECT summary, question, source, source_file FROM turns WHERE session_id=? ORDER BY timestamp, id LIMIT 1",
-            (r["session_id"],)).fetchone()
-        is_sub, parent = _subagent_info(head["source_file"] if head else None)
+        is_sub, parent = _subagent_info(r["source_file"])
         out.append({
             "session": r["session_id"], "count": r["n"],
             "started": r["started"], "ended": r["ended"],
-            "headline": (head["summary"] or head["question"] or "") if head else "",
-            "source": (head["source"] if head else None) or "claude-code",
+            "headline": r["summary"] or r["question"] or "",
+            "source": r["source"] or "claude-code",
             "subagent": is_sub,      # 배경(서브에이전트) 대화 여부
             "parent": parent,        # 파생된 부모 세션 id(있으면)
         })
@@ -1241,6 +1249,8 @@ def api_enrich(payload: dict | None = None):
                 _graph3d_invalidate()   # 태그가 바뀌었으니 군집 라벨도 다시 계산되게 지도 캐시 폐기
             _enrich_state.update(phase=f"완료: {total}턴 정제", enriched=total)
         except Exception as e:  # noqa: BLE001
+            import traceback
+            traceback.print_exc(file=_sys.stderr)   # 스레드 예외 → app.log 에 트레이스백 남김
             _enrich_state.update(phase="오류", last_error=str(e))
         finally:
             _enrich_state["running"] = False
@@ -1428,6 +1438,8 @@ def api_reindex(payload: dict):
             _state["model_mismatch"] = None  # 재색인으로 해소 → 불일치 배너 즉시 내림
             _reindex_state.update(done=total, msg=f"완료: {total}")
         except Exception as e:  # noqa: BLE001
+            import traceback
+            traceback.print_exc(file=_sys.stderr)   # 스레드 예외 → app.log 에 트레이스백 남김
             _reindex_state["msg"] = f"오류: {e}"
         finally:
             _reindex_state["running"] = False

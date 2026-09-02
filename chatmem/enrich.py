@@ -11,12 +11,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
 import subprocess
 import time
 
 from .models import Turn
+
+logger = logging.getLogger(__name__)
 
 # windowed(콘솔 없는) exe에서 claude CLI 서브프로세스가 콘솔 창을 띄우지 않게(Windows 전용 플래그).
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -251,8 +254,16 @@ def enrich_session(session_id: str, db, backend: str | None = None,
             if not tid:
                 continue
             tags = item.get("tags", [])
-            db.set_enrichment(tid, item.get("summary", ""), tags if isinstance(tags, list) else [])
-            done += 1
+            if not isinstance(tags, list):
+                logger.warning("enrich: LLM이 tags를 리스트 아닌 %s로 반환(id=%s) → 빈 태그로 저장",
+                               type(tags).__name__, tid)
+                tags = []
+            # 매칭되는 turn이 있을 때만 완료로 카운트. 0행(=LLM이 긴 turn id를 잘못 복사)을 done으로 세면
+            # summary IS NULL 필터가 그 턴을 계속 재선택 → 무한 재시도로 쿼터만 태운다.
+            if db.set_enrichment(tid, item.get("summary", ""), tags):
+                done += 1
+            else:
+                logger.warning("enrich: id=%s 가 어떤 turn과도 매칭 안 됨 → 건너뜀(재시도 루프 방지)", tid)
         db.commit()
     return done
 

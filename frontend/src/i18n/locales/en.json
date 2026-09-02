@@ -15,7 +15,8 @@
     "sessions": "Sessions",
     "clusters": "Clusters",
     "map": "Map",
-    "settings": "Settings"
+    "settings": "Settings",
+    "mainAria": "Primary navigation"
   },
   "app": {
     "mapLoading": "Loading 3D map…",

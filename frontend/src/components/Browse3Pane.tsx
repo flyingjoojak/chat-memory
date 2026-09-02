@@ -58,6 +58,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   // 타이머 정리(unmount 후 setState 방지). copied 되돌림 / resumeMsg 자동 해제용.
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const msgTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchReq = useRef(0)   // 최신 검색만 반영(빠른 연속 입력 시 오래된 응답 덮어쓰기 방지) — SearchView 와 동일 패턴
   useEffect(() => () => {
     if (copyTimer.current) clearTimeout(copyTimer.current)
     if (msgTimer.current) clearTimeout(msgTimer.current)
@@ -169,21 +170,24 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
   async function runSearch(v = q, m = mode) {
     setQ(v)
     const term = v.trim()
-    if (!term) { setHits(null); setSearchErr(""); return }
+    if (!term) { searchReq.current++; setHits(null); setSearchErr(""); return }   // 진행 중 요청 무효화
+    const myId = ++searchReq.current
     setSearching(true); setSearchErr("")
     try {
       if (kind === "sessions") {
         const r = await search({ q: term, k: 20, session: sel!, mode: m, since: since || undefined, until: until || undefined })
+        if (myId !== searchReq.current) return   // 더 새 요청이 진행 중 → 이 응답 폐기
         if (r.code || r.error) { setHits([]); setSearchErr(errText(t, r, "browse.noResults")); return }
         const list = r.hits || []; setHits(list)
         if (list.length) setSelTurn({ session: sel!, turn: list[0].id })
       } else {
         const r = await search({ q: term, k: 100, mode: m, since: since || undefined, until: until || undefined })
+        if (myId !== searchReq.current) return   // 더 새 요청이 진행 중 → 이 응답 폐기
         if (r.code || r.error) { setHits([]); setSearchErr(errText(t, r, "browse.noResults")); return }
         const list = (r.hits || []).filter((h) => convSet.has(h.id)); setHits(list)
         if (list.length) setSelTurn({ session: list[0].session_full, turn: list[0].id })
       }
-    } catch { setHits([]) } finally { setSearching(false) }
+    } catch { if (myId === searchReq.current) setHits([]) } finally { if (myId === searchReq.current) setSearching(false) }
   }
 
   function pickGroup(id: string) { setSel(id); setSelTurn(null) }
@@ -309,7 +313,7 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
           )}
           <div className="relative">
             <Magnifier className="pointer-events-none absolute left-3 top-1/2 size-[17px] -translate-y-1/2 text-muted-foreground" />
-            <Input value={q} onChange={(e) => runSearch(e.target.value)} placeholder={t("browse.searchPlaceholder", { title })} className="h-9 rounded-lg pl-9 text-sm" />
+            <Input value={q} onChange={(e) => runSearch(e.target.value)} aria-label={t("browse.searchPlaceholder", { title })} placeholder={t("browse.searchPlaceholder", { title })} className="h-9 rounded-lg pl-9 text-sm" />
             {searching && <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">

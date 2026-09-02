@@ -63,6 +63,29 @@ def test_hit_to_dict_shape():
     assert d["cosine"] == 0.87
 
 
+def test_api_sessions_aggregates_without_n_plus_1(tmp_path, monkeypatch):
+    """세션 목록: 윈도우 함수 단일 쿼리로 세션별 턴수·대표 헤드라인·최근순 정렬을 올바로 산출(N+1 제거 후 형태 보존)."""
+    from chatmem.models import Turn
+    from chatmem.store import ArchiveDB
+
+    def _t(tid, sid, ts, q):
+        return Turn(id=tid, session_id=sid, uuid=tid, parent_uuid=None,
+                    timestamp=ts, project="p", question=q, answer="a", actions=())
+
+    db = ArchiveDB(tmp_path / "a.db")
+    db.upsert_turn(_t("A:u0", "Asession", "2026-07-24T00:00:00Z", "A첫질문"))
+    db.upsert_turn(_t("A:u1", "Asession", "2026-07-24T00:01:00Z", "A둘째"))
+    db.upsert_turn(_t("B:u0", "Bsession", "2026-07-24T05:00:00Z", "B첫질문"))  # 더 나중에 끝남
+    db.commit()
+
+    monkeypatch.setattr(web, "ArchiveDB", lambda *a, **k: ArchiveDB(tmp_path / "a.db"))
+    out = web.api_sessions()["sessions"]
+    assert [s["session"] for s in out] == ["Bsession", "Asession"]   # ended DESC
+    by = {s["session"]: s for s in out}
+    assert by["Asession"]["count"] == 2 and by["Asession"]["headline"] == "A첫질문"   # 첫 턴 헤드라인
+    assert by["Bsession"]["count"] == 1 and by["Bsession"]["headline"] == "B첫질문"
+
+
 def test_safe_resume_cwd_rejects_unc_and_missing(tmp_path):
     """세션 로그의 cwd(신뢰 불가)에서 UNC/네트워크·디바이스·없는 경로를 거부(강제 NTLM 인증 등 차단)."""
     from chatmem.web import _safe_resume_cwd

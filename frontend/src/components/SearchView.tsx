@@ -92,6 +92,7 @@ export function SearchView() {
             <Input
               autoFocus value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
+              aria-label={t("search.placeholder")}
               placeholder={t("search.placeholder")} className="h-11 rounded-lg pl-10 text-[15px] shadow-sm"
             />
           </div>
