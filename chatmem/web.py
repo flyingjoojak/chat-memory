@@ -979,6 +979,11 @@ def api_config():
     import os
 
     from . import config as C
+    try:
+        from .enrich import resolve_claude_bin
+        _claude = resolve_claude_bin()
+    except Exception:  # noqa: BLE001 — 설정 화면이 죽지 않게(해석 실패=미발견 취급)
+        _claude = None
     return {
         "enrich_backend": C.ENRICH_BACKEND,
         "models": {
@@ -995,6 +1000,11 @@ def api_config():
         "keys": {k: bool(os.environ.get(k)) for k in
                  ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")},
         "config_path": str(C.CONFIG_PATH),
+        # claude CLI 경로: 사용자가 지정한 override(있으면) + 실제 해석된 경로/발견 여부.
+        # macOS GUI 앱은 셸 PATH 미상속이라 여기서 직접 지정할 수 있게 노출한다.
+        "claude_bin": os.environ.get("CHATMEM_CLAUDE_BIN", ""),
+        "claude_resolved": _claude or "",
+        "claude_found": _claude is not None,
         # Claude Code 로그 소스 — 각 사용자 홈 기준 자동 해석, 필요 시 직접 지정.
         "projects_dir": str(C.PROJECTS_DIR),
         "projects_exists": C.PROJECTS_DIR.exists(),
