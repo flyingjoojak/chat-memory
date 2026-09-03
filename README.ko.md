@@ -17,7 +17,7 @@
 겨우 맞춘 Docker 설정, 드디어 먹힌 그 프롬프트. 그런데 세션을 닫는 순간 전부 사라집니다.
 다음에 필요하면 기록을 하염없이 스크롤하거나, 그냥 처음부터 다시 물어보죠.
 
-**Engram은 당신의 AI에게 없는 장기 기억입니다.** 모든 대화를 내 컴퓨터에 조용히 보관하고,
+**Engram은 당신의 AI에게 없는 장기 기억입니다.** 모든 대화를 내 컴퓨터에 백그라운드로 보관하고,
 그중 무엇이든 몇 초 만에 찾아줍니다 - 정확한 단어가 아니라 **의미로**.
 
 <div align="center">
@@ -62,28 +62,28 @@
 
 ## 다운로드
 
-> **플랫폼 지원 현황** — **Windows**는 빌드하고 실제 실행까지 확인했습니다. **macOS·Linux**는 자동 빌드는 되지만 **아직 실기기에서 테스트하지 못했습니다.** 잘 동작하지 않을 수 있으니, 문제가 생기면 [이슈](https://github.com/flyingjoojak/engram/issues)로 알려주시면 고치겠습니다.
+> **플랫폼 지원 현황:** **Windows**는 빌드하고 실제 실행까지 확인했습니다. **macOS·Linux**는 자동 빌드는 되지만 **아직 실기기에서 테스트하지 못했습니다.** 잘 동작하지 않을 수 있으니, 문제가 생기면 [이슈](https://github.com/flyingjoojak/engram/issues)로 알려주시면 고치겠습니다.
 
 최신 빌드는 [**Releases**](https://github.com/flyingjoojak/engram/releases)에 올라옵니다.
 
-### 🪟 Windows — 권장 · 검증됨
+### 🪟 Windows - 권장 · 검증됨
 
 1. `Engram-Setup-<버전>.exe` 를 받아 실행합니다.
 2. "Windows의 PC 보호" 경고가 뜨면 **추가 정보 → 실행**. (아직 코드 서명을 안 해서 뜨는 경고일 뿐이며 안전합니다.)
 3. 설치가 싫으면 포터블 `.zip` 을 풀어 `Engram.exe` 를 실행하세요.
 
-### 🍎 macOS — 아직 테스트 안 됨
+### 🍎 macOS - 아직 테스트 안 됨
 
 ```bash
 brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram
 brew install --cask flyingjoojak/engram/engram
 ```
 
-### 🐧 Linux — 아직 테스트 안 됨
+### 🐧 Linux - 아직 테스트 안 됨
 
 `.AppImage` 를 받아 `chmod +x` 로 실행 권한을 준 뒤 실행합니다.
 
-**첫 실행** — 임베딩 모델을 하나 고르면(느린 기기용 경량 옵션 있음) 끝입니다. 이후 Engram이 백그라운드에서 대화를 자동 색인하고, 왼쪽 레일에서 **검색 · 세션 · 3D 지도 · 설정**을 오갑니다.
+**첫 실행:** 임베딩 모델을 하나 고르면(느린 기기용 경량 옵션 있음) 끝입니다. 이후 Engram이 백그라운드에서 대화를 자동 색인하고, 왼쪽 레일에서 **검색 · 세션 · 3D 지도 · 설정**을 오갑니다.
 
 ## 어떻게 동작하나
 
