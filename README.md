@@ -17,8 +17,8 @@ You've solved hundreds of problems with **Claude Code** and **Codex** - that gna
 Docker config, the prompt that finally worked. Then the session closes and it's gone. Next time you
 need it, you scroll through endless history, or just ask again from scratch.
 
-**Engram is the long-term memory your AI assistant doesn't have.** It quietly keeps every conversation
-on your own machine and lets you find any of them in a second - by meaning, not just keywords.
+**Engram is the long-term memory your AI assistant doesn't have.** It keeps every conversation
+on your own machine, in the background, and lets you find any of them in a second - by meaning, not just keywords.
 
 <div align="center">
   <img src="docs/assets/search.png" alt="Searching past conversations in Engram - type what you remember and the exact answer comes back" width="880">
@@ -62,28 +62,28 @@ on your own machine and lets you find any of them in a second - by meaning, not 
 
 ## Download
 
-> **Platform status** — **Windows** is built and verified end to end. **macOS and Linux** builds are produced automatically but **haven't been tested on real hardware yet**, so they may not work smoothly. If something breaks, please [open an issue](https://github.com/flyingjoojak/engram/issues) and I'll fix it.
+> **Platform status:** **Windows** is built and verified end to end. **macOS and Linux** builds are produced automatically but **haven't been tested on real hardware yet**, so they may not work smoothly. If something breaks, please [open an issue](https://github.com/flyingjoojak/engram/issues) and I'll fix it.
 
 Builds land on the [**Releases**](https://github.com/flyingjoojak/engram/releases) page.
 
-### 🪟 Windows — recommended · verified
+### 🪟 Windows - recommended · verified
 
 1. Download `Engram-Setup-<version>.exe` and run it.
 2. If Windows shows a "protected your PC" warning, click **More info → Run anyway**. (It's just because the app isn't code-signed yet - it's safe.)
 3. Prefer no install? Unzip the portable `.zip` and run `Engram.exe`.
 
-### 🍎 macOS — not tested yet
+### 🍎 macOS - not tested yet
 
 ```bash
 brew tap flyingjoojak/engram https://github.com/flyingjoojak/engram
 brew install --cask flyingjoojak/engram/engram
 ```
 
-### 🐧 Linux — not tested yet
+### 🐧 Linux - not tested yet
 
 Download the `.AppImage`, make it executable with `chmod +x`, and run it.
 
-**First launch** — pick an embedding model (a lightweight option is offered for slower machines) and you're set. Engram then indexes your conversations in the background; use the left rail for **Search · Sessions · 3D map · Settings**.
+**First launch:** pick an embedding model (a lightweight option is offered for slower machines) and you're set. Engram then indexes your conversations in the background; use the left rail for **Search · Sessions · 3D map · Settings**.
 
 ## How it works
 
@@ -207,7 +207,7 @@ macOS: unsigned apps can't auto-update, so install/update via **Homebrew** (no G
 
 ## Contributing
 
-The highest-leverage contribution is **teaching Engram to read a new tool's logs** (Aider, Cursor,
+The most valuable contribution is **teaching Engram to read a new tool's logs** (Aider, Cursor,
 Gemini CLI, …). It's a single self-contained adapter file - the search, map, and storage pipeline
 stay untouched. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the four-method contract, a worked
 example, and the security rules for adapters.
