@@ -163,6 +163,8 @@ Summaries/tags are **optional** (search runs on the raw text). Pick a backend vi
 
 `openai`/`gemini`/`ollama` all speak the OpenAI-compatible API (LM Studio, vLLM, Groq, … work too).
 
+> On macOS the app is launched from Finder and doesn't inherit your shell `PATH`, so it may not find the `claude` CLI even when it's installed. Engram looks in the usual spots (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, …); if yours lives elsewhere, point at it with `CHATMEM_CLAUDE_BIN=/full/path/to/claude`.
+
 ```bash
 CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 engram enrich   # local, zero leakage
 ```

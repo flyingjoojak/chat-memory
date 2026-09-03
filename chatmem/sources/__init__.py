@@ -56,9 +56,30 @@ def disabled_sources() -> set[str]:
     return {s.strip() for s in raw.split(",") if s.strip()}
 
 
+def parent_source(name: str) -> str:
+    """어댑터가 저장·노출하는 출처명(source_name). 대부분 name 과 같다.
+
+    subagent 처럼 name≠source_name 인 '하위 스트림'은 부모 출처(여기선 claude-code)로 접힌다:
+    검색에서도 부모 출처로 나오고, 켜기/끄기도 부모 토글 하나만 따른다(자기 토글 없음).
+    """
+    a = ADAPTERS.get(name)
+    return getattr(a, "source_name", name) if a is not None else name
+
+
+def is_substream(name: str) -> bool:
+    """하위 스트림(자기 토글 없이 부모 출처를 따르는 어댑터)인가."""
+    return parent_source(name) != name
+
+
+def toggleable_source_names() -> list[str]:
+    """사용자 설정에 on/off 토글로 노출할 소스명(= 부모 출처인 것만, 하위 스트림 제외)."""
+    return [n for n in ADAPTERS if not is_substream(n)]
+
+
 def enabled_source_names() -> list[str]:
     """색인 대상 소스명. CHATMEM_SOURCES(쉼표)로 한정하거나 비면 전부에서, UI로 끈 소스를 제외.
 
+    하위 스트림(subagent)은 자기 이름이 아니라 부모 출처(claude-code)의 disabled 여부만 따른다.
     중복 제거·순서 유지, env의 미등록 이름은 경고.
     """
     from .. import config as C
@@ -72,7 +93,8 @@ def enabled_source_names() -> list[str]:
     else:
         base = list(ADAPTERS.keys())
     disabled = disabled_sources()
-    return [n for n in base if n not in disabled]   # 중복 제거+순서 유지
+    # 하위 스트림은 부모의 disabled 만 확인(자기 이름의 레거시 disabled 항목은 무시 → 부모를 따른다).
+    return [n for n in base if parent_source(n) not in disabled]   # 중복 제거+순서 유지
 
 
 def active_sources() -> list[tuple[str, SourceAdapter, Path]]:
@@ -90,5 +112,6 @@ def active_sources() -> list[tuple[str, SourceAdapter, Path]]:
 __all__ = [
     "SourceAdapter", "ClaudeCodeAdapter", "CodexAdapter", "SubagentAdapter",
     "ADAPTERS", "default_adapter", "active_sources", "enabled_source_names",
-    "source_roots", "disabled_sources",
+    "source_roots", "disabled_sources", "parent_source", "is_substream",
+    "toggleable_source_names",
 ]

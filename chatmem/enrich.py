@@ -16,6 +16,7 @@ import os
 import shutil
 import subprocess
 import time
+from pathlib import Path
 
 from .models import Turn
 
@@ -23,6 +24,57 @@ logger = logging.getLogger(__name__)
 
 # windowed(콘솔 없는) exe에서 claude CLI 서브프로세스가 콘솔 창을 띄우지 않게(Windows 전용 플래그).
 _NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def _claude_search_dirs() -> list[str]:
+    """claude CLI 가 흔히 설치되는 위치들(PATH 미상속 GUI 앱용).
+
+    macOS Finder/Dock 로 띄운 앱은 셸 PATH(~/.zshrc 등)를 물려받지 못해 `which claude` 가
+    실패한다 → 아래 표준 위치들을 직접 확인한다. 순서 = 우선순위.
+    """
+    home = Path.home()
+    return [
+        "/opt/homebrew/bin",                 # macOS Apple Silicon Homebrew
+        "/usr/local/bin",                    # macOS Intel Homebrew / 수동 설치
+        str(home / ".local/bin"),            # 네이티브 인스톨러
+        str(home / ".claude/local"),         # Claude Code 로컬 설치
+        str(home / ".npm-global/bin"),       # npm 전역(사용자)
+        "/usr/bin",
+    ]
+
+
+def resolve_claude_bin() -> str | None:
+    """claude 실행파일 경로 해석: (1) CHATMEM_CLAUDE_BIN 명시 → (2) PATH → (3) 표준 설치 위치.
+
+    반환은 실행 가능한 절대/명령 경로, 못 찾으면 None. 설정 즉시 반영을 위해 호출 시점에 조회한다.
+    """
+    override = os.environ.get("CHATMEM_CLAUDE_BIN", "").strip()
+    if override:
+        # 파일 경로면 존재 확인, 아니면 PATH 에서 그 이름을 찾음(둘 다 허용).
+        if Path(override).is_file() or shutil.which(override):
+            return override
+        logger.warning("CHATMEM_CLAUDE_BIN=%r 를 찾을 수 없음 → 자동 탐색으로 폴백", override)
+    found = shutil.which("claude")            # 터미널/개발 실행은 보통 여기서 잡힘
+    if found:
+        return found
+    name = "claude.exe" if os.name == "nt" else "claude"
+    for d in _claude_search_dirs():           # GUI 앱: 표준 위치 직접 확인
+        p = Path(d) / name
+        if p.is_file():
+            return str(p)
+    return None
+
+
+def _claude_env(bin_path: str) -> dict:
+    """claude 서브프로세스용 환경: 실행파일 폴더(+표준 bin)를 PATH 앞에 붙인다.
+
+    claude 는 내부적으로 node 등을 PATH 에서 찾으므로, PATH 를 못 물려받은 GUI 앱에서 절대경로로
+    실행할 때 실행파일과 같은 폴더(예: /opt/homebrew/bin 의 node)를 PATH 에 넣어줘야 동작한다.
+    """
+    env = os.environ.copy()
+    extra = [str(Path(bin_path).parent), "/opt/homebrew/bin", "/usr/local/bin"]
+    env["PATH"] = os.pathsep.join(extra) + os.pathsep + env.get("PATH", "")
+    return env
 
 # 창이 크면 LLM이 긴 JSON 목록에서 일부 턴을 누락함 → 작게 잡아 커버리지 확보.
 _MAX_TURNS_PER_CALL = 20
@@ -70,10 +122,14 @@ def _build_prompt(turns: list[Turn]) -> str:
 
 # --- 백엔드 ------------------------------------------------------------
 def _call_claude_cli(prompt: str, model: str, timeout: int = 240) -> str:
+    bin_path = resolve_claude_bin()
+    if not bin_path:
+        raise RuntimeError(
+            "claude CLI 를 찾을 수 없습니다 — Claude Code 설치, 또는 CHATMEM_CLAUDE_BIN 로 경로 지정")
     r = subprocess.run(
-        ["claude", "-p", prompt, "--model", model],
+        [bin_path, "-p", prompt, "--model", model],
         capture_output=True, text=True, encoding="utf-8", timeout=timeout,
-        creationflags=_NO_WINDOW,
+        creationflags=_NO_WINDOW, env=_claude_env(bin_path),
     )
     if r.returncode != 0:
         raise RuntimeError(f"claude -p 실패(rc={r.returncode}): {(r.stderr or '')[:200]}")
@@ -154,8 +210,8 @@ def verify_backend(backend: str, model: str | None = None, api_key: str | None =
     if backend == "off":
         return True, "정제 안 함"
     if backend == "claude":
-        if shutil.which("claude") is None:
-            return False, "claude CLI 없음 (Claude Code 설치 필요)"
+        if resolve_claude_bin() is None:
+            return False, "claude CLI 없음 (Claude Code 설치, 또는 CHATMEM_CLAUDE_BIN 로 경로 지정)"
         return True, "claude CLI 확인됨"
     if backend == "anthropic":
         try:
@@ -195,8 +251,9 @@ def backend_available(backend: str) -> tuple[bool, str]:
     if backend == "off":
         return False, "정제 비활성화(off)"
     if backend == "claude":
-        if shutil.which("claude") is None:
-            return False, "claude CLI 없음 — Claude Code 설치, 또는 CHATMEM_ENRICH_BACKEND=anthropic"
+        if resolve_claude_bin() is None:
+            return False, ("claude CLI 없음 — Claude Code 설치, CHATMEM_CLAUDE_BIN 로 경로 지정, "
+                           "또는 CHATMEM_ENRICH_BACKEND=anthropic")
         return True, ""
     if backend == "anthropic":
         try:
