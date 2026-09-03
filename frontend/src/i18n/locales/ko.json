@@ -152,7 +152,7 @@
     "claudeBinPlaceholder": "자동 탐색 (비워두기)",
     "claudeBinFound": "찾음: {{path}}",
     "claudeBinNotFound": "claude CLI를 찾지 못했습니다",
-    "claudeBinHint": "비워두면 자동으로 찾습니다. macOS는 앱이 셸 PATH를 못 봐서, 요약이 실패하면 전체 경로(예: /opt/homebrew/bin/claude)를 지정하세요.",
+    "claudeBinHint": "못 찾으면 전체 경로를 지정하세요 (예: /opt/homebrew/bin/claude).",
     "enrichTime": "요약 시각 (매일)",
     "testing": "테스트 중…",
     "testConnection": "연결 테스트",
