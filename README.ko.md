@@ -163,6 +163,8 @@ engram stats | config | progress           # 상태 · 설정 · 진행률
 
 `openai`/`gemini`/`ollama`는 모두 OpenAI 호환 API입니다(LM Studio·vLLM·Groq도 연결 가능).
 
+> macOS에서는 앱이 Finder로 실행돼 셸 `PATH`를 물려받지 못하므로, `claude` CLI가 설치돼 있어도 못 찾을 수 있습니다. Engram이 흔한 위치(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` 등)를 자동으로 확인하지만, 다른 곳에 있으면 `CHATMEM_CLAUDE_BIN=/claude/전체/경로`로 지정하세요.
+
 ```bash
 CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 engram enrich   # 로컬, 유출 0
 ```

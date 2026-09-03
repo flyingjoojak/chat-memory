@@ -540,11 +540,15 @@ def api_sources():
 def api_sources_toggle(payload: dict):
     """색인 소스 켜기/끄기(비파괴). enabled=false면 다음 색인부터 그 소스를 건너뛴다.
     기존에 색인된 데이터는 그대로 남아 검색된다(삭제하지 않음)."""
-    from .sources import ADAPTERS, disabled_sources
+    from .sources import ADAPTERS, disabled_sources, is_substream
     name = str((payload or {}).get("source", "")).strip()
     enabled = bool((payload or {}).get("enabled", True))
     if name not in ADAPTERS:
         raise HTTPException(status_code=400, detail={"code": "unknown_source", "msg": "알 수 없는 소스"})
+    if is_substream(name):
+        # 하위 스트림(subagent)은 자기 토글이 없다 — 부모 출처(claude-code) 토글을 따른다.
+        raise HTTPException(status_code=400, detail={"code": "substream_follows_parent",
+                            "msg": "이 소스는 부모 출처 토글을 따릅니다"})
     cur = disabled_sources()
     cur.discard(name) if enabled else cur.add(name)
     db = ArchiveDB()
@@ -975,6 +979,11 @@ def api_config():
     import os
 
     from . import config as C
+    try:
+        from .enrich import resolve_claude_bin
+        _claude = resolve_claude_bin()
+    except Exception:  # noqa: BLE001 — 설정 화면이 죽지 않게(해석 실패=미발견 취급)
+        _claude = None
     return {
         "enrich_backend": C.ENRICH_BACKEND,
         "models": {
@@ -991,6 +1000,11 @@ def api_config():
         "keys": {k: bool(os.environ.get(k)) for k in
                  ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")},
         "config_path": str(C.CONFIG_PATH),
+        # claude CLI 경로: 사용자가 지정한 override(있으면) + 실제 해석된 경로/발견 여부.
+        # macOS GUI 앱은 셸 PATH 미상속이라 여기서 직접 지정할 수 있게 노출한다.
+        "claude_bin": os.environ.get("CHATMEM_CLAUDE_BIN", ""),
+        "claude_resolved": _claude or "",
+        "claude_found": _claude is not None,
         # Claude Code 로그 소스 — 각 사용자 홈 기준 자동 해석, 필요 시 직접 지정.
         "projects_dir": str(C.PROJECTS_DIR),
         "projects_exists": C.PROJECTS_DIR.exists(),
@@ -1135,20 +1149,37 @@ def _sources_info_cached() -> list:
     now = time.time()
     if now - _sources_cache["at"] < _PENDING_TTL and _sources_cache["list"]:
         return _sources_cache["list"]
-    from .sources import ADAPTERS, active_sources, disabled_sources, source_roots
+    from .sources import (ADAPTERS, active_sources, disabled_sources,
+                          is_substream, parent_source, source_roots)
     active = {n for n, _a, _r in active_sources()}
     disabled = disabled_sources()
     roots = source_roots()
-    out = []
-    for name, adapter in ADAPTERS.items():
-        root = roots.get(name)
-        exists = bool(root and root.exists())
+
+    def _count(name: str, adapter, root) -> int:
+        if not (root and root.exists()):
+            return 0
         try:
-            count = sum(1 for _ in adapter.discover(root)) if exists else 0
+            return sum(1 for _ in adapter.discover(root))
         except Exception as e:  # noqa: BLE001 — walk 실패해도 UI 안 죽게(로그만)
             import logging
             logging.getLogger(__name__).warning("소스 %s 파일 카운트 실패: %s", name, e)
-            count = 0
+            return 0
+
+    # 하위 스트림(subagent)은 부모 출처(claude-code)로 접힌다: 별도 토글로 노출하지 않고,
+    # 그 파일 수는 부모 카운트에 합산해 "Claude Code N개"가 실제 색인 범위와 어긋나지 않게 한다.
+    substream_counts: dict[str, int] = {}
+    for name, adapter in ADAPTERS.items():
+        if is_substream(name):
+            substream_counts[parent_source(name)] = (
+                substream_counts.get(parent_source(name), 0) + _count(name, adapter, roots.get(name)))
+
+    out = []
+    for name, adapter in ADAPTERS.items():
+        if is_substream(name):
+            continue   # 부모 토글을 따르므로 설정에 별도 표시 안 함
+        root = roots.get(name)
+        exists = bool(root and root.exists())
+        count = _count(name, adapter, root) + substream_counts.get(name, 0)
         out.append({"name": name, "root": str(root) if root else None, "exists": exists,
                     "active": name in active, "disabled": name in disabled, "count": count})
     _sources_cache.update(at=now, list=out)

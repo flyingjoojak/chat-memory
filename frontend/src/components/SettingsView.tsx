@@ -458,6 +458,7 @@ export function SettingsView() {
   const [indexMode, setIndexMode] = useState<IndexMode>("interval")
   const [indexTime, setIndexTime] = useState("03:00")       // scheduled 색인 시각
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434/v1")
+  const [claudeBin, setClaudeBin] = useState("")   // claude CLI 경로 override(빈값=자동 탐색)
   const [saved, setSaved] = useState(false)
   const [testing, setTesting] = useState(false)
   const [verify, setVerify] = useState<{ ok: boolean; msg: string } | null>(null)
@@ -544,6 +545,7 @@ export function SettingsView() {
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
       setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir); setCodexDir(c.codex_dir)
+      setClaudeBin(c.claude_bin ?? "")
       setIndexMode((c.index_mode as IndexMode) || "interval"); setIndexTime(c.index_time || "03:00")
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
@@ -606,6 +608,7 @@ export function SettingsView() {
     if (be.modelEnv && model) u[be.modelEnv] = model
     if (be.key && apiKey) u[be.key] = apiKey
     if (backend === "ollama" && ollamaUrl) u.CHATMEM_OLLAMA_URL = ollamaUrl
+    if (backend === "claude") u.CHATMEM_CLAUDE_BIN = claudeBin.trim()   // 빈값=자동 탐색으로 되돌림
     try {
       const r = await putConfig(u)
       if (!r.ok) { setBlockMsg(errText(t, r, "settings.saveFailed")); return }
@@ -850,6 +853,20 @@ export function SettingsView() {
                     <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} aria-label={t("settings.apiKey")}
                       className="h-8 w-56" placeholder={cfg?.keys[be.key] ? t("settings.apiKeyChangePlaceholder") : (be.keyExKey ? t(be.keyExKey) : "")} />
                   </Row>
+                )}
+                {backend === "claude" && (
+                  <>
+                    <Row label={t("settings.claudeBin")}>
+                      <Input value={claudeBin} onChange={(e) => setClaudeBin(e.target.value)} aria-label={t("settings.claudeBin")}
+                        className="h-8 w-72" placeholder={t("settings.claudeBinPlaceholder")} />
+                    </Row>
+                    <div className="border-b py-2 text-xs last:border-0">
+                      {cfg?.claude_found
+                        ? <span className="inline-flex items-center gap-1 text-primary"><Check className="size-3" />{t("settings.claudeBinFound", { path: cfg.claude_resolved })}</span>
+                        : <span className="inline-flex items-center gap-1 text-destructive"><AlertTriangle className="size-3" />{t("settings.claudeBinNotFound")}</span>}
+                      <div className="mt-1 text-muted-foreground">{t("settings.claudeBinHint")}</div>
+                    </div>
+                  </>
                 )}
                 {backend === "ollama" && (
                   <>

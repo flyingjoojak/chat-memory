@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from chatmem.enrich import _build_prompt, _parse_json
+import chatmem.enrich as enrich
+from chatmem.enrich import _build_prompt, _parse_json, resolve_claude_bin
 from chatmem.models import Turn
 
 
@@ -74,3 +75,50 @@ def test_generate_dispatch(monkeypatch):
     assert "11434" in enrich._generate("x", "ollama", "llama3.1")
     with pytest.raises(RuntimeError):
         enrich._generate("x", "off", "m")
+
+
+# --- claude 실행파일 해석(PATH 미상속 GUI 앱 대응) ------------------------
+def test_resolve_claude_bin_prefers_env_override(monkeypatch, tmp_path):
+    fake = tmp_path / "claude"
+    fake.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("CHATMEM_CLAUDE_BIN", str(fake))
+    # PATH/표준경로를 못 찾게 막아도 override 가 우선.
+    monkeypatch.setattr(enrich.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(enrich, "_claude_search_dirs", lambda: [])
+    assert resolve_claude_bin() == str(fake)
+
+
+def test_resolve_claude_bin_falls_back_to_path(monkeypatch):
+    monkeypatch.delenv("CHATMEM_CLAUDE_BIN", raising=False)
+    monkeypatch.setattr(enrich.shutil, "which", lambda n: "/usr/bin/claude" if n == "claude" else None)
+    assert resolve_claude_bin() == "/usr/bin/claude"
+
+
+def test_resolve_claude_bin_scans_standard_dirs_when_path_misses(monkeypatch, tmp_path):
+    # GUI 앱: PATH 에 없지만 표준 설치 위치(예: /opt/homebrew/bin)에 있으면 찾아야 한다.
+    monkeypatch.delenv("CHATMEM_CLAUDE_BIN", raising=False)
+    monkeypatch.setattr(enrich.shutil, "which", lambda _n: None)   # PATH 미상속 흉내
+    brew = tmp_path / "opt_homebrew_bin"
+    brew.mkdir()
+    binname = "claude.exe" if enrich.os.name == "nt" else "claude"   # 호스트 규칙에 맞춘 파일명
+    (brew / binname).write_text("#!/bin/sh\n")
+    monkeypatch.setattr(enrich, "_claude_search_dirs", lambda: [str(brew)])
+    assert resolve_claude_bin() == str(brew / binname)
+
+
+def test_resolve_claude_bin_none_when_absent(monkeypatch):
+    monkeypatch.delenv("CHATMEM_CLAUDE_BIN", raising=False)
+    monkeypatch.setattr(enrich.shutil, "which", lambda _n: None)
+    monkeypatch.setattr(enrich, "_claude_search_dirs", lambda: [])
+    assert resolve_claude_bin() is None
+
+
+def test_claude_env_prepends_bindir_to_path(monkeypatch):
+    from pathlib import Path
+    monkeypatch.setenv("PATH", "/existing")
+    bin_path = "/opt/homebrew/bin/claude"
+    env = enrich._claude_env(bin_path)
+    parts = env["PATH"].split(enrich.os.pathsep)
+    assert parts[0] == str(Path(bin_path).parent)   # 실행파일 폴더가 PATH 맨 앞(node 등 해석용)
+    assert "/opt/homebrew/bin" in parts and "/usr/local/bin" in parts   # 표준 bin 도 포함
+    assert "/existing" in parts                     # 기존 PATH 보존
