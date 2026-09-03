@@ -104,3 +104,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false" # 서명 인증서 없음 → 자동 서명 탐색 끔(mac)
         run: npx electron-builder --publish ${{ github.event_name == 'push' && 'always' || 'never' }}
+
+      # 수동 실행(테스트 빌드)일 때만: 만들어진 설치본을 다운로드 가능한 아티팩트로 올린다.
+      # (태그 릴리스는 이미 릴리스 자산으로 붙으므로 불필요. unpacked 폴더는 용량 커서 제외.)
+      - name: 테스트 설치본 업로드(수동 실행 전용)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: engram-installer-${{ matrix.os }}
+          retention-days: 14
+          if-no-files-found: warn
+          path: |
+            electron/dist/*.dmg
+            electron/dist/*.exe
+            electron/dist/*.zip
+            electron/dist/*.AppImage
