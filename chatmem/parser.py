@@ -8,10 +8,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Iterable, Iterator
 
 from .models import Action, Turn
+
+logger = logging.getLogger(__name__)
 
 # 대화가 아닌 메타/시스템 라인 타입.
 _STRUCTURAL_TYPES = {
@@ -69,6 +72,9 @@ def iter_json_lines(path: str | Path, start_offset: int = 0) -> Iterator[tuple[d
         try:
             obj = json.loads(text)
         except json.JSONDecodeError:
+            # 손상된(하지만 완결된) 줄은 건너뛸 수밖에 없다 — 다만 무로그로 사라지면 나중에
+            # 검색 공백의 원인을 알 수 없으므로, 경로·오프셋·앞부분을 남겨 관측 가능하게 한다.
+            logger.warning("손상 JSON 라인 스킵: %s @%d — %.80r", path, offset, text)
             continue
         yield obj, offset
 

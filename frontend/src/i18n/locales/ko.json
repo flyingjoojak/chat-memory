@@ -15,7 +15,8 @@
     "sessions": "세션",
     "clusters": "군집",
     "map": "지도",
-    "settings": "설정"
+    "settings": "설정",
+    "mainAria": "기본 내비게이션"
   },
   "app": {
     "mapLoading": "3D 지도 불러오는 중…",

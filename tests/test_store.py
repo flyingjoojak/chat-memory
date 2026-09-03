@@ -76,6 +76,16 @@ def test_enrichment_additive(tmp_path):
     assert db.get_turn("s1:u1").question == "질문"
 
 
+def test_set_enrichment_returns_rowcount(tmp_path):
+    # 매칭되는 turn이 있으면 1, 없으면(예: LLM이 id를 잘못 복사) 0을 돌려줘야
+    # enrich 루프가 "완료"로 오인하지 않는다 → summary IS NULL 무한 재시도 방지.
+    db = ArchiveDB(tmp_path / "a.db")
+    db.upsert_turn(_turn("s1:u1"))
+    db.commit()
+    assert db.set_enrichment("s1:u1", "요약", ["t"]) == 1
+    assert db.set_enrichment("s1:does-not-exist", "요약", ["t"]) == 0
+
+
 def test_thread_window(tmp_path):
     db = ArchiveDB(tmp_path / "a.db")
     for i in range(5):
