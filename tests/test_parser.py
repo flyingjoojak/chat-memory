@@ -122,6 +122,35 @@ def test_tool_result_not_a_prompt():
     assert not is_real_user_prompt(obj)
 
 
+# --- 자동화(claude -p / SDK) 세션 제외 ----------------------------------
+def _user_src(uuid, text, src):
+    o = _user(uuid, text)
+    o["promptSource"] = src
+    return o
+
+
+def test_sdk_automation_prompt_excluded():
+    # promptSource=sdk = 프로그램/claude -p 자동화 → 사람 턴 아님(더미 세션 제외).
+    assert not is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
+
+
+def test_human_prompt_sources_still_indexed():
+    # 사람이 구동한 소스(typed/queued/suggestion_accepted)는 그대로 색인.
+    for src in ("typed", "queued", "suggestion_accepted"):
+        assert is_real_user_prompt(_user_src("u1", "이거 고쳐줘", src)), src
+
+
+def test_missing_prompt_source_treated_as_human():
+    # promptSource 필드가 없는 구버전 로그는 사람으로 간주(하위호환·오검 방지).
+    assert is_real_user_prompt(_user("u1", "질문"))
+
+
+def test_sdk_opt_in_env_indexes_automation(monkeypatch):
+    # 옵트인이면 자동화 세션도 색인(파워유저용).
+    monkeypatch.setenv("CHATMEM_INDEX_SDK_SESSIONS", "1")
+    assert is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
+
+
 # --- 턴 그룹핑 ----------------------------------------------------------
 def test_turn_grouping_and_actions():
     objs = [
