@@ -10,6 +10,7 @@ import logging
 import re
 import sqlite3
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from .config import DB_PATH
@@ -38,6 +39,42 @@ CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id);
 CREATE INDEX IF NOT EXISTS idx_turns_ts ON turns(timestamp);
 CREATE INDEX IF NOT EXISTS idx_chunks_turn ON chunks(turn_id);
 """
+
+# 스키마 버전 = 아래 _MIGRATIONS 길이. 새 DB는 _SCHEMA(최신 형태)로 만든 뒤 곧장 이 번호로 스탬프하고,
+# 기존 DB는 PRAGMA user_version 부터 여기까지의 마이그레이션만 순서대로 적용한다.
+#
+# 왜 이게 필요한가: 로컬-퍼스트 앱에서 사용자의 archive.db 는 영구 자산이다. 사용자가 퍼진 뒤엔
+# "그냥 다시 만들기"가 불가능하므로, 스키마 변경은 반드시 버전이 매겨진·되돌릴 수 없는 앞으로만 가는
+# 단계로 관리해야 한다. 각 단계는 (a) 멱등하게 짜고(부분 적용 후 재시도 안전), (b) 자체 트랜잭션으로 감싼다.
+#
+# 규칙:
+#   - 마이그레이션은 오직 이 리스트 '끝에만' 추가한다(기존 항목의 순서/내용을 바꾸지 말 것).
+#   - 컬럼 추가 같은 건 ADD COLUMN + IF NOT EXISTS 관용구로 멱등하게.
+#   - _SCHEMA(신규 DB의 시작 형태)에 이미 반영된 변경도, 구 DB를 끌어올리기 위해 여기 단계로 남긴다.
+_Migration = Callable[[sqlite3.Connection], None]
+
+
+def _mig_0001_source_columns(conn: sqlite3.Connection) -> None:
+    """turns 에 멀티소스용 source / source_file 컬럼 추가(구 단일소스 DB → 멀티소스)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(turns)")}
+    for col in ("source", "source_file"):
+        if col not in cols:
+            conn.execute(f"ALTER TABLE turns ADD COLUMN {col} TEXT")
+
+
+def _mig_0002_cursor_hold_offset(conn: sqlite3.Connection) -> None:
+    """cursors 에 hold_offset 추가(idle 확정된 '열린 마지막 턴' 뒷내용 재포착용)."""
+    ccols = {r["name"] for r in conn.execute("PRAGMA table_info(cursors)")}
+    if "hold_offset" not in ccols:
+        conn.execute("ALTER TABLE cursors ADD COLUMN hold_offset INTEGER")
+
+
+# 순서 고정 — 끝에만 추가한다. len(_MIGRATIONS) 가 곧 최신 스키마 버전.
+_MIGRATIONS: tuple[_Migration, ...] = (
+    _mig_0001_source_columns,
+    _mig_0002_cursor_hold_offset,
+)
+_SCHEMA_VERSION = len(_MIGRATIONS)
 
 
 def _actions_to_json(actions: tuple[Action, ...]) -> str:
@@ -73,29 +110,41 @@ class ArchiveDB:
         except sqlite3.OperationalError:
             pass  # 쓰기중이라 잠기면 스킵(다음 기회에 적용됨)
         # 스키마 생성(쓰기)은 없을 때만 → 읽기전용 명령이 쓰기락과 충돌하지 않도록.
-        if not self._has_schema():
-            self.conn.executescript(_SCHEMA)
-        self._ensure_columns()          # 기존 DB에 source/source_file 추가(멀티소스 재개용)
+        fresh = not self._has_schema()
+        if fresh:
+            self.conn.executescript(_SCHEMA)   # 신규 DB = 이미 최신 형태
+        self._migrate(fresh)                   # 버전 스탬프 + 구 DB 순차 업그레이드
         self.fts_enabled = self._ensure_fts()
 
-    def _ensure_columns(self) -> None:
-        """기존 turns 테이블에 없는 컬럼을 추가(경량 마이그레이션). 이미 있으면 쓰기 없음."""
-        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(turns)")}
-        for col in ("source", "source_file"):
-            if col not in cols:
-                try:
-                    self.conn.execute(f"ALTER TABLE turns ADD COLUMN {col} TEXT")
-                except sqlite3.OperationalError as e:
-                    # 쓰기 락이면 다음 기회에 적용됨(무해). 영속적 실패면 이후 upsert가
-                    # 'no such column'으로 터지므로 원인 추적용 경고를 남긴다.
-                    logger.warning("turns.%s 컬럼 추가 실패(다음 열기 때 재시도): %s", col, e)
-        # cursors.hold_offset: idle 확정된 '열린 마지막 턴'의 시작 offset(뒷내용 재포착용).
-        ccols = {r["name"] for r in self.conn.execute("PRAGMA table_info(cursors)")}
-        if "hold_offset" not in ccols:
+    def _migrate(self, fresh: bool) -> None:
+        """PRAGMA user_version 기반 순차 마이그레이션. 신규 DB는 곧장 최신 버전으로 스탬프.
+
+        - 신규(_SCHEMA로 방금 생성): 이미 최신 형태이므로 마이그레이션을 '적용 없이' 버전만 올린다.
+        - 기존: 현재 user_version 다음 단계부터 끝까지, 각 단계를 자체 트랜잭션으로 적용.
+        각 단계는 멱등하게 작성돼 있어(부분 적용 후 재시도 안전) 쓰기 락 등으로 중단돼도 다음 열기 때 이어진다.
+        """
+        cur = self.conn.execute("PRAGMA user_version").fetchone()[0]
+        if fresh:
+            # 신규 DB는 단계를 돌릴 필요가 없다(이미 최신). 버전만 확정.
+            if cur != _SCHEMA_VERSION:
+                self.conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+            return
+        if cur >= _SCHEMA_VERSION:
+            if cur > _SCHEMA_VERSION:
+                # 더 새 버전이 만든 DB를 구 앱으로 연 경우 → 파괴적 작업은 안 하되, 앞으로 못 감을 알린다.
+                logger.warning("DB 스키마 버전(%d)이 이 앱(%d)보다 높음 — 앱 업데이트를 권장", cur, _SCHEMA_VERSION)
+            return
+        for ver in range(cur, _SCHEMA_VERSION):
+            migrate = _MIGRATIONS[ver]   # 0-기반: user_version=N 이면 다음은 인덱스 N
             try:
-                self.conn.execute("ALTER TABLE cursors ADD COLUMN hold_offset INTEGER")
+                with self.conn:          # 단계별 트랜잭션(실패 시 이 단계만 롤백)
+                    migrate(self.conn)
+                    self.conn.execute(f"PRAGMA user_version = {ver + 1}")
             except sqlite3.OperationalError as e:
-                logger.warning("cursors.hold_offset 컬럼 추가 실패(다음 열기 때 재시도): %s", e)
+                # 쓰기 락이면 다음 열기 때 이어서 적용됨(무해). 그 전엔 이후 쿼리가 'no such column' 등으로
+                # 터질 수 있으므로 원인 추적용 경고를 남기고 멈춘다(더 진행하지 않음).
+                logger.warning("스키마 마이그레이션 v%d 적용 실패(다음 열기 때 재시도): %s", ver + 1, e)
+                return
 
     def _has_schema(self) -> bool:
         row = self.conn.execute(

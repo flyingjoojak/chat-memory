@@ -1,7 +1,11 @@
 """소스 어댑터 레지스트리.
 
-현재 등록: Claude Code 하나. 새 도구를 지원하려면 여기에 어댑터를 추가하면 되고,
-파이프라인(indexer/chunker/embedder/store/search)은 건드릴 필요가 없다.
+현재 등록: Claude Code · Codex · Subagent. 새 도구(Aider·Cursor 등)를 지원하려면 아래 ADAPTERS 에
+어댑터 인스턴스를 추가하면 되고, 파이프라인(indexer/chunker/embedder/store/search)은 건드릴 필요가 없다.
+추가 방법 단계별 가이드 → 프로젝트 루트 CONTRIBUTING.md "새 소스 어댑터 추가하기".
+
+보안: 등록은 반드시 이 파일의 '명시적 import'를 거친다(자동 플러그인 로더 없음). 3자 어댑터가
+사용자 머신에 도달하는 유일한 경로는 PR → 코드리뷰 → 릴리스이며, 이게 신뢰 게이트다.
 """
 from __future__ import annotations
 

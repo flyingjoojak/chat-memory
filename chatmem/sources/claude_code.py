@@ -18,6 +18,7 @@ _SKIP_DIRS = {".stversions", ".chatmem-archive"}
 
 class ClaudeCodeAdapter:
     name = "claude-code"
+    source_name = "claude-code"   # 저장·검색에 노출되는 출처명(= name)
 
     def discover(self, root: Path) -> Iterator[Path]:
         for p in root.rglob("*.jsonl"):

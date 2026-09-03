@@ -142,6 +142,7 @@ def _summarize_item(item: dict) -> Action:
 
 class CodexAdapter:
     name = "codex"
+    source_name = "codex"   # 저장·검색에 노출되는 출처명(= name)
 
     def discover(self, root: Path) -> Iterator[Path]:
         for p in root.rglob("rollout-*.jsonl"):

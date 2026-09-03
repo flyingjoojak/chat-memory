@@ -76,6 +76,48 @@ def test_enrichment_additive(tmp_path):
     assert db.get_turn("s1:u1").question == "질문"
 
 
+def test_fresh_db_stamped_at_latest_schema_version(tmp_path):
+    from chatmem.store import _SCHEMA_VERSION
+    db = ArchiveDB(tmp_path / "a.db")
+    ver = db.conn.execute("PRAGMA user_version").fetchone()[0]
+    assert ver == _SCHEMA_VERSION   # 신규 DB는 곧장 최신으로 스탬프(마이그레이션 재적용 안 함)
+
+
+def test_migrates_legacy_v0_db_up_to_latest(tmp_path):
+    import sqlite3
+
+    from chatmem.store import _SCHEMA_VERSION
+    # 마이그레이션 시스템 이전의 '구' DB 흉내: turns/cursors 를 신규 컬럼 없이, user_version=0 으로 생성.
+    p = tmp_path / "legacy.db"
+    con = sqlite3.connect(str(p))
+    con.executescript(
+        "CREATE TABLE turns(id TEXT PRIMARY KEY, session_id TEXT, uuid TEXT, parent_uuid TEXT,"
+        " timestamp TEXT, project TEXT, question TEXT, answer TEXT, actions TEXT, summary TEXT, tags TEXT);"
+        "CREATE TABLE chunks(chunk_key TEXT PRIMARY KEY, turn_id TEXT, idx INTEGER, text TEXT);"
+        "CREATE TABLE cursors(file_path TEXT PRIMARY KEY, offset INTEGER, size INTEGER, mtime REAL, updated_at REAL);"
+        "CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);"
+    )
+    con.commit(); con.close()
+
+    db = ArchiveDB(p)   # 열기만 해도 v0 → 최신으로 끌어올려야 한다
+    assert db.conn.execute("PRAGMA user_version").fetchone()[0] == _SCHEMA_VERSION
+    tcols = {r["name"] for r in db.conn.execute("PRAGMA table_info(turns)")}
+    assert {"source", "source_file"} <= tcols
+    ccols = {r["name"] for r in db.conn.execute("PRAGMA table_info(cursors)")}
+    assert "hold_offset" in ccols
+    # 업그레이드 후에도 정상 동작(upsert/조회).
+    db.upsert_turn(_turn("s1:u1")); db.commit()
+    assert db.get_turn("s1:u1").question == "질문"
+
+
+def test_reopen_is_noop_idempotent(tmp_path):
+    from chatmem.store import _SCHEMA_VERSION
+    p = tmp_path / "a.db"
+    ArchiveDB(p).commit()
+    db = ArchiveDB(p)   # 두 번째 열기 = 이미 최신 → 마이그레이션 재적용 없이 그대로
+    assert db.conn.execute("PRAGMA user_version").fetchone()[0] == _SCHEMA_VERSION
+
+
 def test_set_enrichment_returns_rowcount(tmp_path):
     # 매칭되는 turn이 있으면 1, 없으면(예: LLM이 id를 잘못 복사) 0을 돌려줘야
     # enrich 루프가 "완료"로 오인하지 않는다 → summary IS NULL 무한 재시도 방지.
