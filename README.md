@@ -205,6 +205,13 @@ macOS: unsigned apps can't auto-update, so install/update via **Homebrew** (no G
 
 </details>
 
+## Contributing
+
+The highest-leverage contribution is **teaching Engram to read a new tool's logs** (Aider, Cursor,
+Gemini CLI, …). It's a single self-contained adapter file - the search, map, and storage pipeline
+stay untouched. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the four-method contract, a worked
+example, and the security rules for adapters.
+
 ## License
 
 **MIT** - see [LICENSE](LICENSE). Engram bundles the [Syncthing](https://syncthing.net/) (MPL-2.0) engine for device sync; other third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

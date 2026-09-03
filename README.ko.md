@@ -205,6 +205,12 @@ macOS: 미서명 앱은 자동 업데이트가 막혀 **Homebrew로 설치/업�
 
 </details>
 
+## 기여하기
+
+가장 효과가 큰 기여는 **Engram이 새 도구의 로그를 읽게 하는 것**입니다(Aider·Cursor·Gemini CLI 등).
+자족적인 어댑터 파일 하나면 되고 - 검색·지도·저장 파이프라인은 그대로입니다. 4-메서드 계약, 예제,
+어댑터 보안 규칙은 **[CONTRIBUTING.md](CONTRIBUTING.md)** 를 참고하세요.
+
 ## 라이선스
 
 **MIT** - [LICENSE](LICENSE) 참고. 기기 동기화를 위해 [Syncthing](https://syncthing.net/)(MPL-2.0) 엔진을 번들합니다. 다른 서드파티 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 있습니다.
