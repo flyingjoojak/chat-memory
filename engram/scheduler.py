@@ -1,10 +1,10 @@
 """크로스플랫폼 스케줄러 등록: 10분 증분 인덱싱 + 야간 정제 + 세션 동기화 충돌 해소.
 
-- Windows: schtasks (chatmem-index / chatmem-enrich / chatmem-sync)
-- macOS:   launchd (~/Library/LaunchAgents/com.chatmem.*.plist)
+- Windows: schtasks (engram-index / engram-enrich / engram-sync)
+- macOS:   launchd (~/Library/LaunchAgents/com.engram.*.plist)
 - Linux:   cron (crontab 관리 블록)
 
-스케줄이 실행하는 명령은 `<python> -m chatmem index|enrich|sync --once` (콘솔 PATH 불필요).
+스케줄이 실행하는 명령은 `<python> -m engram index|enrich|sync --once` (콘솔 PATH 불필요).
 index/enrich 커맨드가 내부에서 절전방지·로그·메모리가드를 이미 처리하고,
 sync --once 는 헤드리스에서 Syncthing 충돌 사본을 주기적으로 해소(웹앱 안 켜도).
 """
@@ -33,11 +33,17 @@ def _timing() -> tuple[int, int, int]:
 
 INDEX_EVERY_MIN, ENRICH_HOUR, ENRICH_MIN = _timing()
 
-_WIN_INDEX = "chatmem-index"
-_WIN_ENRICH = "chatmem-enrich"
-_WIN_SYNC = "chatmem-sync"
-_CRON_BEGIN = "# >>> chatmem >>>"
-_CRON_END = "# <<< chatmem <<<"
+_WIN_INDEX = "engram-index"
+_WIN_ENRICH = "engram-enrich"
+_WIN_SYNC = "engram-sync"
+_CRON_BEGIN = "# >>> engram >>>"
+_CRON_END = "# <<< engram <<<"
+
+# 레거시(이름 변경 전) 스케줄 식별자 — 업그레이드 시 구 작업/plist/cron블록이 고아로
+# 남지 않도록 uninstall 과 install(재등록 전 정리)에서 best-effort로 함께 제거한다.
+_LEGACY_WIN = ("chatmem-index", "chatmem-enrich", "chatmem-sync")
+_LEGACY_MAC = ("com.chatmem.index", "com.chatmem.enrich", "com.chatmem.sync")
+_LEGACY_CRON = ("# >>> chatmem >>>", "# <<< chatmem <<<")
 
 
 def _py() -> str:
@@ -51,27 +57,27 @@ def _py() -> str:
 
 
 def _index_cmd() -> list[str]:
-    return [_py(), "-m", "chatmem", "index"]
+    return [_py(), "-m", "engram", "index"]
 
 
 def _enrich_cmd() -> list[str]:
-    return [_py(), "-m", "chatmem", "enrich"]
+    return [_py(), "-m", "engram", "enrich"]
 
 
 def _sync_cmd() -> list[str]:
     # 헤드리스에서 Syncthing 충돌 사본을 주기적으로 해소(웹앱 안 켜도). 색인은 index 작업이 담당.
-    return [_py(), "-m", "chatmem", "sync", "--once"]
+    return [_py(), "-m", "engram", "sync", "--once"]
 
 
 # ---------- Windows (schtasks) ----------
 def _win_install(dry_run: bool) -> list[str]:
     py = _py()
     tasks = [
-        (_WIN_INDEX, f'"{py}" -m chatmem index',
+        (_WIN_INDEX, f'"{py}" -m engram index',
          ["/SC", "MINUTE", "/MO", str(INDEX_EVERY_MIN)]),
-        (_WIN_ENRICH, f'"{py}" -m chatmem enrich',
+        (_WIN_ENRICH, f'"{py}" -m engram enrich',
          ["/SC", "DAILY", "/ST", f"{ENRICH_HOUR:02d}:{ENRICH_MIN:02d}"]),
-        (_WIN_SYNC, f'"{py}" -m chatmem sync --once',
+        (_WIN_SYNC, f'"{py}" -m engram sync --once',
          ["/SC", "MINUTE", "/MO", str(INDEX_EVERY_MIN)]),
     ]
     lines = []
@@ -85,7 +91,8 @@ def _win_install(dry_run: bool) -> list[str]:
 
 def _win_uninstall(dry_run: bool) -> list[str]:
     lines = []
-    for name in (_WIN_INDEX, _WIN_ENRICH, _WIN_SYNC):
+    # 신규 + 레거시(chatmem-*) 작업 모두 제거(구 작업 고아 방지). 없으면 조용히 무시.
+    for name in (_WIN_INDEX, _WIN_ENRICH, _WIN_SYNC, *_LEGACY_WIN):
         cmd = ["schtasks", "/Delete", "/TN", name, "/F"]
         lines.append(" ".join(cmd))
         if not dry_run:
@@ -127,9 +134,9 @@ def _mac_plist(label: str, args: list[str], *, interval: int | None = None,
 
 def _mac_jobs():
     return [
-        ("com.chatmem.index", _index_cmd(), {"interval": INDEX_EVERY_MIN * 60}),
-        ("com.chatmem.enrich", _enrich_cmd(), {"hour": ENRICH_HOUR, "minute": ENRICH_MIN}),
-        ("com.chatmem.sync", _sync_cmd(), {"interval": INDEX_EVERY_MIN * 60}),
+        ("com.engram.index", _index_cmd(), {"interval": INDEX_EVERY_MIN * 60}),
+        ("com.engram.enrich", _enrich_cmd(), {"hour": ENRICH_HOUR, "minute": ENRICH_MIN}),
+        ("com.engram.sync", _sync_cmd(), {"interval": INDEX_EVERY_MIN * 60}),
     ]
 
 
@@ -150,7 +157,9 @@ def _mac_install(dry_run: bool) -> list[str]:
 def _mac_uninstall(dry_run: bool) -> list[str]:
     d = _mac_dir()
     lines = []
-    for label, _, _w in _mac_jobs():
+    # 신규 라벨 + 레거시(com.chatmem.*) plist 모두 제거(구 LaunchAgent 고아 방지).
+    labels = [lbl for lbl, _, _w in _mac_jobs()] + list(_LEGACY_MAC)
+    for label in labels:
         path = d / f"{label}.plist"
         lines.append(f"launchctl unload + rm {path}")
         if not dry_run:
@@ -183,12 +192,15 @@ def _cron_current() -> str:
 
 
 def _cron_strip(text: str) -> str:
+    # 신규 마커 + 레거시(chatmem) 마커 블록 모두 제거 → 재등록/제거 시 구 블록 고아 방지.
+    begins = {_CRON_BEGIN, _LEGACY_CRON[0]}
+    ends = {_CRON_END, _LEGACY_CRON[1]}
     out, skip = [], False
     for line in text.splitlines():
-        if line.strip() == _CRON_BEGIN:
+        if line.strip() in begins:
             skip = True
             continue
-        if line.strip() == _CRON_END:
+        if line.strip() in ends:
             skip = False
             continue
         if not skip:
@@ -248,7 +260,7 @@ def status() -> str:
 
 
 def index_scheduled() -> bool:
-    """OS 레벨 색인 태스크(chatmem-index)가 등록돼 있는지 값싸게 확인.
+    """OS 레벨 색인 태스크(engram-index)가 등록돼 있는지 값싸게 확인.
     웹앱의 인프로세스 자동 색인 루프가 이 태스크와 이중으로 돌지 않게 판정하는 용도."""
     plat = _platform()
     try:
@@ -257,7 +269,7 @@ def index_scheduled() -> bool:
                                capture_output=True, text=True, errors="replace", creationflags=NO_WINDOW)
             return r.returncode == 0
         if plat == "macos":
-            return (_mac_dir() / "com.chatmem.index.plist").exists()
+            return (_mac_dir() / "com.engram.index.plist").exists()
         return _CRON_BEGIN in _cron_current()   # linux: 관리블록 존재 = index/sync cron 등록됨
     except Exception:
         return False   # 확인 실패 시 인프로세스 루프가 담당(색인이 아예 안 도는 것보다 안전)

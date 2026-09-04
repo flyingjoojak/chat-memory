@@ -19,7 +19,7 @@ of which are tool-agnostic and stay untouched.
 
 ### The contract
 
-An adapter is a class satisfying `chatmem/sources/base.py::SourceAdapter`:
+An adapter is a class satisfying `engram/sources/base.py::SourceAdapter`:
 
 | Member | What it does |
 |---|---|
@@ -28,19 +28,19 @@ An adapter is a class satisfying `chatmem/sources/base.py::SourceAdapter`:
 | `discover(root)` | Yield each session file under the tool's log root. |
 | `read_records(path, start_offset=0)` | Yield `(record_dict, end_offset)` for each **complete** record. Must be incremental and tail-safe: start reading at `start_offset`, and never yield a half-written trailing line (hold it back until the next read). |
 | `is_turn_start(obj)` | Is this record the start of a human's turn (a user prompt)? |
-| `extract_turns(objs)` | Turn a list of records into normalized `Turn` objects (`chatmem/models.py`). |
+| `extract_turns(objs)` | Turn a list of records into normalized `Turn` objects (`engram/models.py`). |
 
 A `Turn` is the universal unit the rest of Engram understands: a user question + the assistant's
 answer + the actions it took. Once your adapter emits `Turn`s, everything downstream just works.
 
 ### Steps
 
-1. **Create `chatmem/sources/aider.py`** with your adapter class. Read `chatmem/sources/codex.py`
+1. **Create `engram/sources/aider.py`** with your adapter class. Read `engram/sources/codex.py`
    as a worked example - it documents how it absorbs three Codex-specific quirks (context only on
    the first line, schema differs by version, double-logged messages) *inside the adapter* so the
    pipeline never sees them. That's the pattern: **weird tool details are absorbed by the adapter.**
 
-2. **Register it** in `chatmem/sources/__init__.py`:
+2. **Register it** in `engram/sources/__init__.py`:
    ```python
    from .aider import AiderAdapter
    ADAPTERS = { ..., AiderAdapter.name: AiderAdapter() }
@@ -49,7 +49,7 @@ answer + the actions it took. Once your adapter emits `Turn`s, everything downst
    ```python
    "aider": Path(C.AIDER_SESSIONS_DIR),
    ```
-   (add the corresponding config entry in `chatmem/config.py`).
+   (add the corresponding config entry in `engram/config.py`).
 
 3. **Write a test** under `tests/` (copy `tests/test_codex_source.py`): feed a small real log
    sample through the adapter and assert the `Turn`s come out right. Please include a redacted
@@ -85,7 +85,7 @@ trust a field to exist.
 - **Tests:** `python -m pytest -q` (backend) must stay green. `npx tsc -b --noEmit` and
   `npm --prefix frontend run build` for frontend changes.
 - **Database changes:** the user's `archive.db` is a permanent asset. Never edit `_SCHEMA` in a way
-  that breaks existing DBs - add a versioned, idempotent step to `_MIGRATIONS` in `chatmem/store.py`
+  that breaks existing DBs - add a versioned, idempotent step to `_MIGRATIONS` in `engram/store.py`
   instead (see the comment there). Migrations only ever go forward and are appended to the end of
   the list.
 - **Style:** small, focused files; explicit error handling; no secrets. Match the surrounding code.

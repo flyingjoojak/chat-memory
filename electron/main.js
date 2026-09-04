@@ -58,7 +58,7 @@ function backendCommand(p) {
     const repo = path.resolve(__dirname, "..")
     return { cmd: "python", args: [path.join(repo, "packaging", "backend_entry.py"), String(p)], cwd: repo }
   }
-  const exe = process.platform === "win32" ? "chatmem-backend.exe" : "chatmem-backend"
+  const exe = process.platform === "win32" ? "engram-backend.exe" : "engram-backend"
   const dir = path.join(process.resourcesPath, "backend")
   return { cmd: path.join(dir, exe), args: [String(p)], cwd: dir }
 }
@@ -69,8 +69,8 @@ function logPath() {
 
 function spawnBackend() {
   const { cmd, args, cwd } = backendCommand(port)
-  // CHATMEM_MANAGED=1 → 백엔드가 뮤텍스·브라우저 자동열기·app.log를 끔(셸이 담당).
-  const env = { ...process.env, CHATMEM_MANAGED: "1", CHATMEM_PORT: String(port) }
+  // ENGRAM_MANAGED=1 → 백엔드가 뮤텍스·브라우저 자동열기·app.log를 끔(셸이 담당).
+  const env = { ...process.env, ENGRAM_MANAGED: "1", ENGRAM_PORT: String(port) }
   backend = spawn(cmd, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true })
   try {
     logStream = logStream || fs.createWriteStream(logPath(), { flags: "a" })

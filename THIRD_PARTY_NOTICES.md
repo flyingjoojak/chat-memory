@@ -18,7 +18,7 @@ does not modify or statically link Syncthing.
 - **License:** Mozilla Public License 2.0 (MPL-2.0)
 - **Source code:** https://github.com/syncthing/syncthing
 - **License text:** https://github.com/syncthing/syncthing/blob/main/LICENSE
-- **Pinned version:** see `SYNCTHING_VERSION` in `chatmem/syncthing.py`
+- **Pinned version:** see `SYNCTHING_VERSION` in `engram/syncthing.py`
 
 Under MPL-2.0, the source code for the redistributed binary is available at the
 URL above. No changes are made to Syncthing's source; the binary is used as

@@ -6,9 +6,9 @@ import json
 
 import numpy as np
 
-from chatmem.indexer import has_new_data, index_file
-from chatmem.store import ArchiveDB
-from chatmem.vectorindex import VectorIndex
+from engram.indexer import has_new_data, index_file
+from engram.store import ArchiveDB
+from engram.vectorindex import VectorIndex
 
 
 class FakeEmbedder:

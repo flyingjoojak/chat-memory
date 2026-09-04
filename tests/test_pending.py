@@ -6,7 +6,7 @@ import json
 import os
 import time
 
-from chatmem.indexer import count_pending, iter_jsonl
+from engram.indexer import count_pending, iter_jsonl
 
 
 class _FakeDB:

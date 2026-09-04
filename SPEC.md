@@ -1,4 +1,4 @@
-# chat-memory — 대화 정보자산 축적·검색 시스템 SPEC
+# engram — 대화 정보자산 축적·검색 시스템 SPEC
 
 > 상태: **전 항목·세부 전부 확정 — 구축 착수 대기** · 최종수정 2026-07-24
 > 확정: 4.1 원문verbatim+2단자산화 / 4.2 지연배치+JSONL커서·다중세션 / 4.3 e5-large / 4.4 독립벡터DB / 4.5 CLI+코어라이브러리 / 4.6 전체포착 / 4.7 작업턴 균형캡처 / 4.8 맥락 3중전략 / 4.9 정제=claude -p·임베딩=로컬fastembed.
@@ -15,7 +15,7 @@ AI와 나눈 질문·답변·판단·해법이 대화창을 닫으면 사라진�
 기존 자산 층과의 관계:
 - `MEMORY.md` (자동 메모리) — 압축된 사실/선호
 - Obsidian 볼트 (개인 노트) — 수기 지식
-- **chat-memory (신규)** — AI 대화 원본에서 추출한 검색가능 지식 ← 3번째 층
+- **engram (신규)** — AI 대화 원본에서 추출한 검색가능 지식 ← 3번째 층
 
 ---
 
@@ -105,7 +105,7 @@ JSONL 로그 (Claude Code 자동생성)
 - 유일 제약: 배치 시 PC 전원 ON. 스케줄러 "놓친 작업 재실행"으로 보완.
 
 ### 4.4 저장 위치 — ✅ 확정: 독립 벡터DB만
-- chat-memory 폴더에 인덱스(.npy) + 메타(.jsonl) + 원문 아카이브. Obsidian 내보내기는 **함수로 나중 추가**.
+- engram 폴더에 인덱스(.npy) + 메타(.jsonl) + 원문 아카이브. Obsidian 내보내기는 **함수로 나중 추가**.
 
 ### 4.5 검색 인터페이스 — ✅ 확정: CLI 먼저, 코어 라이브러리 분리
 - 지금: `mem "검색어"` CLI. 로직은 전부 **코어 라이브러리**(index/search/reindex/export)에 둠.
@@ -205,28 +205,28 @@ JSONL 로그 (Claude Code 자동생성)
 > 현재는 `config.env`(KEY=VALUE, 환경변수 우선) 한 파일로 CLI·스케줄러·웹 공통. 아래는 배포·멀티기기·확장 단계에서 **추가될 설정 항목의 예상 목록**(지금은 미구현, 방향만).
 
 **벡터/저장 (8.1 관련)**
-- `CHATMEM_VECTOR_BACKEND` = `npy`(기본, 로컬 빠름) / `sqlite-vec`(배포·저RAM)
-- `CHATMEM_VECTOR_QUANT` = `float32` / `int8`(1/4 용량) / `binary`(재랭킹용)
-- `CHATMEM_RERANK` = int8/binary 거친검색 후 fp32 원본 재랭킹 on/off
-- (규모 시) `CHATMEM_VECTOR_BACKEND=pgvector` + 접속 URL
+- `ENGRAM_VECTOR_BACKEND` = `npy`(기본, 로컬 빠름) / `sqlite-vec`(배포·저RAM)
+- `ENGRAM_VECTOR_QUANT` = `float32` / `int8`(1/4 용량) / `binary`(재랭킹용)
+- `ENGRAM_RERANK` = int8/binary 거친검색 후 fp32 원본 재랭킹 on/off
+- (규모 시) `ENGRAM_VECTOR_BACKEND=pgvector` + 접속 URL
 
 **임베딩 (저사양 대응)**
-- `CHATMEM_EMBED_MODEL` 이미 있음 — 저RAM용 `e5-small(384d)` 선택지 문서화
-- `CHATMEM_EMBED_DEVICE` = cpu/gpu(내장그래픽 포함) — 있으면 가속
-- `CHATMEM_EMBED_REMOTE_URL` = 임베딩을 중앙 서버에 위임(클라이언트는 모델 없이)
+- `ENGRAM_EMBED_MODEL` 이미 있음 — 저RAM용 `e5-small(384d)` 선택지 문서화
+- `ENGRAM_EMBED_DEVICE` = cpu/gpu(내장그래픽 포함) — 있으면 가속
+- `ENGRAM_EMBED_REMOTE_URL` = 임베딩을 중앙 서버에 위임(클라이언트는 모델 없이)
 
 **배포/네트워크 (8.2 관련)**
-- `CHATMEM_MODE` = `local`(단일) / `client`(얇은 클라) / `server`(중앙 코어)
-- `CHATMEM_SERVER_URL` = 클라이언트가 붙을 중앙 코어 주소
-- `CHATMEM_AUTH_TOKEN` = 인그레스 인증 토큰(사용자별)
-- `CHATMEM_DEVICE_NAME` = 이 기기 태그(멀티기기 필터용)
-- `CHATMEM_BIND` = 서버 바인드 주소/포트(현재 웹 127.0.0.1:8642 고정)
+- `ENGRAM_MODE` = `local`(단일) / `client`(얇은 클라) / `server`(중앙 코어)
+- `ENGRAM_SERVER_URL` = 클라이언트가 붙을 중앙 코어 주소
+- `ENGRAM_AUTH_TOKEN` = 인그레스 인증 토큰(사용자별)
+- `ENGRAM_DEVICE_NAME` = 이 기기 태그(멀티기기 필터용)
+- `ENGRAM_BIND` = 서버 바인드 주소/포트(현재 웹 127.0.0.1:8642 고정)
 
 **캡처 범위 (4.6 "제외목록 여지")**
-- `CHATMEM_EXCLUDE_PROJECTS` / `CHATMEM_EXCLUDE_SESSIONS` = 특정 프로젝트·세션 색인 제외
-- `CHATMEM_CAPTURE_SIDECHAIN` = 서브에이전트 대화 포함 여부(현재 제외)
-- `CHATMEM_REDACT` = 저장 전 시크릿 패턴 마스킹 on/off(현재 원문 그대로)
+- `ENGRAM_EXCLUDE_PROJECTS` / `ENGRAM_EXCLUDE_SESSIONS` = 특정 프로젝트·세션 색인 제외
+- `ENGRAM_CAPTURE_SIDECHAIN` = 서브에이전트 대화 포함 여부(현재 제외)
+- `ENGRAM_REDACT` = 저장 전 시크릿 패턴 마스킹 on/off(현재 원문 그대로)
 
 **동작/스케줄 (이미 일부 존재)**
-- 있음: `CHATMEM_ENRICH_BACKEND`(+모델별), `MIN_FREE_MB`, `IDLE_SECS`, `CHECKPOINT_TURNS`, `EMBED_BATCH`
-- 추가 예상: `CHATMEM_ENRICH_TIME`(야간 정제 시각, 현재 04:00 고정), `CHATMEM_INDEX_INTERVAL`(현재 10분 고정), `CHATMEM_LOG_LEVEL`
+- 있음: `ENGRAM_ENRICH_BACKEND`(+모델별), `MIN_FREE_MB`, `IDLE_SECS`, `CHECKPOINT_TURNS`, `EMBED_BATCH`
+- 추가 예상: `ENGRAM_ENRICH_TIME`(야간 정제 시각, 현재 04:00 고정), `ENGRAM_INDEX_INTERVAL`(현재 10분 고정), `ENGRAM_LOG_LEVEL`

@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from chatmem.filters import should_embed
-from chatmem.parser import (
+from engram.filters import should_embed
+from engram.parser import (
     extract_turns,
     is_real_user_prompt,
     is_structural_noise,
@@ -69,7 +69,7 @@ def test_compaction_summary_excluded_from_turns():
 
 def test_bash_mode_and_interrupt_excluded():
     # `!` bash 모드 입력/출력, 중단 마커 = 대화 아님.
-    for txt in ("<bash-input> python -m chatmem progress</bash-input>",
+    for txt in ("<bash-input> python -m engram progress</bash-input>",
                 "<bash-stdout>...</bash-stdout><bash-stderr></bash-stderr>",
                 "[Request interrupted by user for tool use]"):
         assert not is_real_user_prompt(
@@ -110,7 +110,7 @@ def test_system_events_not_a_prompt():
 
 def test_enrichment_prompt_not_a_prompt():
     # 정제 claude -p 세션(자기오염) 제외 — sentinel/구버전 둘 다.
-    assert not is_real_user_prompt(_user("u1", "<<CHATMEM-ENRICH>> chatmem 정제 작업..."))
+    assert not is_real_user_prompt(_user("u1", "<<CHATMEM-ENRICH>> engram 정제 작업..."))
     assert not is_real_user_prompt(_user("u1", "다음은 한 Claude Code 세션의 대화 턴들이다.\n각 턴마다..."))
 
 
@@ -147,7 +147,7 @@ def test_missing_prompt_source_treated_as_human():
 
 def test_sdk_opt_in_env_indexes_automation(monkeypatch):
     # 옵트인이면 자동화 세션도 색인(파워유저용).
-    monkeypatch.setenv("CHATMEM_INDEX_SDK_SESSIONS", "1")
+    monkeypatch.setenv("ENGRAM_INDEX_SDK_SESSIONS", "1")
     assert is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
 
 

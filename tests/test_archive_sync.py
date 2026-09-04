@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from chatmem import archive_sync as A
-from chatmem.models import Turn
-from chatmem.store import ArchiveDB
+from engram import archive_sync as A
+from engram.models import Turn
+from engram.store import ArchiveDB
 
 
 def _turn(tid: str, sid: str, q: str, a: str) -> Turn:

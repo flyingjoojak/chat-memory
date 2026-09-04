@@ -3,29 +3,29 @@
 ## 권장: 한 명령으로 (크로스플랫폼)
 
 ```bash
-chatmem scheduler install          # 등록 (Windows schtasks / macOS launchd / Linux cron)
-chatmem scheduler install --dry-run  # 실행 없이 계획만 확인
-chatmem scheduler status           # 등록 여부
-chatmem scheduler uninstall        # 제거
+engram scheduler install          # 등록 (Windows schtasks / macOS launchd / Linux cron)
+engram scheduler install --dry-run  # 실행 없이 계획만 확인
+engram scheduler status           # 등록 여부
+engram scheduler uninstall        # 제거
 ```
 
-- `chatmem setup` 이 최초 온보딩 때 자동으로 이걸 호출한다(`--no-scheduler` 로 생략 가능).
-- 등록되는 작업: **10분마다 증분 인덱싱** + **매일 04:00 정제**. 각각 `<python> -m chatmem index|enrich` 를 실행하며, 절전방지·로그·메모리가드는 명령 내부가 처리한다.
+- `engram setup` 이 최초 온보딩 때 자동으로 이걸 호출한다(`--no-scheduler` 로 생략 가능).
+- 등록되는 작업: **10분마다 증분 인덱싱** + **매일 04:00 정제**. 각각 `<python> -m engram index|enrich` 를 실행하며, 절전방지·로그·메모리가드는 명령 내부가 처리한다.
 - ⚠️ **현재 로그인 사용자**로 실행되어야 한다 — `claude -p` 구독 인증과 e5 모델 캐시가 사용자 프로필에 있기 때문(SYSTEM 계정 불가). schtasks/launchd/cron 모두 사용자 세션 기준.
 
 ---
 
 ## 수동 등록 (참고 — Windows 작업 스케줄러)
 
-> ⚠️ 아래는 **시스템에 영구 등록**하는 명령이다. 위 `chatmem scheduler install` 로 대체됨.
-> `chatmem scheduler` 는 아래와 같은 이름(chatmem-index/chatmem-enrich)으로 등록하되,
-> `.cmd` 래퍼 대신 `python -m chatmem` 을 직접 호출한다(래퍼 불필요).
+> ⚠️ 아래는 **시스템에 영구 등록**하는 명령이다. 위 `engram scheduler install` 로 대체됨.
+> `engram scheduler` 는 아래와 같은 이름(engram-index/engram-enrich)으로 등록하되,
+> `.cmd` 래퍼 대신 `python -m engram` 을 직접 호출한다(래퍼 불필요).
 
 ## 1. 증분 인덱싱 (10분마다)
 
 ```cmd
-schtasks /create /tn "chatmem-index" ^
-  /tr "%USERPROFILE%\chat-memory\scripts\index_batch.cmd" ^
+schtasks /create /tn "engram-index" ^
+  /tr "%USERPROFILE%\engram\scripts\index_batch.cmd" ^
   /sc minute /mo 10 /f
 ```
 
@@ -35,8 +35,8 @@ schtasks /create /tn "chatmem-index" ^
 ## 2. 야간 정제 (매일 04:00, Sonnet)
 
 ```cmd
-schtasks /create /tn "chatmem-enrich" ^
-  /tr "%USERPROFILE%\chat-memory\scripts\enrich_nightly.cmd" ^
+schtasks /create /tn "engram-enrich" ^
+  /tr "%USERPROFILE%\engram\scripts\enrich_nightly.cmd" ^
   /sc daily /st 04:00 /f
 ```
 
@@ -45,16 +45,16 @@ schtasks /create /tn "chatmem-enrich" ^
 ## 확인 / 삭제
 
 ```cmd
-schtasks /query /tn "chatmem-index"
-schtasks /query /tn "chatmem-enrich"
-schtasks /run   /tn "chatmem-index"     REM 즉시 1회 실행 테스트
-schtasks /delete /tn "chatmem-index" /f
-schtasks /delete /tn "chatmem-enrich" /f
+schtasks /query /tn "engram-index"
+schtasks /query /tn "engram-enrich"
+schtasks /run   /tn "engram-index"     REM 즉시 1회 실행 테스트
+schtasks /delete /tn "engram-index" /f
+schtasks /delete /tn "engram-enrich" /f
 ```
 
 ## 로그
 
-두 작업 모두 `%USERPROFILE%\chat-memory\data\batch.log` 에 append.
+두 작업 모두 `%USERPROFILE%\engram\data\batch.log` 에 append.
 
 ## (선택) Stop 훅은 쓰지 않음
 

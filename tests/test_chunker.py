@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from chatmem.chunker import chunk_turn
-from chatmem.models import Action, Turn
+from engram.chunker import chunk_turn
+from engram.models import Action, Turn
 
 
 def _turn(question="", answer="", actions=()):

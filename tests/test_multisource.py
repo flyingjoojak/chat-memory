@@ -6,11 +6,11 @@ import os
 
 import numpy as np
 
-from chatmem import config
-from chatmem.indexer import has_new_data, index_all
-from chatmem.sources import active_sources, enabled_source_names
-from chatmem.store import ArchiveDB
-from chatmem.vectorindex import VectorIndex
+from engram import config
+from engram.indexer import has_new_data, index_all
+from engram.sources import active_sources, enabled_source_names
+from engram.store import ArchiveDB
+from engram.vectorindex import VectorIndex
 
 SID = "019e80dc-1754-7422-b72f-2d176635efb2"
 

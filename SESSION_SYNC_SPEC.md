@@ -5,7 +5,7 @@
 > (Obsidian Sync / Syncthing 같은 경험, 단 **대화 원문은 제3자에게 노출하지 않는다**는 프로젝트 철학 유지.)
 
 - 상태: **초안 (설계 검토용)**
-- 범위: **Phase 1 = Syncthing 전송 + chat-memory 얇은 헬퍼**. Phase 2(네이티브 델타 동기)는 §11에서 미리보기만.
+- 범위: **Phase 1 = Syncthing 전송 + engram 얇은 헬퍼**. Phase 2(네이티브 델타 동기)는 §11에서 미리보기만.
 - 관련 문서: 저장소 `SPEC.md`(메인 설계), `README.md`
 
 ---
@@ -15,7 +15,7 @@
 ### 목표
 - 기기 A에서 만든/진행한 세션을 기기 B·C에서 **자동으로 사용 가능**하게 한다.
 - B에서 그 세션을 **`claude --resume`으로 이어서** 진행할 수 있다(같은 세션 id에 append).
-- 동기된 세션이 각 기기의 **chat-memory 검색/지도에도 반영**되어 검색까지 멀티기기 통일.
+- 동기된 세션이 각 기기의 **engram 검색/지도에도 반영**되어 검색까지 멀티기기 통일.
 - **프라이버시 우선**: 대화 원문이 신뢰할 수 없는 제3자 저장소에 평문으로 남지 않는다.
 - **안전한 삭제**: 한 기기의 실수/정리가 다른 기기의 이력을 파괴하지 않는다.
 
@@ -54,7 +54,7 @@
 │   [Syncthing 폴더]  ⇄⇄⇄  P2P·TLS(E2E) ⇄⇄⇄  [Syncthing 폴더]                     │
 │         │                          │        │         │                          │
 │         ▼                          │        │         ▼                          │
-│  chatmem sync-helper               │        │  chatmem sync-helper               │
+│  engram sync-helper               │        │  engram sync-helper               │
 │   - superset 충돌 리졸버           │        │   - superset 충돌 리졸버           │
 │   - 활성 세션 가드                 │        │   - 활성 세션 가드                 │
 │   - 동기 후 자동 색인(커서 재사용) │        │   - 동기 후 자동 색인              │
@@ -62,10 +62,10 @@
 ```
 
 - **전송 계층 = Syncthing**: 검증된 오픈소스 P2P 파일 동기. 기기 간 **TLS 종단암호화**, 인증서 기반 device ID, LAN 직접연결 + (선택) 암호화 릴레이. 제3자 저장소 없음.
-- **chat-memory sync-helper**(우리 코드): Syncthing이 못 하는 **도메인 특화 처리**만 담당.
+- **engram sync-helper**(우리 코드): Syncthing이 못 하는 **도메인 특화 처리**만 담당.
   1. `.sync-conflict` 파일을 **superset-wins**로 자동 정리(또는 fork 보존).
   2. **활성 세션 가드**(진행 중 세션의 조기 동기/이중 재개 방지 신호).
-  3. 동기로 새로 들어온 jsonl을 **chat-memory 증분 색인**(기존 커서/오프셋 재사용).
+  3. 동기로 새로 들어온 jsonl을 **engram 증분 색인**(기존 커서/오프셋 재사용).
 
 > 설계 원칙: **전송은 검증된 도구에 위임, 우리는 얇게**. Phase 1은 "Syncthing + 리졸버 스크립트/데몬" 수준으로 최소화.
 
@@ -103,7 +103,7 @@ Syncthing은 기기 간 전송을 항상 E2E 암호화하지만, **"기기 발�
 문제: A에서 **진행 중**인 세션을 B가 당겨 **동시에 재개**하면 진짜 fork 발생.
 - **파일 무결성**은 Syncthing이 **원자적 교체(temp→rename)**로 써서 안전 — 리더가 반쪽 파일을 볼 일은 없음(찢긴 마지막 줄 리스크 낮음).
 - 남는 위험은 **동시 재개(이중 작성자)**. 대응:
-  1. `chatmem` 재개("열기") 시 그 세션이 **다른 기기에서 활성**이면 경고/차단. 활성 신호는 작은 사이드카(예: `<id>.lock` 또는 동기되는 인덱스의 `active_on`/`heartbeat`)로 전파.
+  1. `engram` 재개("열기") 시 그 세션이 **다른 기기에서 활성**이면 경고/차단. 활성 신호는 작은 사이드카(예: `<id>.lock` 또는 동기되는 인덱스의 `active_on`/`heartbeat`)로 전파.
   2. 활성 판정: 해당 jsonl의 최근 mtime(N분 내) + 로컬 `claude` 프로세스 존재.
 - Phase 1 최소안: **경고만**(하드 차단은 옵션). 진짜 fork가 나도 §5.3이 둘 다 보존.
 
@@ -146,7 +146,7 @@ resolve(base = <id>.jsonl, conflict = <id>.sync-conflict-*.jsonl):
 
 ---
 
-## 6. chat-memory 통합
+## 6. engram 통합
 - **설정 탭 / CLI에 "세션 동기" 섹션** 추가:
   - Syncthing 설치·기기 페어링 **가이드**(원클릭까진 아님, 안내+상태 배지).
   - sync-helper 데몬 on/off, 충돌 리졸버 로그, 선택 동기 글롭 편집.
@@ -174,7 +174,7 @@ resolve(base = <id>.jsonl, conflict = <id>.sync-conflict-*.jsonl):
 - 저장: P2P라 **제3자 평문 저장 없음**(§4). 릴레이는 암호문만 중계.
 - 노출면: 동기 폴더를 **`projects/`로 한정**해 자격증명/설정 유출 차단.
 - 기기 분실 대비: 기기 폐기 시 device 링크 해지. (선택) 민감 사용자용 M3 자가호스팅.
-- chat-memory DB/벡터는 **동기 대상 아님**(각 기기 로컬 재색인). 원문은 jsonl로만 이동.
+- engram DB/벡터는 **동기 대상 아님**(각 기기 로컬 재색인). 원문은 jsonl로만 이동.
 
 ---
 
@@ -214,7 +214,7 @@ resolve(base = <id>.jsonl, conflict = <id>.sync-conflict-*.jsonl):
 > **따라서 로드맵의 정직한 그림:** Phase 1(순수 P2P) → Phase 1.5(허브 노드로 상시성) → **Phase 2(서버)는 위 3개가 실제로 필요할 때만.** 아래 §11/§13의 "서버/스토리지" 언급은 이 경계 안에서 읽을 것.
 
 ## 11. Phase 2 미리보기 — 네이티브 append-델타 동기(선택)
-- chat-memory 내장 클라이언트가 **커서/오프셋으로 추가 바이트만** 전송(전체파일 X).
+- engram 내장 클라이언트가 **커서/오프셋으로 추가 바이트만** 전송(전체파일 X).
 - 백엔드: 자가호스팅 서버 또는 오브젝트 스토리지(R2/S3) + **클라이언트 E2E 암호화**.
 - lazy pull(경량 인덱스로 목록만, 본문은 on-demand), 충돌정책 내장, "다른 기기 세션" 탭.
 - 이점: Syncthing 설치 불필요(배포형 완성), 초기 대용량 부하 없음.
@@ -285,8 +285,8 @@ resolve(base = <id>.jsonl, conflict = <id>.sync-conflict-*.jsonl):
 ## 14. 임베디드 Syncthing (앱 내장 — 비개발자 무설정 UX)
 
 Phase 1은 "사용자가 Syncthing을 **따로 설치·설정**"을 전제한다. 비개발자에겐 이게 진입장벽이다.
-**임베디드 Syncthing**은 그 Syncthing 엔진을 **chat-memory 안에 번들해 우리가 대신 운전**함으로써,
-사용자 경험을 "**chat-memory 하나 설치 → 앱 안에서 기기 연결 한 번**"으로 낮춘다.
+**임베디드 Syncthing**은 그 Syncthing 엔진을 **engram 안에 번들해 우리가 대신 운전**함으로써,
+사용자 경험을 "**engram 하나 설치 → 앱 안에서 기기 연결 한 번**"으로 낮춘다.
 (옵시디언 Sync의 편의를 **자체 서버·요금 없이** 대부분 얻는 방향.)
 
 ### 14.1 핵심 결정 — 재구현 X, 임베드 O
@@ -302,9 +302,9 @@ Phase 1은 "사용자가 Syncthing을 **따로 설치·설정**"을 전제한다
 우리 파이썬 백엔드를 exe에 번들한 것과 **정확히 같은 패턴**(컴파일 합침이 아니라 리소스 동봉 후 자식 프로세스).
 
 ```
-chat-memory (exe/Electron)
+engram (exe/Electron)
 ├─ frontend(dist)               ← 이미 번들
-├─ chatmem-backend(FastAPI)     ← 이미 번들
+├─ engram-backend(FastAPI)     ← 이미 번들
 └─ syncthing 바이너리           ← 추가 번들(~25MB/플랫폼)
         │ 백엔드가 spawn(헤드리스) + 종료 시 kill
         ▼

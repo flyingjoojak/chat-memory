@@ -6,11 +6,11 @@ import os
 
 import numpy as np
 
-from chatmem import config
-from chatmem.indexer import index_all
-from chatmem.search import search
-from chatmem.store import ArchiveDB
-from chatmem.vectorindex import VectorIndex
+from engram import config
+from engram.indexer import index_all
+from engram.search import search
+from engram.store import ArchiveDB
+from engram.vectorindex import VectorIndex
 
 SID = "019e80dc-1754-7422-b72f-2d176635efb2"
 KW = "공통키워드매칭"
