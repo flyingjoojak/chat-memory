@@ -227,6 +227,7 @@ export interface Config {
   claude_bin?: string        // 사용자가 지정한 claude CLI 경로 override(빈값=자동 탐색)
   claude_resolved?: string   // 실제 해석된 claude 경로
   claude_found?: boolean     // claude CLI 를 찾았는지
+  skip_sdk?: boolean         // 자동화(SDK/claude -p) 세션 색인 제외 여부
 }
 export interface SourceInfo {
   name: string

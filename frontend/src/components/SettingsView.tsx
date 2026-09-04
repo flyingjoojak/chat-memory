@@ -459,6 +459,8 @@ export function SettingsView() {
   const [indexTime, setIndexTime] = useState("03:00")       // scheduled 색인 시각
   const [ollamaUrl, setOllamaUrl] = useState("http://localhost:11434/v1")
   const [claudeBin, setClaudeBin] = useState("")   // claude CLI 경로 override(빈값=자동 탐색)
+  const [skipSdk, setSkipSdk] = useState(false)    // 자동화(SDK/claude -p) 세션 제외
+  const [skipSdkBusy, setSkipSdkBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const [testing, setTesting] = useState(false)
   const [verify, setVerify] = useState<{ ok: boolean; msg: string } | null>(null)
@@ -540,12 +542,27 @@ export function SettingsView() {
     }
   }
 
+  // 자동화(SDK/claude -p) 세션 제외 토글. 다음 색인부터 반영(기존 데이터는 전체 재색인 시 정리).
+  async function toggleSkipSdk(next: boolean) {
+    if (skipSdkBusy) return
+    setSkipSdkBusy(true); setSkipSdk(next)
+    try {
+      await putConfig({ ENGRAM_SKIP_SDK_SESSIONS: next ? "1" : "" })
+      getConfig().then(setCfg).catch(() => {})
+    } catch {
+      setSkipSdk(!next)   // 실패 시 되돌림
+    } finally {
+      setSkipSdkBusy(false)
+    }
+  }
+
   useEffect(() => {
     getStats().then(setStats).catch(() => {})
     getConfig().then((c) => {
       setCfg(c); setBackend(c.enrich_backend); setEnrichTime(c.enrich_time)
       setIntervalMin(c.index_interval); setOllamaUrl(c.ollama_url); setProjectsDir(c.projects_dir); setCodexDir(c.codex_dir)
       setClaudeBin(c.claude_bin ?? "")
+      setSkipSdk(!!c.skip_sdk)
       setIndexMode((c.index_mode as IndexMode) || "interval"); setIndexTime(c.index_time || "03:00")
       const cur = c.models[c.enrich_backend] ?? ""
       const opts = BACKENDS.find((b) => b.v === c.enrich_backend)?.models ?? []
@@ -790,6 +807,16 @@ export function SettingsView() {
                       <AlertTriangle className="size-3.5 shrink-0" />{t("settings.allSourcesOff")}
                     </div>
                   )}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 border-t pt-2.5 text-sm">
+                    <span className="font-medium">{t("settings.skipSdk")}</span>
+                    <button type="button" role="switch" aria-checked={skipSdk} disabled={skipSdkBusy}
+                      aria-label={t("settings.skipSdk")} aria-describedby="skip-sdk-help"
+                      onClick={() => toggleSkipSdk(!skipSdk)}
+                      className={`ml-auto inline-flex h-6 shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${skipSdk ? "border-primary/40 bg-primary/10 text-primary hover:bg-primary/15" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                      {skipSdkBusy && <Loader2 className="size-3 animate-spin" />}{skipSdk ? t("common.on") : t("common.off")}
+                    </button>
+                  </div>
+                  <p id="skip-sdk-help" className="text-[11px] text-muted-foreground">{t("settings.skipSdkHelp")}</p>
                   <p className="text-xs text-muted-foreground">
                     <Trans i18nKey="settings.sourcesNote" components={{ b: <b /> }} />
                   </p>
