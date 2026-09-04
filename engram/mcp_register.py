@@ -31,7 +31,7 @@ def mcp_command() -> tuple[str, list[str]]:
     """
     if getattr(sys, "frozen", False):
         return sys.executable, ["--mcp"]
-    exe = shutil.which("engram-mcp") or shutil.which("engram-mcp")
+    exe = shutil.which("engram-mcp")
     if exe:
         return exe, []
     return sys.executable, ["-m", "engram.mcp_server"]

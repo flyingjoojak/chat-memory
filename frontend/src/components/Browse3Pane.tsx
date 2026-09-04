@@ -212,6 +212,9 @@ export function Browse3Pane({ kind, initialSel = null, initialTurn = null }: {
         </div>
       )}
       {!groups && !groupsErr && <div className="grid h-40 place-items-center text-muted-foreground"><Loader2 className="size-5 animate-spin" /></div>}
+      {groups && groups.length === 0 && !groupsErr && (
+        <div className="grid h-40 place-items-center px-6 text-center text-sm text-muted-foreground">{t("browse.emptyGroups")}</div>
+      )}
       {groups?.map((g) => compact ? (
         <button key={g.id} onClick={() => pickGroup(g.id)}
           className={`cm-cv-row flex w-full items-center gap-2.5 rounded-lg border p-3 text-left transition-colors ${sel === g.id ? "border-primary/50 bg-primary/5" : "bg-card hover:bg-muted/50"}`}>

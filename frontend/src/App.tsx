@@ -11,7 +11,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { StatusBar } from "@/components/StatusBar"
 import { UpdateBanner } from "@/components/UpdateBanner"
 import { AlertTriangle } from "lucide-react"
-import { getOnboarding, getSchemaReport, getSystem, type SchemaSource } from "@/lib/api"
+import { getOnboarding, getSchemaReport, getSystem, getStats, getIndexStatus, type SchemaSource } from "@/lib/api"
 import { buildIssueUrl, copyText } from "@/lib/report"
 import { applyTheme } from "@/lib/theme"
 
@@ -48,6 +48,9 @@ export default function App() {
   const [backendDown, setBackendDown] = useState(false)
   const [mismatch, setMismatch] = useState<{ stored: string; current: string } | null>(null)
   const [drift, setDrift] = useState<string[]>([])   // 로그 형식이 바뀌어 못 읽는 소스
+  // 첫 실행 배너: 색인이 돌고 아카이브가 아직 거의 빈 상태면 "지금 채우는 중"임을 전면에 알린다
+  // (하단 7px 상태바만으론 첫 사용자가 앱이 멈춘 줄 오해). 아카이브가 차면(>200턴) 자동으로 사라진다.
+  const [firstRun, setFirstRun] = useState<{ turns: number } | null>(null)
   useEffect(() => { applyTheme() }, [])
   // 온보딩 상태 확인 = 백엔드 헬스체크 겸용. 실패는 '완료'가 아니라 '백엔드 미기동'으로 구분(빈 화면 방지).
   const checkOnboard = useCallback(() => {
@@ -68,6 +71,21 @@ export default function App() {
     const id = window.setInterval(load, 20000)
     return () => window.clearInterval(id)
   }, [])
+  // 첫 실행 색인 진행 폴링: (색인 중 또는 대기) && 아카이브가 아직 거의 빈 상태(<200턴)일 때만 배너.
+  useEffect(() => {
+    if (onboard !== false) return   // 온보딩 끝난 뒤에만
+    const load = async () => {
+      try {
+        const [ix, stats] = await Promise.all([getIndexStatus(), getStats()])
+        const turns = stats?.turns ?? 0
+        const busy = !!ix?.running || (ix?.pending?.files ?? 0) > 0
+        setFirstRun(busy && turns < 200 ? { turns } : null)
+      } catch { /* 백엔드 미기동 등은 다른 배너가 처리 */ }
+    }
+    load()
+    const id = window.setInterval(load, 4000)
+    return () => window.clearInterval(id)
+  }, [onboard])
 
   // 드리프트 원클릭 신고: 그 소스의 리댁트 지문(대화 내용 없음)을 클립보드에 담고 프리필된 GitHub 이슈를 연다.
   async function reportDrift() {
@@ -145,6 +163,12 @@ export default function App() {
       {/* 메인 패널 — 뷰 크래시가 앱 전체를 죽이지 않게 격리 */}
       <main className="min-h-0 overflow-y-auto">
         <UpdateBanner />
+        {firstRun && (
+          <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-2 border-b border-sky-500/40 bg-sky-500/10 px-4 py-2 text-[13px] text-sky-700 dark:text-sky-300">
+            <Loader2 className="size-4 shrink-0 animate-spin" />
+            <span>{t("app.firstRunIndexing", { n: firstRun.turns.toLocaleString() })}</span>
+          </div>
+        )}
         {mismatch && (
           <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-[13px] text-amber-700 dark:text-amber-400">
             <AlertTriangle className="size-4 shrink-0" />
