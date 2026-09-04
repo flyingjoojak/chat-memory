@@ -96,7 +96,7 @@ function FolderRow({ label, chip, path, onPathChange, onSave, saved, err, placeh
         <span className="flex items-center gap-2">
           {saved && <span className="inline-flex items-center gap-1 text-[12px] text-primary"><Check className="size-3.5" />{t("common.saved")}</span>}
           <Button variant="ghost" size="sm" onClick={() => setEditing((v) => !v)}
-            aria-expanded={editing} aria-controls={panelId}>{editing ? t("common.close") : t("settings.change")}</Button>
+            aria-expanded={editing} aria-controls={panelId}>{editing ? t("common.close") : t("settings.changePath")}</Button>
         </span>
       </div>
       {editing && (
@@ -751,31 +751,6 @@ export function SettingsView() {
                 </Row>
               </Section>
 
-              <Section title={t("settings.logFolder")}>
-                <FolderRow
-                  label="Claude Code"
-                  chip={!cfg
-                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />{t("settings.checking")}</StatusChip>
-                    : cfg.projects_exists
-                      ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: cfg.jsonl_count })}</StatusChip>
-                      : <StatusChip tone="warn"><AlertTriangle className="size-3" />{t("settings.folderMissing")}</StatusChip>}
-                  path={projectsDir} onPathChange={setProjectsDir} onSave={saveProjects} saved={projSaved} err={projErr}
-                  placeholder="~/.claude/projects"
-                  help={t("settings.claudeFolderHelp")}
-                />
-                <FolderRow
-                  label="Codex"
-                  chip={!cfg
-                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />{t("settings.checking")}</StatusChip>
-                    : cfg.codex_exists
-                      ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: (cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0 })}</StatusChip>
-                      : <StatusChip tone="muted">{t("settings.notUsed")}</StatusChip>}
-                  path={codexDir} onPathChange={setCodexDir} onSave={saveCodex} saved={codexSaved} err={codexErr}
-                  placeholder="~/.codex/sessions"
-                  help={t("settings.codexFolderHelp")}
-                />
-              </Section>
-
               <Section title={t("settings.storageStatus")}>
                 <Row label={t("settings.sessions")}>{stats?.sessions ?? "—"}{t("settings.countSuffix")}</Row>
                 <Row label={t("settings.turns")}>{stats?.turns ?? "—"}{t("settings.countSuffix")}</Row>
@@ -819,6 +794,31 @@ export function SettingsView() {
                     <Trans i18nKey="settings.sourcesNote" components={{ b: <b /> }} />
                   </p>
                 </div>
+              </Section>
+
+              <Section title={t("settings.logFolder")}>
+                <FolderRow
+                  label="Claude Code"
+                  chip={!cfg
+                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />{t("settings.checking")}</StatusChip>
+                    : cfg.projects_exists
+                      ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: cfg.jsonl_count })}</StatusChip>
+                      : <StatusChip tone="warn"><AlertTriangle className="size-3" />{t("settings.folderMissing")}</StatusChip>}
+                  path={projectsDir} onPathChange={setProjectsDir} onSave={saveProjects} saved={projSaved} err={projErr}
+                  placeholder="~/.claude/projects"
+                  help={t("settings.claudeFolderHelp")}
+                />
+                <FolderRow
+                  label="Codex"
+                  chip={!cfg
+                    ? <StatusChip tone="muted"><Loader2 className="size-3 animate-spin" />{t("settings.checking")}</StatusChip>
+                    : cfg.codex_exists
+                      ? <StatusChip tone="ok"><Check className="size-3" />{t("settings.conversationsDetected", { count: (cfg.sources ?? []).find((s) => s.name === "codex")?.count ?? 0 })}</StatusChip>
+                      : <StatusChip tone="muted">{t("settings.notUsed")}</StatusChip>}
+                  path={codexDir} onPathChange={setCodexDir} onSave={saveCodex} saved={codexSaved} err={codexErr}
+                  placeholder="~/.codex/sessions"
+                  help={t("settings.codexFolderHelp")}
+                />
               </Section>
 
               <SchemaReportSection />
