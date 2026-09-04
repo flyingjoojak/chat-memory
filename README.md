@@ -70,7 +70,6 @@ Builds land on the [**Releases**](https://github.com/flyingjoojak/engram/release
 
 1. Download `Engram-Setup-<version>.exe` and run it.
 2. If Windows shows a "protected your PC" warning, click **More info → Run anyway**. (It's just because the app isn't code-signed yet - it's safe.)
-3. Prefer no install? Unzip the portable `.zip` and run `Engram.exe`.
 
 ### 🍎 macOS - not tested yet
 
