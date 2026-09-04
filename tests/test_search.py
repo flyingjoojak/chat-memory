@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from chatmem.chunker import chunk_turn
-from chatmem.models import Action, Turn
-from chatmem.search import search
-from chatmem.store import ArchiveDB
-from chatmem.vectorindex import VectorIndex
+from engram.chunker import chunk_turn
+from engram.models import Action, Turn
+from engram.search import search
+from engram.store import ArchiveDB
+from engram.vectorindex import VectorIndex
 
 
 class FakeEmbedder:

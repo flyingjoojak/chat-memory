@@ -6,7 +6,7 @@ import sqlite3
 
 import numpy as np
 
-from chatmem.indexer import backfill_missing
+from engram.indexer import backfill_missing
 
 
 class _FakeVI:

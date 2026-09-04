@@ -1,6 +1,6 @@
 """임베디드 Syncthing 관리 (E1): 바이너리 확보 + 헤드리스 spawn + 헬스체크 + Device ID.
 
-재구현이 아니라 성숙한 Syncthing 엔진을 chat-memory가 대신 운전한다(SESSION_SYNC_SPEC.md §14).
+재구현이 아니라 성숙한 Syncthing 엔진을 engram가 대신 운전한다(SESSION_SYNC_SPEC.md §14).
 - 바이너리 확보 순서: (1) env override (2) 프리즈 번들(sys._MEIPASS) (3) 캐시 (4) GitHub 릴리스 다운로드.
 - 동기를 켤 때만 spawn(지연 실행) — 단일 기기 사용자는 오버헤드 0.
 - 제어는 REST(127.0.0.1:<gui_port>, X-API-Key)로. GUI 주소·키는 우리가 랜덤 생성해 주입.
@@ -30,7 +30,7 @@ from .proc import NO_WINDOW  # Windows 콘솔 창 깜빡임 방지
 
 SYNCTHING_VERSION = "v2.1.3"   # pin(재현성). 갱신 시 여기만 바꾸면 됨.
 # 공유 폴더 ID는 양쪽 기기가 같아야 연결됨 → 고정값 사용(우리가 관리하는 전용 폴더).
-DEFAULT_FOLDER_ID = "chatmem-claude-projects"
+DEFAULT_FOLDER_ID = "engram-claude-projects"
 VERSIONING_MAX_AGE_SEC = 31536000   # 삭제·덮어쓰기 이력 보관 기간(기본 1년). 조정 시 여기만.
 _BIN_DIR = C.DATA_DIR / "bin"
 _HOME_DIR = C.DATA_DIR / "syncthing-home"
@@ -86,7 +86,7 @@ def _verify_sha256(path: Path, name: str) -> None:
 def binary_path() -> Path:
     """확보돼 있으면 바이너리 경로(없으면 캐시 예정 위치). 존재 여부는 .exists()로 확인."""
     _, _, _, exe = _plat()
-    ov = os.environ.get("CHATMEM_SYNCTHING_BIN")
+    ov = os.environ.get("ENGRAM_SYNCTHING_BIN")
     if ov and Path(ov).exists():
         return Path(ov)
     meipass = getattr(sys, "_MEIPASS", None)

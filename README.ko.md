@@ -97,7 +97,7 @@ Claude Code / Codex 로그  →  증분 읽기  →  대화(질문 + 답변 + �
 
 **내가 실제로 나눈 대화만** 색인됩니다. `claude -p`로 프로그램이 돌린 세션(CI·cron·git 훅·스크립트)은
 내가 나눈 대화가 아니라 자동화라, Engram이 건너뜁니다 - 로그의 `promptSource`로 사람이 친 프롬프트와
-SDK 구동 프롬프트를 구분해요. 그것까지 색인하려면 `CHATMEM_INDEX_SDK_SESSIONS=1`을 설정하세요.
+SDK 구동 프롬프트를 구분해요. 그것까지 색인하려면 `ENGRAM_INDEX_SDK_SESSIONS=1`을 설정하세요.
 
 **원문 대화가 진실원본**이고 검색 인덱스는 재생성 가능한 파생물이라, 재색인·모델 교체는 항상 무손실입니다.
 설계 전문: [SPEC.md](SPEC.md).
@@ -147,7 +147,7 @@ engram stats | config | progress           # 상태 · 설정 · 진행률
 ```
 
 > Extras: `[web]` 웹 UI · `[enrich]` 클라우드/로컬 요약 백엔드 · `[mcp]` MCP 서버 · `[all]` 전부.
-> (명령은 `engram`, 별칭 `mem`. 데이터는 `~/chat-memory/data`에 저장됩니다.)
+> (명령은 `engram`, 별칭 `mem`. 데이터는 `~/engram/data`에 저장됩니다.)
 
 </details>
 
@@ -156,7 +156,7 @@ engram stats | config | progress           # 상태 · 설정 · 진행률
 
 <br>
 
-요약/태그는 **선택 기능**이며 검색은 원문 기반입니다. `CHATMEM_ENRICH_BACKEND`로 백엔드 선택:
+요약/태그는 **선택 기능**이며 검색은 원문 기반입니다. `ENGRAM_ENRICH_BACKEND`로 백엔드 선택:
 
 | 백엔드 | 설명 | 요건 |
 |--------|------|-----------|
@@ -167,10 +167,10 @@ engram stats | config | progress           # 상태 · 설정 · 진행률
 
 `openai`/`gemini`/`ollama`는 모두 OpenAI 호환 API입니다(LM Studio·vLLM·Groq도 연결 가능).
 
-> macOS에서는 앱이 Finder로 실행돼 셸 `PATH`를 물려받지 못하므로, `claude` CLI가 설치돼 있어도 못 찾을 수 있습니다. Engram이 흔한 위치(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` 등)를 자동으로 확인하지만, 다른 곳에 있으면 `CHATMEM_CLAUDE_BIN=/claude/전체/경로`로 지정하세요.
+> macOS에서는 앱이 Finder로 실행돼 셸 `PATH`를 물려받지 못하므로, `claude` CLI가 설치돼 있어도 못 찾을 수 있습니다. Engram이 흔한 위치(`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` 등)를 자동으로 확인하지만, 다른 곳에 있으면 `ENGRAM_CLAUDE_BIN=/claude/전체/경로`로 지정하세요.
 
 ```bash
-CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 engram enrich   # 로컬, 유출 0
+ENGRAM_ENRICH_BACKEND=ollama ENGRAM_OLLAMA_MODEL=llama3.1 engram enrich   # 로컬, 유출 0
 ```
 
 </details>

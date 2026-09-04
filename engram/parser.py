@@ -127,9 +127,9 @@ def _is_automation_prompt(obj: dict) -> bool:
 
     - promptSource 가 명시적으로 사람(_HUMAN_PROMPT_SOURCES)이 아니고 존재하면 자동화로 본다.
     - promptSource 필드가 아예 없으면(구버전 로그) 사람으로 간주(하위호환, 오검 방지).
-    - CHATMEM_INDEX_SDK_SESSIONS 옵트인이면 이 필터를 끈다(자동화 이력도 검색하려는 파워유저용).
+    - ENGRAM_INDEX_SDK_SESSIONS 옵트인이면 이 필터를 끈다(자동화 이력도 검색하려는 파워유저용).
     """
-    if os.environ.get("CHATMEM_INDEX_SDK_SESSIONS", "").strip().lower() in ("1", "true", "yes", "on"):
+    if os.environ.get("ENGRAM_INDEX_SDK_SESSIONS", "").strip().lower() in ("1", "true", "yes", "on"):
         return False
     src = obj.get("promptSource")
     return src is not None and src not in _HUMAN_PROMPT_SOURCES

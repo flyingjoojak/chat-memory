@@ -8,7 +8,7 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from chatmem import mcp_server as M  # noqa: E402
+from engram import mcp_server as M  # noqa: E402
 
 
 def test_tools_registered():

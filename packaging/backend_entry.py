@@ -1,7 +1,7 @@
 """PyInstaller 사이드카 진입점: FastAPI 백엔드를 로컬 포트에 띄운다.
 
 Electron 메인이 이 exe를 spawn하고 포트를 넘긴다:
-    chatmem-backend.exe 8765      (또는 CHATMEM_PORT 환경변수)
+    engram-backend.exe 8765      (또는 ENGRAM_PORT 환경변수)
 """
 
 import multiprocessing
@@ -9,9 +9,9 @@ import os
 import sys
 
 # 배포(PyInstaller 프리즈) exe는 벡터 백엔드를 sqlite-vec(디스크·int8·저RAM)로 기본 설정.
-# 개발(python) 실행은 npy 기본 유지. chatmem import 전에 설정해야 config가 반영.
+# 개발(python) 실행은 npy 기본 유지. engram import 전에 설정해야 config가 반영.
 if getattr(sys, "frozen", False):
-    os.environ.setdefault("CHATMEM_VECTOR_BACKEND", "sqlite-vec")
+    os.environ.setdefault("ENGRAM_VECTOR_BACKEND", "sqlite-vec")
     # windowed(--noconsole) exe는 stdout/stderr가 None → 병렬 임베딩 멀티프로세싱 워커가 출력 시
     # 크래시(→ '빠른 재색인'이 매번 조용히 순차로 전락). import 시점에 devnull로 돌려 자식도 안전하게.
     # (웹 프로세스는 main()에서 app.log로 다시 지정. --mcp는 stdout이 파이프라 None이 아님 → 건드리지 않음)
@@ -24,22 +24,22 @@ if getattr(sys, "frozen", False):
 
 
 def main() -> None:
-    # `chatmem-backend.exe --mcp` → 웹 대신 MCP(stdio) 서버로 동작.
+    # `engram-backend.exe --mcp` → 웹 대신 MCP(stdio) 서버로 동작.
     # 이래야 exe만 받은 사용자도 별도 설치 없이 MCP를 등록·실행할 수 있다
-    # (frozen exe는 `-m chatmem.mcp_server`가 안 되므로 이 인자 모드가 유일한 경로).
+    # (frozen exe는 `-m engram.mcp_server`가 안 되므로 이 인자 모드가 유일한 경로).
     if "--mcp" in sys.argv[1:]:
-        from chatmem.mcp_server import main as mcp_main
+        from engram.mcp_server import main as mcp_main
         mcp_main()
         return
 
     port = 8765
     if len(sys.argv) > 1 and sys.argv[1].isdigit():
         port = int(sys.argv[1])
-    port = int(os.environ.get("CHATMEM_PORT", port))
+    port = int(os.environ.get("ENGRAM_PORT", port))
 
     # managed=1: Electron 셸이 구동·감독. 셸이 창·단일인스턴스·로깅을 담당하므로 백엔드는
     # 순수 서버로만 동작(뮤텍스·브라우저 자동열기·app.log 리다이렉트 끔 → stdout은 셸이 캡처).
-    managed = os.environ.get("CHATMEM_MANAGED") == "1"
+    managed = os.environ.get("ENGRAM_MANAGED") == "1"
     if getattr(sys, "frozen", False) and not managed:
         _setup_file_logging()                # windowed(콘솔 없음) 단독 실행에서 print/로그 보존
         # 단일 인스턴스: 프로세스 시작 즉시 네임드 뮤텍스로 판정. uvicorn은 모델 로딩(~15초) *후*에
@@ -52,7 +52,7 @@ def main() -> None:
 
     import uvicorn
 
-    from chatmem.web import app
+    from engram.web import app
 
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
@@ -67,7 +67,7 @@ def _acquire_single_instance(port: int) -> bool:
         return True
     try:
         import ctypes
-        h = ctypes.windll.kernel32.CreateMutexW(None, False, f"chatmem-backend-singleton-{port}")
+        h = ctypes.windll.kernel32.CreateMutexW(None, False, f"engram-backend-singleton-{port}")
         if ctypes.windll.kernel32.GetLastError() == 183:   # ERROR_ALREADY_EXISTS
             return False
         _MUTEX.append(h)   # 핸들 유지(프로세스 종료까지 뮤텍스 살아있게)
@@ -79,7 +79,7 @@ def _acquire_single_instance(port: int) -> bool:
 def _setup_file_logging() -> None:
     """windowed exe는 stdout/stderr가 없어 print가 깨질 수 있음 → data/app.log로 리다이렉트."""
     try:
-        from chatmem import config as C
+        from engram import config as C
         C.DATA_DIR.mkdir(parents=True, exist_ok=True)
         f = open(C.DATA_DIR / "app.log", "a", encoding="utf-8", buffering=1)  # noqa: SIM115
         sys.stdout = f

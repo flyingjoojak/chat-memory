@@ -97,7 +97,7 @@ Claude Code / Codex logs  →  read incrementally  →  conversations (question 
 
 Only your **real, interactive conversations** are indexed. Sessions driven programmatically by `claude -p`
 (CI, cron, git hooks, scripts) are automation, not chats you had, so Engram skips them - it keys on the log's
-`promptSource` to tell a typed prompt from an SDK-driven one. To index those too, set `CHATMEM_INDEX_SDK_SESSIONS=1`.
+`promptSource` to tell a typed prompt from an SDK-driven one. To index those too, set `ENGRAM_INDEX_SDK_SESSIONS=1`.
 
 Your **raw conversations are the source of truth**; the search index is just a regenerable derivative, so
 re-indexing or switching models is always lossless. Design notes: [SPEC.md](SPEC.md).
@@ -147,7 +147,7 @@ engram stats | config | progress                 # status · config · progress
 ```
 
 > Extras: `[web]` web UI · `[enrich]` cloud/local summary backends · `[mcp]` MCP server · `[all]` everything.
-> (The command is `engram`, alias `mem`; data lives in `~/chat-memory/data`.)
+> (The command is `engram`, alias `mem`; data lives in `~/engram/data`.)
 
 </details>
 
@@ -156,7 +156,7 @@ engram stats | config | progress                 # status · config · progress
 
 <br>
 
-Summaries/tags are **optional** (search runs on the raw text). Pick a backend via `CHATMEM_ENRICH_BACKEND`:
+Summaries/tags are **optional** (search runs on the raw text). Pick a backend via `ENGRAM_ENRICH_BACKEND`:
 
 | Backend | Description | Requirements |
 |--------|------|-----------|
@@ -167,10 +167,10 @@ Summaries/tags are **optional** (search runs on the raw text). Pick a backend vi
 
 `openai`/`gemini`/`ollama` all speak the OpenAI-compatible API (LM Studio, vLLM, Groq, … work too).
 
-> On macOS the app is launched from Finder and doesn't inherit your shell `PATH`, so it may not find the `claude` CLI even when it's installed. Engram looks in the usual spots (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, …); if yours lives elsewhere, point at it with `CHATMEM_CLAUDE_BIN=/full/path/to/claude`.
+> On macOS the app is launched from Finder and doesn't inherit your shell `PATH`, so it may not find the `claude` CLI even when it's installed. Engram looks in the usual spots (`/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`, …); if yours lives elsewhere, point at it with `ENGRAM_CLAUDE_BIN=/full/path/to/claude`.
 
 ```bash
-CHATMEM_ENRICH_BACKEND=ollama CHATMEM_OLLAMA_MODEL=llama3.1 engram enrich   # local, zero leakage
+ENGRAM_ENRICH_BACKEND=ollama ENGRAM_OLLAMA_MODEL=llama3.1 engram enrich   # local, zero leakage
 ```
 
 </details>
