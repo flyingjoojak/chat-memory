@@ -143,7 +143,9 @@ export function SearchView() {
 
           {state === "done" && hits.length === 0 && (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              <SearchX className="mx-auto mb-2.5 size-8 text-muted-foreground/60" />{t("search.emptyResults")}
+              <SearchX className="mx-auto mb-2.5 size-8 text-muted-foreground/60" />
+              {/* 색인된 소스가 하나도 없으면 '검색 실패'가 아니라 '아직 색인 전'임을 알린다(첫 실행 오해 방지). */}
+              {srcOpts.length === 0 ? t("search.emptyNotIndexed") : t("search.emptyResults")}
             </div>
           )}
 

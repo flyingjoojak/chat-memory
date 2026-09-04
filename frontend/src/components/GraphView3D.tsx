@@ -476,6 +476,10 @@ export function GraphView3D({ onOpenTurn }: { onOpenTurn: OpenTurn }) {
           : !hasData ? <div className="grid h-full place-items-center text-muted-foreground">{t("graph.empty")}</div>
             : (
               <div ref={wrapRef} className="relative h-full w-full overflow-hidden rounded-xl border bg-card">
+                {/* 조작 힌트(좌하단) — 캔버스가 드래그·클릭 가능하다는 걸 첫 사용자에게 알림 */}
+                <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-md bg-card/80 px-2 py-1 text-[11px] text-muted-foreground backdrop-blur">
+                  {t("graph.controlsHint")}
+                </div>
                 {/* 떠다니는 라벨은 큰 군집 상위 18개만(과밀 방지) — 전체 목록은 우측 범례에 */}
                 {clusters.slice(0, 18).map((c) => (
                   <div key={c.id} ref={(el) => { labelRefs.current.set(c.id, el) }}
