@@ -122,33 +122,38 @@ def test_tool_result_not_a_prompt():
     assert not is_real_user_prompt(obj)
 
 
-# --- 자동화(claude -p / SDK) 세션 제외 ----------------------------------
+# --- sdk 세션은 기본 색인, 옵트인일 때만 제외 --------------------------
 def _user_src(uuid, text, src):
     o = _user(uuid, text)
     o["promptSource"] = src
     return o
 
 
-def test_sdk_automation_prompt_excluded():
-    # promptSource=sdk = 프로그램/claude -p 자동화 → 사람 턴 아님(더미 세션 제외).
-    assert not is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
+def test_sdk_prompt_indexed_by_default():
+    # sdk 는 SDK/통합 사용일 수도 있어 기본은 색인(그런 기기는 대화가 전부 sdk).
+    assert is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
 
 
-def test_human_prompt_sources_still_indexed():
-    # 사람이 구동한 소스(typed/queued/suggestion_accepted)는 그대로 색인.
-    for src in ("typed", "queued", "suggestion_accepted"):
+def test_system_prompt_not_specially_filtered_by_promptsource():
+    # system(<task-notification> 등)은 promptSource 가 아니라 기존 plumbing 필터가 처리한다.
+    # 실텍스트를 가진 system 프롬프트는 promptSource 때문에 제외되지 않는다(회귀 방지: 맥 typed=1 대량손실).
+    assert is_real_user_prompt(_user_src("u1", "이 버그 고쳐줘", "system"))
+
+
+def test_all_prompt_sources_indexed_by_default():
+    for src in ("typed", "queued", "suggestion_accepted", "sdk", "system"):
         assert is_real_user_prompt(_user_src("u1", "이거 고쳐줘", src)), src
 
 
 def test_missing_prompt_source_treated_as_human():
-    # promptSource 필드가 없는 구버전 로그는 사람으로 간주(하위호환·오검 방지).
     assert is_real_user_prompt(_user("u1", "질문"))
 
 
-def test_sdk_opt_in_env_indexes_automation(monkeypatch):
-    # 옵트인이면 자동화 세션도 색인(파워유저용).
-    monkeypatch.setenv("ENGRAM_INDEX_SDK_SESSIONS", "1")
-    assert is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
+def test_sdk_opt_out_env_excludes_sdk_only(monkeypatch):
+    # 옵트인(SKIP)이면 sdk 만 제외. system 등은 여전히 promptSource 로 제외하지 않는다.
+    monkeypatch.setenv("ENGRAM_SKIP_SDK_SESSIONS", "1")
+    assert not is_real_user_prompt(_user_src("u1", "run the nightly summary", "sdk"))
+    assert is_real_user_prompt(_user_src("u1", "이거 고쳐줘", "typed"))
 
 
 # --- 턴 그룹핑 ----------------------------------------------------------
