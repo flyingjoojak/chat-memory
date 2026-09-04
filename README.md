@@ -95,9 +95,9 @@ Claude Code / Codex logs  →  read incrementally  →  conversations (question 
       →  hybrid search: meaning ⊕ keywords
 ```
 
-Only your **real, interactive conversations** are indexed. Sessions driven programmatically by `claude -p`
-(CI, cron, git hooks, scripts) are automation, not chats you had, so Engram skips them - it keys on the log's
-`promptSource` to tell a typed prompt from an SDK-driven one. To index those too, set `ENGRAM_INDEX_SDK_SESSIONS=1`.
+Everything Claude Code and Codex log is indexed by default. If you run `claude -p` automation (CI, cron, git
+hooks) and want those one-shot sessions kept out, set `ENGRAM_SKIP_SDK_SESSIONS=1` - it drops SDK-driven
+prompts. It's off by default because SDK-driven doesn't always mean throwaway (some people work through the SDK).
 
 Your **raw conversations are the source of truth**; the search index is just a regenerable derivative, so
 re-indexing or switching models is always lossless. Design notes: [SPEC.md](SPEC.md).

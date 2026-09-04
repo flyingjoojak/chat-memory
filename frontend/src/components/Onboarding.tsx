@@ -2,10 +2,14 @@ import { useEffect, useState } from "react"
 import { Trans, useTranslation } from "react-i18next"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import { chooseModel, getEmbedModels, type EmbedModel } from "@/lib/api"
+import { getLang, setLang, type Lang } from "@/lib/lang"
 
-// 첫 실행 화면: 기기 성능에 맞는 임베딩 모델을 고르게 한다(저사양 기기가 기본 최대모델을 자동으로 물지 않게).
+// 첫 실행 화면: (1) 언어 선택 → (2) 기기 성능에 맞는 임베딩 모델 선택.
+// 언어를 먼저 고르게 해, 이어지는 모델 선택·안내가 고른 언어로 뜨게 한다.
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation()
+  const [step, setStep] = useState<"lang" | "model">("lang")
+  const [lang, setLangLocal] = useState<Lang>(getLang())
   const [models, setModels] = useState<EmbedModel[] | null>(null)
   const [ramGb, setRamGb] = useState<number | null>(null)   // 기기 총 RAM(권장 근거 표시)
   const [picking, setPicking] = useState<string | null>(null)
@@ -27,6 +31,33 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
     } catch { setPicking(null); setPickErr(true) }
   }
 
+  function chooseLang(l: Lang) {
+    setLang(l); setLangLocal(l); setStep("model")   // i18n 언어 전환 → 이후 화면이 그 언어로 렌더
+  }
+
+  // 1단계: 언어 선택. 아직 언어 미선택이므로 라벨은 각 언어 원어(중립)로 표기.
+  if (step === "lang") {
+    return (
+      <div className="h-full overflow-y-auto bg-background">
+        <div className="mx-auto max-w-2xl px-6 py-10">
+          <h1 className="text-balance text-2xl font-bold">Language · 언어</h1>
+          <p className="mt-2 text-pretty text-sm text-muted-foreground">Choose your language · 사용할 언어를 선택하세요</p>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            {([["ko", "한국어"], ["en", "English"]] as [Lang, string][]).map(([l, label]) => (
+              <button key={l} type="button" onClick={() => chooseLang(l)}
+                className={`flex items-center justify-center rounded-xl border bg-card p-5 text-lg font-semibold shadow-sm transition-all hover:-translate-y-px hover:border-primary/50 hover:shadow-md ${
+                  lang === l ? "border-primary/60 ring-1 ring-primary/30" : ""
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 2단계: 임베딩 모델 선택(고른 언어로 표시).
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-2xl px-6 py-10">

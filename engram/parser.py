@@ -17,9 +17,11 @@ from .models import Action, Turn
 
 logger = logging.getLogger(__name__)
 
-# 사람이 실제로 친 프롬프트로 인정하는 promptSource(대화형). 나머지(sdk=프로그램/claude -p, system=주입)는 제외.
-# Claude Code 로그 실측: typed(직접입력)·queued(큐잉)·suggestion_accepted(제안수락)=사람 구동.
-_HUMAN_PROMPT_SOURCES = frozenset({"typed", "queued", "suggestion_accepted"})
+# promptSource="sdk" = 프로그램 구동(claude -p 자동화일 수도, 정식 SDK/통합 사용일 수도 있음).
+# 실측 결과 sdk 는 '버릴 자동화'와 '진짜 작업'을 구분하지 못한다(SDK/통합으로만 쓰는 기기는 전부 sdk).
+# 그래서 기본은 '전부 색인'이고, claude -p 더미만 빼고 싶은 사람은 ENGRAM_SKIP_SDK_SESSIONS 로 옵트인.
+# (system=<task-notification> 등 주입 프롬프트는 promptSource 가 아니라 기존 plumbing/isMeta 필터가 처리한다.)
+_SKIP_SDK_ENV = "ENGRAM_SKIP_SDK_SESSIONS"
 
 # 대화가 아닌 메타/시스템 라인 타입.
 _STRUCTURAL_TYPES = {
@@ -118,21 +120,15 @@ def _is_plumbing(text: str) -> bool:
     return text.lstrip().startswith(_PLUMBING_PREFIXES)
 
 
-def _is_automation_prompt(obj: dict) -> bool:
-    """프로그램(SDK)/`claude -p` 자동화로 주입된 프롬프트인지 — 사람이 타이핑한 게 아님.
+def _is_skipped_sdk_prompt(obj: dict) -> bool:
+    """옵트인(ENGRAM_SKIP_SDK_SESSIONS)일 때만, promptSource="sdk" 프롬프트를 제외한다.
 
-    사용자가 claude 로 자동화(CI·cron·git 훅·스크립트)를 돌리면 그 세션은 통째로 promptSource="sdk"라,
-    "내가 나눈 진짜 대화"가 아니라 더미 노이즈다 → 색인에서 뺀다. 순수 자동화 세션은 사람 턴이 0개라
-    turn 이 안 만들어져 결과적으로 색인되지 않는다.
-
-    - promptSource 가 명시적으로 사람(_HUMAN_PROMPT_SOURCES)이 아니고 존재하면 자동화로 본다.
-    - promptSource 필드가 아예 없으면(구버전 로그) 사람으로 간주(하위호환, 오검 방지).
-    - ENGRAM_INDEX_SDK_SESSIONS 옵트인이면 이 필터를 끈다(자동화 이력도 검색하려는 파워유저용).
+    기본은 제외 안 함(전부 색인). sdk 는 claude -p 일회성 자동화일 수도 있지만 정식 SDK/통합 사용일
+    수도 있어(그런 기기는 대화가 전부 sdk), 기본 제외 시 진짜 대화가 통째로 사라진다. 그래서 옵트인.
     """
-    if os.environ.get("ENGRAM_INDEX_SDK_SESSIONS", "").strip().lower() in ("1", "true", "yes", "on"):
+    if os.environ.get(_SKIP_SDK_ENV, "").strip().lower() not in ("1", "true", "yes", "on"):
         return False
-    src = obj.get("promptSource")
-    return src is not None and src not in _HUMAN_PROMPT_SOURCES
+    return obj.get("promptSource") == "sdk"
 
 
 def is_real_user_prompt(obj: dict) -> bool:
@@ -147,7 +143,7 @@ def is_real_user_prompt(obj: dict) -> bool:
         return False
     if _is_plumbing(text):
         return False
-    if _is_automation_prompt(obj):   # 프로그램/claude -p 자동화 세션(더미) 제외
+    if _is_skipped_sdk_prompt(obj):   # 옵트인일 때만 claude -p 자동화(sdk) 제외
         return False
     return True
 
