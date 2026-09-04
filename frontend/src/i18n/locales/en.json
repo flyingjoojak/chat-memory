@@ -152,7 +152,7 @@
     "claudeBinPlaceholder": "auto-detect (leave empty)",
     "claudeBinFound": "Found: {{path}}",
     "claudeBinNotFound": "claude CLI not found",
-    "claudeBinHint": "Leave empty to auto-detect. On macOS the app can't see your shell PATH, so set the full path (e.g. /opt/homebrew/bin/claude) if summaries fail.",
+    "claudeBinHint": "If not found, set the full path (e.g. /opt/homebrew/bin/claude).",
     "enrichTime": "Summary time (daily)",
     "testing": "Testing…",
     "testConnection": "Test connection",
